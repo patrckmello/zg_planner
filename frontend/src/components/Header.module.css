@@ -1,0 +1,76 @@
+/* src/components/Header.module.css */
+/* O principal problema aqui era o padding extra no userControls, que empurrava o botão. */
+/* Removendo-o e confiando apenas no padding principal do header, o Flexbox resolve o alinhamento. */
+
+.header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 24px; /* Aumentei um pouco o padding para dar mais respiro, como na sua imagem. */
+  height: 60px;
+  background-color: #2c3e50;
+  color: white;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  z-index: 1000;
+  width: 100%;
+  box-sizing: border-box; /* Garante que o padding não "empurre" o layout */
+}
+
+.logoSection {
+  display: flex;
+  align-items: center;
+}
+
+.menuToggle {
+  margin-right: 15px;
+  cursor: pointer;
+  font-size: 20px;
+}
+
+.logo {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 500;
+}
+
+.userControls {
+  display: flex;
+  align-items: center;
+  gap: 15px; /* Usamos 'gap' para criar espaço entre a info do usuário e o botão. É mais moderno que margin. */
+}
+
+.userInfo {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  /* margin-right removido */
+}
+
+.username {
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.role {
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.logoutBtn {
+  background-color: transparent;
+  border: 1px solid white;
+  color: white;
+  padding: 5px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap; /* Impede que o texto quebre em várias linhas */
+  /* margin-left removido */
+}
+
+.logoutBtn:hover {
+  background-color: rgba(255,255,255,0.1);
+}

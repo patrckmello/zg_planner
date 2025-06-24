@@ -1,0 +1,111 @@
+/* Este é o container principal da sidebar */
+.sidebar {
+  width: 250px;
+  flex-shrink: 0; /* IMPEDE que a sidebar seja "espremida" ou encolha */
+  height: 100%;
+  background-color: #ffffff;
+  border-right: 1px solid #e0e0e0;
+  display: flex;
+  flex-direction: column;
+  transition: margin-left 0.3s ease-in-out;
+}
+
+/* Quando a sidebar NÃO está aberta, ela tem uma margem negativa que a joga para fora da tela */
+.sidebar:not(.open) {
+  margin-left: -250px;
+}
+
+/* Em telas pequenas, a sidebar flutua sobre o conteúdo */
+@media (max-width: 768px) {
+  .sidebar {
+    position: absolute;
+    z-index: 1100; /* Acima do conteúdo, mas abaixo do header */
+    box-shadow: 4px 0px 15px rgba(0, 0, 0, 0.1);
+  }
+}
+
+.userSection {
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.userAvatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: #6c5ce7;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  margin-right: 15px;
+}
+
+/* CORREÇÃO APLICADA AQUI */
+.userDetails {
+  display: flex;
+  flex-direction: column; /* Organiza nome e email um em cima do outro */
+}
+
+.userName {
+  font-weight: 600;
+  font-size: 15px;
+  color: #333;
+}
+
+.userEmail {
+  font-size: 13px;
+  color: #777;
+}
+/* FIM DA CORREÇÃO */
+
+
+.navigation {
+  flex-grow: 1;
+  padding: 10px 0;
+}
+
+.navigation ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.navigation li a {
+  display: flex;
+  align-items: center;
+  padding: 12px 20px;
+  margin: 0 10px 4px 10px;
+  color: #4a4a4a;
+  text-decoration: none;
+  border-radius: 6px;
+  transition: background-color 0.2s, color 0.2s;
+  font-weight: 500;
+}
+
+.navigation li a:hover {
+  background-color: #f4f4f4;
+}
+
+.navigation li.active a {
+  background-color: #e8eaf6;
+  color: #3f51b5;
+}
+
+.icon {
+  margin-right: 15px;
+  font-size: 20px;
+  width: 24px;
+  text-align: center;
+}
+
+.sidebarFooter {
+  padding: 20px;
+  font-size: 12px;
+  color: #aaa;
+  text-align: center;
+  border-top: 1px solid #f0f0f0;
+}

@@ -1,0 +1,142 @@
+/* O container de toda a página */
+.dashboardPage {
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden; /* Previne barras de rolagem no nível da página */
+}
+
+/* O corpo da página, que fica abaixo do Header */
+.pageBody {
+  display: flex; /* Coloca Sidebar e Content lado a lado */
+  /* Define a altura para ocupar exatamente o espaço restante abaixo do header */
+  height: calc(100vh - 60px); 
+  margin-top: 60px; /* Compensa o espaço ocupado pelo Header fixo */
+  position: relative; /* Necessário para a sidebar absoluta em mobile */
+}
+
+/* A área de conteúdo principal. Será o seu fundo cinza de 100vw */
+.contentArea {
+  flex-grow: 1; /* A MÁGICA: Cresce para ocupar todo o espaço restante */
+  background-color: #f5f5f5;
+  padding: 32px;
+  overflow-y: auto; /* Adiciona rolagem vertical APENAS aqui, se necessário */
+  
+  /* MUDANÇA 1: Vamos centralizar o container das tarefas em vez de alinhá-lo à direita. */
+  display: flex;
+  justify-content: center; 
+}
+
+/* Um wrapper para o conteúdo das tarefas */
+.tasksWrapper {
+  /* MUDANÇA 2: O segredo para o bloco crescer e diminuir */
+  width: 98%; /* Ocupa quase toda a largura do seu pai (a área cinza) */
+  max-width: 1200px; /* Mas limitado a uma largura máxima para não ficar gigante em telas enormes */
+
+  /* MUDANÇA 3: A animação suave de crescimento/encolhimento */
+  transition: width 0.3s ease-in-out;
+}
+
+/* Estilos para o cabeçalho e lista de tarefas (ajustados para um visual melhor) */
+.tasksHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.tasksHeader h2 {
+    font-size: 28px;
+    color: #333;
+}
+
+.addTaskBtn {
+  background-color: #3498db;
+  color: white;
+  border: none;
+  padding: 12px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 15px;
+  transition: background-color 0.2s;
+}
+
+.addTaskBtn:hover {
+  background-color: #2980b9;
+}
+
+.tasksList {
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.07);
+}
+
+.taskItem {
+  display: flex;
+  align-items: center;
+  padding: 16px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.taskItem:last-child {
+  border-bottom: none;
+}
+
+.taskItem.completed .taskTitle {
+  text-decoration: line-through;
+  color: #aaa;
+}
+
+.taskTitle {
+  flex-grow: 1;
+  margin-left: 15px;
+  font-size: 16px;
+}
+
+.taskActions {
+  display: flex;
+  gap: 8px;
+}
+
+.taskActions button {
+  background-color: #f5f5f5;
+  border: 1px solid #e0e0e0;
+  padding: 6px 12px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.editBtn {
+  color: #3498db;
+}
+.editBtn:hover {
+  background-color: #3498db;
+  color: white;
+  border-color: #3498db;
+}
+
+.deleteBtn {
+  color: #e74c3c;
+}
+.deleteBtn:hover {
+  background-color: #e74c3c;
+  color: white;
+  border-color: #e74c3c;
+}
+
+.emptyTasks {
+  text-align: center;
+  padding: 40px;
+  color: #888;
+}
+
+.loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  font-size: 18px;
+}
