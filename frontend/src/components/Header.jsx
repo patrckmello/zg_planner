@@ -12,7 +12,7 @@ function Header({ onLogout, onMenuToggle }) {
           {/* Ícone de menu (pode usar um SVG ou biblioteca de ícones) */}
           <span>☰</span>
         </div>
-        <h1 className={styles.logo}>Planner Interno</h1>
+        <h1 className={styles.logo}>ZG Planner</h1>
       </div>
       
       <div className={styles.userControls}>

@@ -5,34 +5,25 @@
   overflow: hidden; /* Previne barras de rolagem no nível da página */
 }
 
-/* O corpo da página, que fica abaixo do Header */
 .pageBody {
   display: flex; /* Coloca Sidebar e Content lado a lado */
-  /* Define a altura para ocupar exatamente o espaço restante abaixo do header */
   height: calc(100vh - 60px); 
-  margin-top: 60px; /* Compensa o espaço ocupado pelo Header fixo */
-  position: relative; /* Necessário para a sidebar absoluta em mobile */
+  margin-top: 60px; 
+  position: relative;
 }
 
-/* A área de conteúdo principal. Será o seu fundo cinza de 100vw */
 .contentArea {
-  flex-grow: 1; /* A MÁGICA: Cresce para ocupar todo o espaço restante */
+  flex-grow: 1; 
   background-color: #f5f5f5;
   padding: 32px;
-  overflow-y: auto; /* Adiciona rolagem vertical APENAS aqui, se necessário */
-  
-  /* MUDANÇA 1: Vamos centralizar o container das tarefas em vez de alinhá-lo à direita. */
+  overflow-y: auto; 
   display: flex;
   justify-content: center; 
 }
 
-/* Um wrapper para o conteúdo das tarefas */
 .tasksWrapper {
-  /* MUDANÇA 2: O segredo para o bloco crescer e diminuir */
-  width: 98%; /* Ocupa quase toda a largura do seu pai (a área cinza) */
-  max-width: 1200px; /* Mas limitado a uma largura máxima para não ficar gigante em telas enormes */
-
-  /* MUDANÇA 3: A animação suave de crescimento/encolhimento */
+  width: 98%;
+  max-width: 1200px; 
   transition: width 0.3s ease-in-out;
 }
 
@@ -91,12 +82,15 @@
   flex-grow: 1;
   margin-left: 15px;
   font-size: 16px;
+  color: #333;
 }
 
 .taskActions {
   display: flex;
   gap: 8px;
 }
+
+
 
 .taskActions button {
   background-color: #f5f5f5;
@@ -139,4 +133,32 @@
   align-items: center;
   height: 100vh;
   font-size: 18px;
+}
+
+.spinnerContainer {
+  position: fixed;             /* Ocupa toda a tela */
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  display: flex;              /* Centraliza conteúdo */
+  justify-content: center;
+  align-items: center;
+  background-color: #f2f4f8;  /* Mesma cor de fundo do dashboard (opcional) */
+  z-index: 9999;              /* Garante que fique acima de tudo */
+}
+
+.spinner {
+  width: 50px;
+  height: 50px;
+  border: 6px solid #e0e0e0;
+  border-top: 6px solid #4e79a7;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }

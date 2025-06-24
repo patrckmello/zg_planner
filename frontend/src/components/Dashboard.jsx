@@ -2,8 +2,11 @@ import React, { useState, useEffect } from 'react';
 import Header from './Header';
 import Sidebar from './Sidebar';
 import styles from './Dashboard.module.css';
+import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
 
 function Dashboard() {
+  const navigate = useNavigate();
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   // Manteremos a sidebar aberta por padrão em telas maiores
@@ -12,7 +15,7 @@ function Dashboard() {
   useEffect(() => {
     setTimeout(() => {
       setTasks([
-        { id: 1, title: 'Finalizar API de autenticação', completed: false },
+        { id: 1, title: 'Finalizar API de autenticação', completed: true },
         { id: 2, title: 'Estilizar componentes do Dashboard', completed: false },
         { id: 3, title: 'Preparar para o próximo sprint', completed: false },
       ]);
@@ -32,16 +35,27 @@ function Dashboard() {
     };
   }, []);
 
-  const handleLogout = () => {
-    localStorage.removeItem('authToken');
-    window.location.href = '/login';
+  const handleLogout = async () => {
+    try {
+      await axios.post('http://localhost:5000/api/logout', {}, { withCredentials: true });
+    } catch (err) {
+      console.error('Erro ao fazer logout:', err);
+    } finally {
+      localStorage.removeItem('auth');
+      navigate('/login');
+    }
   };
-  
   const toggleSidebar = () => {
     setSidebarOpen(!sidebarOpen);
   };
 
-  if (loading) return <div className={styles.loading}>Carregando...</div>;
+  if (loading) {
+  return (
+    <div className={styles.spinnerContainer}>
+      <div className={styles.spinner}></div>
+    </div>
+  );
+}
 
   return (
     // O container de toda a página

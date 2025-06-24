@@ -1,10 +1,10 @@
-from flask import Flask, request, jsonify, session
+from flask import Flask, request, jsonify, session, make_response
 from dotenv import load_dotenv
 import os
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
-from .extensions import db
-from .models import User
+from extensions import db
+from models import User
 from flask_cors import CORS
 
 load_dotenv()
@@ -58,7 +58,9 @@ def login():
 @app.route('/api/logout', methods=['POST'])
 def logout():
     session.clear()
-    return jsonify({'message': 'Logout bem-sucedido!'}), 200
+    response = make_response(jsonify({'message': 'Logout bem-sucedido!'}), 200)
+    response.set_cookie('session', '', expires=0)  # <-- Expira o cookie manualmente
+    return response
 
 @app.route('/api/dashboard')
 @login_required

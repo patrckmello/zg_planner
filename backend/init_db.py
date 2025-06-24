@@ -1,6 +1,6 @@
-from .app import app
-from .extensions import db
-from .models import User
+from app import app
+from extensions import db
+from models import User
 
 with app.app_context():
     db.drop_all()  # Dropa todas as tabelas antigas (para recriar com a nova definição)
