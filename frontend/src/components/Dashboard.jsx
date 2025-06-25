@@ -4,8 +4,12 @@ import Sidebar from './Sidebar';
 import styles from './Dashboard.module.css';
 import TaskForm from './TaskForm';
 import EditTaskForm from './EditTaskForm';
+import DeleteConfirmModal from './DeleteConfirmModal';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
+import { FiFilter, FiArrowDownCircle } from 'react-icons/fi';
+import Checkbox from "./Checkbox/Checkbox";
+
 
 function Dashboard() {
   const navigate = useNavigate();
@@ -13,12 +17,22 @@ function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [showTaskForm, setShowTaskForm] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
+  const [filterStatus, setFilterStatus] = useState('all');
+  const [sortBy, setSortBy] = useState('due_date');
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [taskToDelete, setTaskToDelete] = useState(null);
+
+
+  const filteredTasks = tasks.filter(task => {
+    if (filterStatus === 'all') return true;
+    return task.status === filterStatus;
+  });
   // Manteremos a sidebar aberta por padrão em telas maiores
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 768);
-  const toggleTaskStatus = async (taskId, currentStatus) => {
+  const toggleTaskStatus = async (taskId, newStatus) => {
     try {
       const response = await axios.put(`http://localhost:5000/api/tasks/${taskId}`, {
-        status: currentStatus === 'done' ? 'pending' : 'done'
+        status: newStatus
       }, { withCredentials: true });
 
       setTasks(prevTasks =>
@@ -30,6 +44,7 @@ function Dashboard() {
       console.error('Erro ao atualizar status da tarefa', err);
     }
   };
+
   
   const handleUpdateTask = async (formData) => {
     try {
@@ -49,19 +64,11 @@ function Dashboard() {
     }
   };
 
-  const handleDeleteTask = async (taskId) => {
-    if (!window.confirm('Tem certeza que deseja excluir esta tarefa?')) return;
-
-    try {
-      await axios.delete(`http://localhost:5000/api/tasks/${taskId}`, {
-        withCredentials: true,
-      });
-
-      setTasks(prev => prev.filter(t => t.id !== taskId));
-    } catch (error) {
-      console.error('Erro ao excluir tarefa:', error);
-    }
-  };
+  const sortedTasks = [...filteredTasks].sort((a, b) => {
+    if (sortBy === 'title') return a.title.localeCompare(b.title);
+    if (sortBy === 'status') return a.status.localeCompare(b.status);
+    if (sortBy === 'due_date') return new Date(a.due_date || 0) - new Date(b.due_date || 0);
+  });
 
   useEffect(() => {
     const fetchTasks = async () => {
@@ -89,6 +96,24 @@ function Dashboard() {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  useEffect(() => {
+    const savedFilter = localStorage.getItem('filterStatus');
+    const savedSort = localStorage.getItem('sortBy');
+
+    if (savedFilter) setFilterStatus(savedFilter);
+    if (savedSort) setSortBy(savedSort);
+  }, []);
+
+  // Salva filtro no localStorage sempre que mudar
+  useEffect(() => {
+    localStorage.setItem('filterStatus', filterStatus);
+  }, [filterStatus]);
+
+  // Salva ordenação no localStorage sempre que mudar
+  useEffect(() => {
+    localStorage.setItem('sortBy', sortBy);
+  }, [sortBy]);
 
   const handleLogout = async () => {
     try {
@@ -128,6 +153,27 @@ function Dashboard() {
   );
 }
 
+const cancelDelete = () => {
+  setTaskToDelete(null);
+  setShowDeleteModal(false);
+};
+
+const confirmDelete = async () => {
+  if (!taskToDelete) return;
+
+  try {
+    await axios.delete(`http://localhost:5000/api/tasks/${taskToDelete.id}`, {
+      withCredentials: true,
+    });
+    setTasks(prev => prev.filter(t => t.id !== taskToDelete.id));
+  } catch (error) {
+    console.error('Erro ao excluir tarefa:', error);
+  } finally {
+    setTaskToDelete(null);
+    setShowDeleteModal(false);
+  }
+};
+
   return (
     // O container de toda a página
     <div className={styles.dashboardPage}>
@@ -147,34 +193,81 @@ function Dashboard() {
               <button className={styles.addTaskBtn} onClick={() => setShowTaskForm(true)}>+ Nova Tarefa</button>
             </div>
             
+            <div className={styles.controls}>
+              <div className={styles.controlGroup}>
+                <label className={styles.controlLabel}>
+                  <FiFilter className={styles.icon} />
+                  Filtrar:
+                  <select 
+                    className={styles.select} 
+                    value={filterStatus} 
+                    onChange={(e) => setFilterStatus(e.target.value)}
+                  >
+                    <option value="all">Todas</option>
+                    <option value="pending">Pendentes</option>
+                    <option value="done">Concluídas</option>
+                  </select>
+                </label>
+              </div>
+
+              <div className={styles.controlGroup}>
+                <label className={styles.controlLabel}>
+                  <FiArrowDownCircle className={styles.icon} />
+                  Ordenar por:
+                  <select 
+                    className={styles.select} 
+                    value={sortBy} 
+                    onChange={(e) => setSortBy(e.target.value)}
+                  >
+                    <option value="due_date">Data de vencimento</option>
+                    <option value="title">Título</option>
+                    <option value="status">Status</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+
             <div className={styles.tasksList}>
-              {tasks.length === 0 ? (
-                <div className={styles.emptyTasks}>Nenhuma tarefa encontrada.</div>
+              {sortedTasks.length === 0 ? (
+                <div className={styles.emptyTasks}>
+                  {filterStatus === 'done' && "Nenhuma tarefa concluída encontrada."}
+                  {filterStatus === 'pending' && "Nenhuma tarefa pendente encontrada."}
+                  {filterStatus === 'all' && "Nenhuma tarefa cadastrada."}
+                </div>
               ) : (
-                tasks.map(task => (
-                  <div key={task.id} className={`${styles.taskItem} ${task.completed ? styles.completed : ''}`}>
-                    <input 
-                      type="checkbox" 
-                      checked={task.status === 'done'} 
-                      onChange={() => toggleTaskStatus(task.id, task.status)} 
-                    />
-                    <span className={styles.taskTitle}>{task.title}</span>
-                    <div className={styles.taskActions}>
-                      <button
-                        className={styles.editBtn}
-                        onClick={() => setEditingTask(task)}
-                      >
-                        Editar
-                      </button>
-                      <button
-                        className={styles.deleteBtn}
-                        onClick={() => handleDeleteTask(task.id)}
-                      >
-                        Excluir
-                      </button>
+                sortedTasks.map(task => {
+                  const isLate = task.due_date && new Date(task.due_date) < new Date() && task.status !== 'done';
+
+                  return (
+                    <div
+                      key={task.id}
+                      className={`${styles.taskItem} ${task.status === 'done' ? styles.completed : ''} ${isLate ? styles.taskLate : ''}`}
+                    >
+                      <Checkbox
+                        checked={task.status === 'done'}
+                        onCheckedChange={(checked) => toggleTaskStatus(task.id, checked ? 'done' : 'pending')}
+                      />
+                      <span className={styles.taskTitle}>{task.title}</span>
+                      <div className={styles.taskActions}>
+                        <button
+                          className={styles.editBtn}
+                          onClick={() => setEditingTask(task)}
+                        >
+                          Editar
+                        </button>
+                        <button
+                          className={styles.deleteBtn}
+                          onClick={() => {
+                            setTaskToDelete(task);
+                            setShowDeleteModal(true);
+                          }}
+                        >
+                          Excluir
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>
@@ -196,6 +289,12 @@ function Dashboard() {
             onSubmit={handleUpdateTask}
           />
         )}
+        <DeleteConfirmModal 
+          isOpen={showDeleteModal} 
+          onCancel={cancelDelete} 
+          onConfirm={confirmDelete} 
+          taskTitle={taskToDelete?.title || ''} 
+        />
       </div>
     </div>
   );

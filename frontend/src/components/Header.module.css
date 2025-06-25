@@ -1,7 +1,3 @@
-/* src/components/Header.module.css */
-/* O principal problema aqui era o padding extra no userControls, que empurrava o botão. */
-/* Removendo-o e confiando apenas no padding principal do header, o Flexbox resolve o alinhamento. */
-
 .header {
   position: fixed;
   top: 0;

@@ -2,44 +2,65 @@ import React, { useState } from 'react';
 import styles from './TaskForm.module.css';
 
 function TaskForm({ onClose, onSubmit }) {
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [dueDate, setDueDate] = useState('');
+  const [formData, setFormData] = useState({
+    title: '',
+    description: '',
+    due_date: '',
+  });
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onSubmit({ title, description, due_date: dueDate });
-    setTitle('');
-    setDescription('');
-    setDueDate('');
+    onSubmit(formData);
+    // Limpar campos
+    setFormData({
+      title: '',
+      description: '',
+      due_date: '',
+    });
     onClose();
   };
 
   return (
     <div className={styles.modalOverlay}>
       <div className={styles.modalContent}>
-        <h2>Nova Tarefa</h2>
-        <form onSubmit={handleSubmit}>
+        <h2 className={styles.title}>Nova Tarefa</h2>
+        <form className={styles.form} onSubmit={handleSubmit}>
+          <label htmlFor="title">Título</label>
           <input
+            id="title"
+            name="title"
             type="text"
-            placeholder="Título"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
+            value={formData.title}
+            onChange={handleChange}
             required
           />
+
+          <label htmlFor="description">Descrição</label>
           <textarea
-            placeholder="Descrição"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-          ></textarea>
-          <input
-            type="date"
-            value={dueDate}
-            onChange={(e) => setDueDate(e.target.value)}
+            id="description"
+            name="description"
+            value={formData.description}
+            onChange={handleChange}
+            rows="3"
           />
-          <div className={styles.actions}>
-            <button type="submit">Salvar</button>
-            <button type="button" onClick={onClose}>Cancelar</button>
+
+          <label htmlFor="due_date">Data de Vencimento</label>
+          <input
+            id="due_date"
+            name="due_date"
+            type="date"
+            value={formData.due_date}
+            onChange={handleChange}
+          />
+
+          <div className={styles.buttons}>
+            <button type="submit" className={styles.saveBtn}>Salvar</button>
+            <button type="button" onClick={onClose} className={styles.cancelBtn}>Cancelar</button>
           </div>
         </form>
       </div>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import styles from './TaskForm.module.css';
+import styles from './EditTaskForm.module.css';
 
 function EditTaskForm({ initialData, onClose, onSubmit }) {
   const [formData, setFormData] = useState({
@@ -31,28 +31,28 @@ function EditTaskForm({ initialData, onClose, onSubmit }) {
   };
 
   return (
-    <div className={styles.modalOverlay}>
-      <div className={styles.modalContent}>
-        <h2>Editar Tarefa</h2>
-        <form onSubmit={handleSubmit}>
-          <label>Título</label>
+    <div className={styles.overlay}>
+      <div className={styles.modal}>
+        <h2 className={styles.title}>Editar Tarefa</h2>
+        <form className={styles.form} onSubmit={handleSubmit}>
+          <label htmlFor="title">Título</label>
           <input name="title" value={formData.title} onChange={handleChange} required />
 
-          <label>Descrição</label>
-          <textarea name="description" value={formData.description} onChange={handleChange} />
+          <label htmlFor="description">Descrição</label>
+          <textarea name="description" value={formData.description} onChange={handleChange} rows="3" />
 
-          <label>Status</label>
+          <label htmlFor="status">Status</label>
           <select name="status" value={formData.status} onChange={handleChange}>
             <option value="pending">Pendente</option>
             <option value="done">Concluída</option>
           </select>
 
-          <label>Data de Vencimento</label>
+          <label htmlFor="due_date">Data de Vencimento</label>
           <input type="date" name="due_date" value={formData.due_date} onChange={handleChange} />
 
-          <div className={styles.actions}>
-            <button type="submit">Salvar</button>
-            <button type="button" onClick={onClose}>Cancelar</button>
+          <div className={styles.buttons}>
+            <button type="submit" className={styles.saveBtn}>Salvar</button>
+            <button type="button" onClick={onClose} className={styles.cancelBtn}>Cancelar</button>
           </div>
         </form>
       </div>

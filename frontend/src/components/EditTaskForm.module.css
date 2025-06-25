@@ -1,6 +1,4 @@
-/* TaskForm.module.css */
-
-.modalOverlay {
+.overlay {
   position: fixed;
   inset: 0;
   backdrop-filter: blur(6px);
@@ -12,17 +10,17 @@
   pointer-events: all;
 }
 
-.modalContent {
+.modal {
   background: #ffffff;
-  padding: 24px 32px;
+  padding: 24px 32px; /* reduzi padding pra ficar menor */
   border-radius: 16px;
-  width: 360px;
+  width: 360px; /* levemente menor */
   max-width: 90%;
-  max-height: 90vh;
+  max-height: 90vh; /* limite de altura pra evitar extrapolar a tela */
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.15);
   animation: slideUp 0.3s ease-out;
   z-index: 10000;
-  overflow-y: auto;
+  overflow-y: auto; /* scroll se o conteúdo for grande */
 }
 
 @keyframes slideUp {
@@ -51,6 +49,13 @@
   color: #334155;
 }
 
+.form textarea {
+  resize: none;
+  min-height: 100px;
+  max-height: 180px; /* controla altura máxima */
+  overflow-y: auto;
+}
+
 .form input,
 .form textarea,
 .form select {
@@ -58,7 +63,7 @@
   padding: 10px 14px;
   border: 1px solid #cbd5e1;
   border-radius: 8px;
-  margin-bottom: 14px;
+  margin-bottom: 14px; /* um pouco menos espaçamento */
   font-size: 1rem;
   background-color: #f8fafc;
   color: #1e293b;
@@ -66,11 +71,13 @@
   box-sizing: border-box;
 }
 
-.form textarea {
-  resize: none;
-  min-height: 100px;
-  max-height: 180px;
-  overflow-y: auto;
+.form select {
+  appearance: none;
+  background-color: #f8fafc;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 140 140' xmlns='http://www.w3.org/2000/svg'%3E%3Cpolygon points='0,0 140,0 70,70' fill='%23475569'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 12px;
 }
 
 .form input:focus,
@@ -84,7 +91,7 @@
 .buttons {
   display: flex;
   justify-content: flex-end;
-  gap: 12px;
+  gap: 12px; /* espaçamento entre botões */
   margin-top: 16px;
 }
 
