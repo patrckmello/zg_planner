@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, session, make_response, abort
+from flask import Flask, request, jsonify, session, make_response, abort, redirect, url_for
 from dotenv import load_dotenv
 import os
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -48,6 +48,13 @@ def register():
 
     return jsonify({'message': 'Usuário registrado com sucesso!'})
 
+@app.route('/')
+def index():
+    if 'user_id' in session:
+        return redirect(url_for('dashboard'))
+    else:
+        return redirect(url_for('login'))  # Ou para uma rota de frontend: redirect("http://localhost:5173/login")
+
 @app.route('/api/login', methods=['POST'])
 def login():
     data = request.get_json()
@@ -55,6 +62,7 @@ def login():
 
     if user and user.check_password(data['password']):
         session['user_id'] = user.id
+        print('Sessão criada:', session.get('user_id'))
         return jsonify({'message': 'Login bem-sucedido!'}), 200
     else:
         return jsonify({'error': 'Credenciais inválidas'}), 401
@@ -254,6 +262,12 @@ def delete_task(task_id):
     db.session.commit()
 
     return jsonify({'message': 'Tarefa excluída com sucesso!'})
+
+@app.route('/api/check-session')
+def check_session():
+    print('Sessão atual:', session.get('user_id'))
+    return jsonify({'logged_in': 'user_id' in session})
+
 
 if __name__ == '__main__':
     app.run(debug=True)
