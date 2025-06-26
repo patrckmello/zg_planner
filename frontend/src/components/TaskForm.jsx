@@ -1,28 +1,90 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import styles from './TaskForm.module.css';
+import Checkbox from './Checkbox/Checkbox';
 
 function TaskForm({ onClose, onSubmit }) {
   const [formData, setFormData] = useState({
     title: '',
     description: '',
     due_date: '',
+    prioridade: 'Média',
+    categoria: 'Processo',
+    status_inicial: 'A fazer',
+    relacionado_a: '',
+    lembretes: [],
+    tags: [],
+    anexos: [],
+    tagInput: '',
   });
+
+  const [lembretesOpen, setLembretesOpen] = useState(false);
+  const lembretesRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (lembretesRef.current && !lembretesRef.current.contains(event.target)) {
+        setLembretesOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
+  const handleLembreteChange = (value, checked) => {
+    setFormData(prev => {
+      let lembretes = [...prev.lembretes];
+      if (checked && !lembretes.includes(value)) lembretes.push(value);
+      else lembretes = lembretes.filter(l => l !== value);
+      return { ...prev, lembretes };
+    });
+  };
+
+  const handleTagInputChange = (e) => {
+    setFormData(prev => ({ ...prev, tagInput: e.target.value }));
+  };
+
+  const addTag = () => {
+    const tag = formData.tagInput.trim();
+    if (tag && !formData.tags.includes(tag)) {
+      setFormData(prev => ({ ...prev, tags: [...prev.tags, tag], tagInput: '' }));
+    }
+  };
+
+  const removeTag = (tagToRemove) => {
+    setFormData(prev => ({ ...prev, tags: prev.tags.filter(t => t !== tagToRemove) }));
+  };
+
+  const handleAnexosChange = (e) => {
+    const files = Array.from(e.target.files);
+    setFormData(prev => ({ ...prev, anexos: [...prev.anexos, ...files] }));
+    e.target.value = null;
+  };
+
+  const removeAnexo = (index) => {
+    setFormData(prev => {
+      const novosAnexos = [...prev.anexos];
+      novosAnexos.splice(index, 1);
+      return { ...prev, anexos: novosAnexos };
+    });
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
     onSubmit(formData);
-    // Limpar campos
-    setFormData({
-      title: '',
-      description: '',
-      due_date: '',
-    });
     onClose();
+  };
+
+  const lembretesOpcoes = ['1 hora antes', '1 dia antes', '1 semana antes', 'Na data de vencimento'];
+
+  const getLembretesDisplayText = () => {
+    if (formData.lembretes.length === 0) return 'Selecionar lembretes...';
+    if (formData.lembretes.length === 1) return formData.lembretes[0];
+    return `${formData.lembretes.length} lembretes selecionados`;
   };
 
   return (
@@ -30,37 +92,116 @@ function TaskForm({ onClose, onSubmit }) {
       <div className={styles.modalContent}>
         <h2 className={styles.title}>Nova Tarefa</h2>
         <form className={styles.form} onSubmit={handleSubmit}>
-          <label htmlFor="title">Título</label>
-          <input
-            id="title"
-            name="title"
-            type="text"
-            value={formData.title}
-            onChange={handleChange}
-            required
-          />
+          <div className={styles.formContent}>
+            
+            {/* --- LINHA 1 --- */}
+            <div style={{ gridColumn: 'span 4' }}>
+              <label htmlFor="title">Título *</label>
+              <input id="title" name="title" type="text" value={formData.title} onChange={handleChange} required />
+            </div>
 
-          <label htmlFor="description">Descrição</label>
-          <textarea
-            id="description"
-            name="description"
-            value={formData.description}
-            onChange={handleChange}
-            rows="3"
-          />
+            {/* --- LINHA 2 e 3 (ÁREA COMBINADA) --- */}
 
-          <label htmlFor="due_date">Data de Vencimento</label>
-          <input
-            id="due_date"
-            name="due_date"
-            type="date"
-            value={formData.due_date}
-            onChange={handleChange}
-          />
+            {/* Coluna 1 e 2 (Ocupa 2 linhas) */}
+            <div style={{ gridColumn: 'span 2', gridRow: 'span 2' }}>
+              <label htmlFor="description">Descrição</label>
+              <textarea id="description" name="description" value={formData.description} onChange={handleChange} rows="6" />
+            </div>
+
+            {/* Coluna 3 e 4 (Primeira linha à direita) */}
+            <div>
+              <label htmlFor="prioridade">Prioridade</label>
+              <select id="prioridade" name="prioridade" value={formData.prioridade} onChange={handleChange}>
+                <option>Alta</option>
+                <option>Média</option>
+                <option>Baixa</option>
+              </select>
+            </div>
+
+            <div>
+              <label htmlFor="status_inicial">Status Inicial</label>
+              <select id="status_inicial" name="status_inicial" value={formData.status_inicial} onChange={handleChange}>
+                <option>A fazer</option>
+                <option>Em andamento</option>
+                <option>Aguardando terceiros</option>
+              </select>
+            </div>
+
+            {/* Coluna 3 e 4 (Segunda linha à direita) */}
+            <div>
+              <label htmlFor="categoria">Categoria</label>
+              <select id="categoria" name="categoria" value={formData.categoria} onChange={handleChange}>
+                <option>Processo</option>
+                <option>Reunião</option>
+                <option>Pesquisa</option>
+                <option>Documento</option>
+                <option>Audiência</option>
+                <option>Outro</option>
+              </select>
+            </div>
+
+            <div>
+              <label htmlFor="due_date">Data de Vencimento</label>
+              <input id="due_date" name="due_date" type="date" value={formData.due_date} onChange={handleChange} />
+            </div>
+
+            {/* --- CONTINUAÇÃO DO FORMULÁRIO --- */}
+
+            <div style={{ gridColumn: 'span 2' }}>
+              <label htmlFor="relacionado_a">Relacionado a</label>
+              <input id="relacionado_a" name="relacionado_a" type="text" value={formData.relacionado_a} onChange={handleChange} placeholder="Nº do processo, cliente..." />
+            </div>
+
+            <div>
+              <label>Lembretes</label>
+              <div className={styles.lembretesDropdown} ref={lembretesRef}>
+                <div className={styles.lembretesDisplay} onClick={() => setLembretesOpen(!lembretesOpen)}>
+                  <span>{getLembretesDisplayText()}</span>
+                  <span className={`${styles.dropdownArrow} ${lembretesOpen ? styles.open : ''}`}></span>
+                </div>
+                {lembretesOpen && (
+                  <div className={styles.lembretesMenu}>
+                    {lembretesOpcoes.map(lembrete => (
+                      <div key={lembrete} className={styles.lembreteOption}>
+                        <Checkbox label={lembrete} checked={formData.lembretes.includes(lembrete)} onChange={(checked) => handleLembreteChange(lembrete, checked)} />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="tags-input">Tags</label>
+              <div className={styles.tagsInputContainer}>
+                <input id="tags-input" type="text" placeholder="Adicionar tag" value={formData.tagInput} onChange={handleTagInputChange} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addTag(); } }} />
+                <button type="button" onClick={addTag}>+</button>
+              </div>
+              <div className={styles.tagsList}>
+                {formData.tags.map(tag => (
+                  <div key={tag} className={styles.tagItem}>
+                    <span>{tag}</span> <button type="button" onClick={() => removeTag(tag)}>×</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className={styles.fieldBlock} style={{ gridColumn: 'span 4' }}>
+              <label htmlFor="anexos-input">Anexos</label>
+              <input id="anexos-input" className={styles.fileInput} type="file" multiple onChange={handleAnexosChange} />
+              <div className={styles.anexosList}>
+                {formData.anexos.map((file, i) => (
+                  <div key={i} className={styles.anexoItem}>
+                    <span>{file.name}</span> <button type="button" onClick={() => removeAnexo(i)}>×</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
 
           <div className={styles.buttons}>
-            <button type="submit" className={styles.saveBtn}>Salvar</button>
             <button type="button" onClick={onClose} className={styles.cancelBtn}>Cancelar</button>
+            <button type="submit" className={styles.saveBtn}>Salvar Tarefa</button>
           </div>
         </form>
       </div>

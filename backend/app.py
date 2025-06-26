@@ -122,24 +122,14 @@ def get_tasks():
 
     tasks = query.all()
 
-    tasks_data = [
-        {
-            'id': task.id,
-            'title': task.title,
-            'description': task.description,
-            'status': task.status,
-            'due_date': task.due_date.isoformat() if task.due_date else None,
-            'created_at': task.created_at.isoformat(),
-            'updated_at': task.updated_at.isoformat()
-        }
-        for task in tasks
-    ]
+    tasks_data = [task.to_dict() for task in tasks]
 
     return jsonify(tasks_data)
 
 @app.route('/api/tasks', methods=['POST'])
 @login_required
 def add_task():
+    from datetime import datetime
     data = request.get_json()
     user_id = session['user_id']
 
@@ -147,35 +137,39 @@ def add_task():
     if not data.get('title'):
         return jsonify({'error': 'O campo título é obrigatório.'}), 400
 
-    # Criar a tarefa
+    # Converte data se existir
+    due_date = None
+    if data.get('due_date'):
+        try:
+            due_date = datetime.fromisoformat(data['due_date'])
+        except ValueError:
+            return jsonify({'error': 'Formato inválido para due_date. Use ISO 8601.'}), 400
+
+    # Cria nova tarefa com todos os campos possíveis
     new_task = Task(
         title=data['title'],
         description=data.get('description'),
         status=data.get('status', 'pending'),
-        due_date=None,
-        user_id=user_id
-    )
+        due_date=due_date,
+        user_id=user_id,
 
-    # Se vier due_date, tentar converter para datetime
-    if data.get('due_date'):
-        from datetime import datetime
-        try:
-            new_task.due_date = datetime.fromisoformat(data['due_date'])
-        except ValueError:
-            return jsonify({'error': 'Formato inválido para due_date. Use ISO 8601.'}), 400
+        # 🆕 Novos campos:
+        prioridade=data.get('prioridade'),
+        categoria=data.get('categoria'),
+        status_inicial=data.get('status_inicial'),
+        tempo_estimado=data.get('tempo_estimado'),
+        tempo_unidade=data.get('tempo_unidade'),
+        relacionado_a=data.get('relacionado_a'),
+        lembretes=data.get('lembretes'),     # Deve ser uma lista
+        tags=data.get('tags'),               # Deve ser uma lista
+        anexos=data.get('anexos')            # Lista de links ou nomes
+    )
 
     db.session.add(new_task)
     db.session.commit()
 
-    return jsonify({
-        'id': new_task.id,
-        'title': new_task.title,
-        'description': new_task.description,
-        'status': new_task.status,
-        'due_date': new_task.due_date.isoformat() if new_task.due_date else None,
-        'created_at': new_task.created_at.isoformat(),
-        'updated_at': new_task.updated_at.isoformat()
-    }), 201
+    return jsonify(new_task.to_dict()), 201
+
 
 @app.route('/api/tasks/<int:task_id>', methods=['GET'])
 @login_required
@@ -189,20 +183,12 @@ def get_task(task_id):
     if task.user_id != user_id:
         return jsonify({'error': 'Acesso negado'}), 403
 
-    return jsonify({
-        'id': task.id,
-        'title': task.title,
-        'description': task.description,
-        'status': task.status,
-        'due_date': task.due_date.isoformat() if task.due_date else None,
-        'created_at': task.created_at.isoformat(),
-        'updated_at': task.updated_at.isoformat()
-    })
-
+    return jsonify(task.to_dict())
 
 @app.route('/api/tasks/<int:task_id>', methods=['PUT'])
 @login_required
 def update_task(task_id):
+    from datetime import datetime
     user_id = session['user_id']
     task = Task.query.get(task_id)
 
@@ -214,7 +200,7 @@ def update_task(task_id):
 
     data = request.get_json()
 
-    # Atualizar campos se vierem no JSON
+    # Atualizar campos básicos se vierem no JSON
     if 'title' in data:
         task.title = data['title']
     if 'description' in data:
@@ -227,23 +213,35 @@ def update_task(task_id):
         if data['due_date'] is None:
             task.due_date = None
         else:
-            from datetime import datetime
             try:
                 task.due_date = datetime.fromisoformat(data['due_date'])
             except ValueError:
                 return jsonify({'error': 'Formato inválido para due_date. Use ISO 8601.'}), 400
 
+    # 🆕 Atualizar campos novos
+    if 'prioridade' in data:
+        task.prioridade = data['prioridade']
+    if 'categoria' in data:
+        task.categoria = data['categoria']
+    if 'status_inicial' in data:
+        task.status_inicial = data['status_inicial']
+    if 'tempo_estimado' in data:
+        task.tempo_estimado = data['tempo_estimado']
+    if 'tempo_unidade' in data:
+        task.tempo_unidade = data['tempo_unidade']
+    if 'relacionado_a' in data:
+        task.relacionado_a = data['relacionado_a']
+    if 'lembretes' in data:
+        task.lembretes = data['lembretes']  # espera lista de strings
+    if 'tags' in data:
+        task.tags = data['tags']            # espera lista de strings
+    if 'anexos' in data:
+        task.anexos = data['anexos']        # espera lista de strings
+
     db.session.commit()
 
-    return jsonify({
-        'id': task.id,
-        'title': task.title,
-        'description': task.description,
-        'status': task.status,
-        'due_date': task.due_date.isoformat() if task.due_date else None,
-        'created_at': task.created_at.isoformat(),
-        'updated_at': task.updated_at.isoformat()
-    })
+    return jsonify(task.to_dict())
+
 
 
 @app.route('/api/tasks/<int:task_id>', methods=['DELETE'])
