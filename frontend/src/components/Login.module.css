@@ -12,7 +12,17 @@
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
 }
 
-h2 {
+.wrapper {
+  display: flex;
+  flex-direction: column;
+}
+
+.leftPanel {
+  display: flex;
+  flex-direction: column;
+}
+
+.title {
   text-align: center;
   margin-bottom: 24px;
   font-weight: 700;
@@ -20,12 +30,12 @@ h2 {
   color: #38bdf8;
 }
 
-form {
+.form {
   display: flex;
   flex-direction: column;
 }
 
-input {
+.input {
   background-color: #334155;
   border: none;
   border-radius: 6px;
@@ -36,11 +46,11 @@ input {
   transition: background-color 0.3s ease;
 }
 
-input::placeholder {
+.input::placeholder {
   color: #94a3b8;
 }
 
-input:focus {
+.input:focus {
   outline: none;
   background-color: #475569;
   box-shadow: 0 0 0 2px #38bdf8;
@@ -87,7 +97,7 @@ input:focus {
   align-items: center;
 }
 
-.passwordWrapper input {
+.passwordWrapper .input {
   flex: 1;
   padding-right: 40px;
 }

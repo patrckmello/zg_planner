@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import styles from './TaskForm.module.css';
-import Checkbox from './Checkbox/Checkbox';
+import Checkbox from './Checkbox/Checkbox.jsx';
+import AnexoItemPreview from './AnexoItemPreview.jsx';
 
 function TaskForm({ onClose, onSubmit }) {
   const [formData, setFormData] = useState({
@@ -94,43 +95,69 @@ function TaskForm({ onClose, onSubmit }) {
         <form className={styles.form} onSubmit={handleSubmit}>
           <div className={styles.formContent}>
             
-            {/* --- LINHA 1 --- */}
-            <div style={{ gridColumn: 'span 4' }}>
+            {/* LINHA 1: TÍTULO (span 4) */}
+            <div className={styles.titleField}>
               <label htmlFor="title">Título *</label>
-              <input id="title" name="title" type="text" value={formData.title} onChange={handleChange} required />
+              <input 
+                id="title" 
+                name="title" 
+                type="text" 
+                value={formData.title} 
+                onChange={handleChange} 
+                required 
+              />
             </div>
 
-            {/* --- LINHA 2 e 3 (ÁREA COMBINADA) --- */}
-
-            {/* Coluna 1 e 2 (Ocupa 2 linhas) */}
-            <div style={{ gridColumn: 'span 2', gridRow: 'span 2' }}>
+            {/* LINHA 2-3: DESCRIÇÃO (span 2, 2 linhas) + CAMPOS LATERAIS */}
+            <div className={styles.descriptionField}>
               <label htmlFor="description">Descrição</label>
-              <textarea id="description" name="description" value={formData.description} onChange={handleChange} rows="6" />
+              <textarea 
+                id="description" 
+                name="description" 
+                value={formData.description} 
+                onChange={handleChange} 
+                rows="4" 
+              />
             </div>
 
-            {/* Coluna 3 e 4 (Primeira linha à direita) */}
-            <div>
+            {/* LINHA 2: PRIORIDADE + STATUS */}
+            <div className={styles.prioridadeField}>
               <label htmlFor="prioridade">Prioridade</label>
-              <select id="prioridade" name="prioridade" value={formData.prioridade} onChange={handleChange}>
+              <select 
+                id="prioridade" 
+                name="prioridade" 
+                value={formData.prioridade} 
+                onChange={handleChange}
+              >
                 <option>Alta</option>
                 <option>Média</option>
                 <option>Baixa</option>
               </select>
             </div>
 
-            <div>
+            <div className={styles.statusField}>
               <label htmlFor="status_inicial">Status Inicial</label>
-              <select id="status_inicial" name="status_inicial" value={formData.status_inicial} onChange={handleChange}>
+              <select 
+                id="status_inicial" 
+                name="status_inicial" 
+                value={formData.status_inicial} 
+                onChange={handleChange}
+              >
                 <option>A fazer</option>
                 <option>Em andamento</option>
                 <option>Aguardando terceiros</option>
               </select>
             </div>
 
-            {/* Coluna 3 e 4 (Segunda linha à direita) */}
-            <div>
+            {/* LINHA 3: CATEGORIA + DATA DE VENCIMENTO */}
+            <div className={styles.categoriaField}>
               <label htmlFor="categoria">Categoria</label>
-              <select id="categoria" name="categoria" value={formData.categoria} onChange={handleChange}>
+              <select 
+                id="categoria" 
+                name="categoria" 
+                value={formData.categoria} 
+                onChange={handleChange}
+              >
                 <option>Processo</option>
                 <option>Reunião</option>
                 <option>Pesquisa</option>
@@ -140,30 +167,49 @@ function TaskForm({ onClose, onSubmit }) {
               </select>
             </div>
 
-            <div>
+            <div className={styles.dueDateField}>
               <label htmlFor="due_date">Data de Vencimento</label>
-              <input id="due_date" name="due_date" type="date" value={formData.due_date} onChange={handleChange} />
+              <input 
+                id="due_date" 
+                name="due_date" 
+                type="date" 
+                value={formData.due_date} 
+                onChange={handleChange} 
+              />
             </div>
-
-            {/* --- CONTINUAÇÃO DO FORMULÁRIO --- */}
-
-            <div style={{ gridColumn: 'span 2' }}>
+            
+            {/* LINHA 4: RELACIONADO A (span 2) + LEMBRETES + TAGS */}
+            <div className={styles.relacionadoField}>
               <label htmlFor="relacionado_a">Relacionado a</label>
-              <input id="relacionado_a" name="relacionado_a" type="text" value={formData.relacionado_a} onChange={handleChange} placeholder="Nº do processo, cliente..." />
+              <input
+                id="relacionado_a"
+                name="relacionado_a"
+                type="text"
+                value={formData.relacionado_a}
+                onChange={handleChange}
+                placeholder="Nº do processo, cliente..."
+              />
             </div>
 
-            <div>
+            <div className={styles.lembretesField}>
               <label>Lembretes</label>
               <div className={styles.lembretesDropdown} ref={lembretesRef}>
-                <div className={styles.lembretesDisplay} onClick={() => setLembretesOpen(!lembretesOpen)}>
+                <div 
+                  className={styles.lembretesDisplay} 
+                  onClick={() => setLembretesOpen(!lembretesOpen)}
+                >
                   <span>{getLembretesDisplayText()}</span>
-                  <span className={`${styles.dropdownArrow} ${lembretesOpen ? styles.open : ''}`}></span>
+                  <span>▼</span>
                 </div>
                 {lembretesOpen && (
                   <div className={styles.lembretesMenu}>
                     {lembretesOpcoes.map(lembrete => (
                       <div key={lembrete} className={styles.lembreteOption}>
-                        <Checkbox label={lembrete} checked={formData.lembretes.includes(lembrete)} onChange={(checked) => handleLembreteChange(lembrete, checked)} />
+                        <Checkbox
+                          label={lembrete}
+                          checked={formData.lembretes.includes(lembrete)}
+                          onChange={(checked) => handleLembreteChange(lembrete, checked)}
+                        />
                       </div>
                     ))}
                   </div>
@@ -171,37 +217,75 @@ function TaskForm({ onClose, onSubmit }) {
               </div>
             </div>
 
-            <div>
+            <div className={styles.tagsField}>
               <label htmlFor="tags-input">Tags</label>
               <div className={styles.tagsInputContainer}>
-                <input id="tags-input" type="text" placeholder="Adicionar tag" value={formData.tagInput} onChange={handleTagInputChange} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addTag(); } }} />
+                <input
+                  id="tags-input"
+                  type="text"
+                  placeholder="Adicionar tag"
+                  value={formData.tagInput}
+                  onChange={handleTagInputChange}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      addTag();
+                    }
+                  }}
+                />
                 <button type="button" onClick={addTag}>+</button>
               </div>
               <div className={styles.tagsList}>
                 {formData.tags.map(tag => (
                   <div key={tag} className={styles.tagItem}>
-                    <span>{tag}</span> <button type="button" onClick={() => removeTag(tag)}>×</button>
+                    <span>{tag}</span>
+                    <button type="button" onClick={() => removeTag(tag)}>×</button>
                   </div>
                 ))}
               </div>
             </div>
 
-            <div className={styles.fieldBlock} style={{ gridColumn: 'span 4' }}>
-              <label htmlFor="anexos-input">Anexos</label>
-              <input id="anexos-input" className={styles.fileInput} type="file" multiple onChange={handleAnexosChange} />
-              <div className={styles.anexosList}>
-                {formData.anexos.map((file, i) => (
-                  <div key={i} className={styles.anexoItem}>
-                    <span>{file.name}</span> <button type="button" onClick={() => removeAnexo(i)}>×</button>
+            {/* LINHA 5: SEÇÃO DE ANEXOS (span 4) COM GRID ANINHADO */}
+            <div className={styles.anexosField}>
+              <div className={styles.anexosSection}>
+                <label>Anexos</label>
+                <input
+                  id="anexos-input"
+                  className={styles.hiddenFileInput}
+                  type="file"
+                  multiple
+                  onChange={handleAnexosChange}
+                />
+                <div className={styles.anexosLayout}>
+                  {/* Input Button (1 coluna) */}
+                  <label htmlFor="anexos-input" className={styles.fileInputArea}>
+                    <span>Clique para selecionar</span>
+                    <p>ou arraste e solte os arquivos aqui</p>
+                  </label>
+
+                  {/* Preview Area (3 colunas) com Grid Aninhado */}
+                  <div className={styles.previewArea}>
+                    {formData.anexos.map((file, i) => (
+                      <AnexoItemPreview
+                        key={i}
+                        file={file}
+                        onRemove={() => removeAnexo(i)}
+                      />
+                    ))}
                   </div>
-                ))}
+                </div>
               </div>
             </div>
-          </div>
+
+          </div> {/* Fim do .formContent */}
 
           <div className={styles.buttons}>
-            <button type="button" onClick={onClose} className={styles.cancelBtn}>Cancelar</button>
-            <button type="submit" className={styles.saveBtn}>Salvar Tarefa</button>
+            <button type="button" onClick={onClose} className={styles.cancelBtn}>
+              Cancelar
+            </button>
+            <button type="submit" className={styles.saveBtn}>
+              Salvar Tarefa
+            </button>
           </div>
         </form>
       </div>
@@ -210,3 +294,4 @@ function TaskForm({ onClose, onSubmit }) {
 }
 
 export default TaskForm;
+
