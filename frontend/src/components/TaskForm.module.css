@@ -1,252 +1,287 @@
-
-
-/* ===== MODAL E ESTRUTURA PRINCIPAL ===== */
+/* ===== MODAL OVERLAY & CONTAINER ===== */
 .modalOverlay {
   position: fixed;
-  inset: 0;
-  backdrop-filter: blur(5px);
-  background: rgba(0, 0, 0, 0.5);
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 9999;
+  z-index: 1000;
+  padding: 20px;
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .modalContent {
-  background: #ffffff;
-  padding: 24px 28px;
+  background: white;
   border-radius: 16px;
-  width: 1100px;
-  max-width: 95vw;
-  height: 85vh; /* Aumentado para 85vh para dar mais espaço */
-  max-height: 85vh;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  width: 100%;
+  max-width: 900px;
+  height: 85vh;
+  max-height: 700px;
+  overflow: hidden;
   animation: slideUp 0.3s ease-out;
+  position: relative;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
 }
 
 @keyframes slideUp {
-  from { 
-    transform: translateY(30px); 
-    opacity: 0; 
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
   }
-  to { 
-    transform: translateY(0); 
-    opacity: 1; 
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
   }
 }
 
-.title {
-  font-size: 1.5rem;
-  color: #2563eb;
-  font-weight: 700;
-  text-align: center;
-  margin-bottom: 20px;
-  flex-shrink: 0;
-}
-
-.form {
-  flex: 1 1 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  min-height: 0;
-}
-
-/* ===== GRID PRINCIPAL DO FORMULÁRIO (4 COLUNAS) ===== */
-.formContent {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  grid-template-rows: auto auto auto auto 1fr; /* Última linha flexível para anexos */
-  gap: 16px 20px;
-  padding: 8px 12px;
-  flex-grow: 1;
-  min-height: 0;
-  overflow-y: none; /* Adicionado overflow-y para o formContent */
-  padding-bottom: 20px; /* Espaçamento extra para evitar corte */
-}
-
-/* ===== ESTILOS GERAIS DOS INPUTS ===== */
-.form label {
-  display: block;
-  margin-bottom: 6px;
-  font-weight: 600;
-  color: #334155;
-  font-size: 0.9rem;
-}
-
-.form input,
-.form select,
-.form textarea,
-.lembretesDisplay {
-  width: 100%;
-  height: 40px;
-  padding: 10px 14px;
-  border: 2px solid #cbd5e1;
-  border-radius: 8px;
-  font-size: 0.9rem;
-  background-color: #f8fafc;
-  color: #1e293b;
-  transition: all 0.2s ease;
-  box-sizing: border-box;
-  font-family: inherit;
+/* ===== MODAL HEADER ===== */
+.modalHeader {
   display: flex;
   align-items: center;
-}
-
-.form textarea {
-  height: auto;
-  min-height: 90px;
-  max-height: 120px;
-  padding-top: 10px;
-  padding-bottom: 10px;
-  resize: vertical;
-  align-items: flex-start;
-}
-
-.form input:focus,
-.form textarea:focus,
-.form select:focus,
-.lembretesDisplay:hover {
-  border-color: #2563eb;
-  outline: none;
-  background-color: #fff;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
-}
-
-/* ===== LAYOUT ESPECÍFICO DOS CAMPOS (NOVO GRID 4 COLUNAS) ===== */
-
-/* Linha 1: Título (span 4) */
-.titleField {
-  grid-column: span 4;
-}
-
-/* Linha 2: Descrição (span 2) + Prioridade (span 1) + Status (span 1) */
-.descriptionField {
-  grid-column: span 2;
-  grid-row: span 2;
-}
-
-.prioridadeField {
-  grid-column: span 1;
-}
-
-.statusField {
-  grid-column: span 1;
-}
-
-/* Linha 3: Categoria (span 1) + Data de Vencimento (span 1) */
-.categoriaField {
-  grid-column: span 1;
-}
-
-.dueDateField {
-  grid-column: span 1;
-}
-
-/* Linha 4: Relacionado a (span 2) + Lembretes (span 1) + Tags (span 1) */
-.relacionadoField {
-  grid-column: span 2;
-}
-
-.lembretesField {
-  grid-column: span 1;
-}
-
-.tagsField {
-  grid-column: span 1;
-}
-
-/* Linha 5: Anexos (span 1) + Preview (span 3) */
-.anexosField {
-  grid-column: span 4;
-  height: 60px; /* Garante que o campo ocupe o espaço disponível */
-  display: flex; /* Adicionado para que o conteúdo interno possa crescer */
-  flex-direction: column;
-}
-
-/* ===== COMPONENTES ESPECÍFICOS ===== */
-
-/* Tags */
-.tagsInputContainer {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  margin-bottom: 8px;
-}
-
-.tagsInputContainer input {
-  flex: 1;
-}
-
-.tagsInputContainer button {
-  flex-shrink: 0;
-  background-color: #2563eb;
-  border: none;
+  justify-content: space-between;
+  padding: 20px 28px 16px;
+  border-bottom: 1px solid #e5e7eb;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
-  padding: 0 16px;
-  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.modalTitle {
+  font-size: 22px;
   font-weight: 600;
-  font-size: 1.1rem;
-  cursor: pointer;
+  margin: 0;
+  color: white;
+}
+
+.closeButton {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  border-radius: 8px;
+  width: 32px;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 40px;
-  transition: background-color 0.2s ease;
+  font-size: 20px;
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
 
-.tagsInputContainer button:hover {
-  background-color: #1d4ed8;
+.closeButton:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: scale(1.05);
 }
 
-.tagsList {
+/* ===== FORM CONTAINER ===== */
+.form {
+  flex: 1;
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-content: flex-start;
-  max-height: 70px;
-  overflow-y: auto;
+  flex-direction: column;
+  overflow: hidden;
 }
 
-.tagItem {
-  background-color: #e0e7ff;
-  color: #4338ca;
-  padding: 4px 12px;
-  border-radius: 16px;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.85rem;
+.formContent {
+  flex: 1;
+  padding: 24px 28px 16px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* ===== GRID LAYOUT ===== */
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px 18px;
+  align-items: start;
+}
+
+/* ===== FORM SECTIONS ===== */
+.titleSection {
+  grid-column: 1 / -1;
+}
+
+.descriptionSection {
+  grid-column: 1 / 3;
+  grid-row: span 2;
+  display: flex;
+  flex-direction: column;
+}
+
+.prioridadeSection {
+  grid-column: 3 / 4;
+}
+
+.statusSection {
+  grid-column: 4 / 5;
+}
+
+.categoriaSection {
+  grid-column: 3 / 4;
+}
+
+.dueDateSection {
+  grid-column: 4 / 5;
+}
+
+.relacionadoSection {
+  grid-column: 1 / 3;
+}
+
+.lembretesSection {
+  grid-column: 3 / 4;
+}
+
+.tagsSection {
+  grid-column: 4 / 5;
+}
+
+.anexosSection {
+  grid-column: 1 / -1;
+  margin-top: 8px;
+}
+
+/* ===== FORM ELEMENTS ===== */
+.label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 5px;
+}
+
+.required {
+  color: #ef4444;
+  margin-left: 2px;
+}
+
+.input,
+.select,
+.textarea {
+  width: 100%;
+  padding: 10px 14px;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #1f2937;
+  background: white;
+  transition: all 0.2s ease;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+.input:focus,
+.select:focus,
+.textarea:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+}
+
+.input:hover,
+.select:hover,
+.textarea:hover {
+  border-color: #d1d5db;
+}
+
+.inputError {
+  border-color: #ef4444;
+}
+
+.inputError:focus {
+  border-color: #ef4444;
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.1);
+}
+
+.textarea {
+  resize: none;
+  height: 80px;
+  flex: 1;
+}
+
+.select {
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
+  background-position: right 12px center;
+  background-repeat: no-repeat;
+  background-size: 16px;
+  padding-right: 36px;
+  appearance: none;
+}
+
+.errorMessage {
+  display: block;
+  color: #ef4444;
+  font-size: 11px;
+  margin-top: 3px;
   font-weight: 500;
 }
 
-.tagItem button {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: #6366f1;
-  font-weight: bold;
-  font-size: 1rem;
-  padding: 0;
-  line-height: 1;
-}
-
-/* Lembretes Dropdown */
+/* ===== LEMBRETES DROPDOWN ===== */
 .lembretesDropdown {
   position: relative;
 }
 
-.lembretesDisplay {
-  justify-content: space-between;
+.lembretesButton {
+  width: 100%;
+  padding: 10px 14px;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  background: white;
+  text-align: left;
   cursor: pointer;
-  user-select: none;
-  /* Adicionado para garantir que o texto não seja cortado */
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  color: #1f2937;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.lembretesButton:hover {
+  border-color: #d1d5db;
+}
+
+.lembretesButton:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+}
+
+.lembretesText {
+  flex: 1;
+  text-align: left;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.chevron {
+  transition: transform 0.2s ease;
+  color: #6b7280;
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+
+.chevronUp {
+  transform: rotate(180deg);
 }
 
 .lembretesMenu {
@@ -255,17 +290,18 @@
   left: 0;
   right: 0;
   background: white;
-  border: 2px solid #cbd5e1;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  z-index: 1000;
-  max-height: 200px;
+  border: 2px solid #e5e7eb;
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  z-index: 20;
+  max-height: 180px;
   overflow-y: auto;
 }
 
 .lembreteOption {
-  padding: 8px 12px;
-  border-bottom: 1px solid #e2e8f0;
+  padding: 6px 14px;
+  border-bottom: 1px solid #f3f4f6;
 }
 
 .lembreteOption:last-child {
@@ -273,263 +309,451 @@
 }
 
 .lembreteOption:hover {
-  background-color: #f8fafc;
+  background: #f9fafb;
 }
 
-/* ===== SEÇÃO DE ANEXOS OTIMIZADA COM GRID ANINHADO ===== */
-.anexosSection {
+/* ===== TAGS INPUT ===== */
+.tagsInputContainer {
   display: flex;
-  flex-direction: column;
-  height: 100%;
+  gap: 6px;
+  margin-bottom: 8px;
 }
 
-.anexosLayout {
-  flex-grow: 1;
-  display: grid;
-  grid-template-columns: 1fr 3fr;
-  gap: 20px;
-  margin-top: 8px;
-  height: 100%;
-  /* min-height removido para permitir que ocupe o espaço restante */
+.tagsInputContainer .input {
+  flex: 1;
+  margin-bottom: 0;
 }
 
-.hiddenFileInput {
-  position: absolute !important;
-  width: 1px !important;
-  height: 1px !important;
-  padding: 0 !important;
-  margin: -1px !important;
-  overflow: hidden !important;
-  clip: rect(0, 0, 0, 0) !important;
-  white-space: nowrap !important;
-  border: 0 !important;
-}
-
-.fileInputArea {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  border: 2px dashed #94a3b8;
-  border-radius: 12px;
-  background-color: #f8fafc;
-  color: #475569;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  padding: 20px;
-  height: 100%;
-  min-height: 140px;
-}
-
-.fileInputArea:hover {
-  border-color: #2563eb;
-  background-color: #f0f5ff;
-  transform: translateY(-2px);
-}
-
-.fileInputArea span {
-  font-weight: 600;
-  font-size: 1rem;
-  margin-bottom: 6px;
-}
-
-.fileInputArea p {
-  font-size: 0.85rem;
-  margin: 0;
-  opacity: 0.7;
-}
-
-/* ===== ÁREA DE PREVIEW COM GRID ANINHADO (3 COLUNAS) ===== */
-.previewArea {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-  overflow-y: auto;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 16px;
-  background-color: #fafbfc;
-  height: 100%;
-  min-height: 140px;
-  align-content: start;
-}
-
-.previewArea:empty::before {
-  content: "Nenhum arquivo selecionado";
-  grid-column: span 3;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  color: #94a3b8;
-  font-style: italic;
-  font-size: 0.9rem;
-}
-
-.anexoItem {
-  background-color: #ffffff;
-  padding: 12px;
-  border-radius: 8px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  font-size: 0.85rem;
-  color: #475569;
-  border: 1px solid #e2e8f0;
-  box-sizing: border-box;
-  transition: all 0.2s ease;
-  position: relative;
-  min-height: 100px;
-}
-
-.anexoItem:hover {
-  border-color: #cbd5e1;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  transform: translateY(-1px);
-}
-
-.anexoItem button {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  background: rgba(255, 255, 255, 0.9);
+.addTagButton {
+  background: #667eea;
+  color: white;
   border: none;
-  cursor: pointer;
-  color: #94a3b8;
-  font-weight: bold;
-  font-size: 1.2rem;
-  padding: 4px 6px;
-  line-height: 1;
-  border-radius: 4px;
-  transition: all 0.2s ease;
-}
-
-.anexoItem button:hover {
-  background-color: #fee2e2;
-  color: #dc2626;
-}
-
-.previewThumb {
-  width: 48px;
-  height: 48px;
-  object-fit: cover;
-  border-radius: 6px;
-  margin-bottom: 8px;
-}
-
-.fileIcon {
-  font-size: 2.5rem;
-  line-height: 1;
-  margin-bottom: 8px;
-}
-
-.fileName {
-  font-weight: 500;
-  color: #1e293b;
-  margin-bottom: 4px;
-  word-break: break-word;
-  line-height: 1.2;
-}
-
-.fileSize {
-  font-size: 0.75rem;
-  color: #64748b;
-}
-
-/* ===== BOTÕES DO RODAPÉ ===== */
-.buttons {
+  border-radius: 8px;
+  width: 36px;
+  height: 38px;
   display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  margin-top: 20px;
-  padding-top: 20px;
-  border-top: 1px solid #e2e8f0;
-  background-color: #fff;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
   flex-shrink: 0;
 }
 
-.saveBtn,
-.cancelBtn {
-  border: none;
-  padding: 12px 28px;
-  border-radius: 8px;
-  font-weight: 600;
-  font-size: 0.95rem;
-  cursor: pointer;
-  transition: all 0.2s ease;
+.addTagButton:hover:not(:disabled) {
+  background: #5a67d8;
+  transform: scale(1.05);
 }
 
-.saveBtn {
-  background: #2563eb;
+.addTagButton:disabled {
+  background: #d1d5db;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.tagsList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 38px;
+  max-height: 60px;
+  overflow-y: auto;
+  align-items: flex-start;
+  align-content: flex-start;
+}
+
+.tagItem {
+  display: flex;
+  align-items: center;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: white;
+  padding: 4px 10px;
+  border-radius: 16px;
+  font-size: 11px;
+  font-weight: 500;
+  animation: tagSlideIn 0.2s ease-out;
+}
+
+@keyframes tagSlideIn {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.tagText {
+  margin-right: 5px;
+}
+
+/* ===== BOTÃO DE REMOÇÃO DE TAG - PERFEITAMENTE REDONDO ===== */
+.removeTagButton {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  min-width: 18px;
+  min-height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  line-height: 1;
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+  padding: 0;
+  margin: 0;
+}
+
+.removeTagButton:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: scale(1.1);
+}
+
+/* ===== ANEXOS SECTION - CONTAINER OCUPANDO TODA A LARGURA ===== */
+.hiddenFileInput {
+  display: none;
+}
+
+.anexosContainer {
+  display: grid;
+  grid-template-columns: 1fr; /* UMA ÚNICA COLUNA PARA OCUPAR TODA A LARGURA */
+  gap: 16px;
+  align-items: start;
+}
+
+.fileDropArea {
+  border: 2px dashed #d1d5db;
+  border-radius: 10px;
+  padding: 20px 16px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: #fafafa;
+  height: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%; /* OCUPA TODA A LARGURA DISPONÍVEL */
+  box-sizing: border-box;
+}
+
+.fileDropArea:hover {
+  border-color: #667eea;
+  background: #f8faff;
+}
+
+.fileDropArea:active {
+  transform: scale(0.98);
+}
+
+.fileDropContent {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.fileDropIcon {
+  font-size: 24px;
+  opacity: 0.6;
+}
+
+.fileDropText {
+  font-weight: 500;
+  color: #374151;
+  font-size: 12px;
+}
+
+.fileDropSubtext {
+  font-size: 10px;
+  color: #6b7280;
+  margin: 0;
+}
+
+.anexosGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 10px;
+  min-height: 100px;
+  max-height: 100px;
+  overflow-y: auto;
+  align-content: flex-start;
+  width: 100%; /* OCUPA TODA A LARGURA DISPONÍVEL */
+  box-sizing: border-box;
+}
+
+/* ===== FORM ACTIONS ===== */
+.formActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 28px 20px;
+  border-top: 1px solid #e5e7eb;
+  flex-shrink: 0;
+  background: white;
+}
+
+.cancelButton,
+.submitButton {
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+  min-width: 100px;
+}
+
+.cancelButton {
+  background: #f3f4f6;
+  color: #374151;
+  border: 2px solid #e5e7eb;
+}
+
+.cancelButton:hover {
+  background: #e5e7eb;
+  transform: translateY(-1px);
+}
+
+.submitButton {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
 }
 
-.saveBtn:hover {
-  background: #1d4ed8;
+.submitButton:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
 }
 
-.cancelBtn {
-  background: #f1f5f9;
-  color: #475569;
-  border: 1px solid #e2e8f0;
+.submitButton:active {
+  transform: translateY(0);
 }
 
-.cancelBtn:hover {
-  background: #e2e8f0;
-  transform: translateY(-1px);
+/* ===== CUSTOM SCROLLBAR ===== */
+.formContent::-webkit-scrollbar {
+  width: 6px;
 }
 
-/* ===== RESPONSIVIDADE ===== */
+.formContent::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.formContent::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.formContent::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+.tagsList::-webkit-scrollbar,
+.anexosGrid::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+.tagsList::-webkit-scrollbar-track,
+.anexosGrid::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 2px;
+}
+
+.tagsList::-webkit-scrollbar-thumb,
+.anexosGrid::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 2px;
+}
+
+/* ===== RESPONSIVE DESIGN ===== */
 @media (max-width: 768px) {
-  .modalContent {
-    width: 95vw;
-    height: 90vh;
-    padding: 16px;
+  .modalOverlay {
+    padding: 10px;
   }
   
-  .title {
-    font-size: 1.3rem;
-    margin-bottom: 16px;
+  .modalContent {
+    height: 95vh;
+    max-height: none;
+    border-radius: 12px;
+  }
+  
+  .modalHeader {
+    padding: 16px 20px 12px;
+  }
+  
+  .modalTitle {
+    font-size: 18px;
   }
   
   .formContent {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 12px 16px;
+    padding: 20px;
   }
   
-  .titleField {
-    grid-column: span 2;
-  }
-  
-  .descriptionField {
-    grid-column: span 2;
-    grid-row: span 1;
-  }
-  
-  .prioridadeField,
-  .statusField,
-  .categoriaField,
-  .dueDateField,
-  .relacionadoField,
-  .lembretesField,
-  .tagsField {
-    grid-column: span 1;
-  }
-  
-  .anexosField {
-    grid-column: span 2;
-  }
-  
-  .anexosLayout {
+  .formGrid {
     grid-template-columns: 1fr;
-    grid-template-rows: auto 1fr;
+    gap: 14px;
   }
   
-  .previewArea {
-    grid-template-columns: repeat(2, 1fr);
+  .titleSection,
+  .descriptionSection,
+  .prioridadeSection,
+  .statusSection,
+  .categoriaSection,
+  .dueDateSection,
+  .relacionadoSection,
+  .lembretesSection,
+  .tagsSection,
+  .anexosSection {
+    grid-column: 1;
+    grid-row: auto;
+  }
+  
+  .anexosContainer {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  
+  .formActions {
+    flex-direction: column-reverse;
+    padding: 12px 20px 16px;
+  }
+  
+  .cancelButton,
+  .submitButton {
+    width: 100%;
   }
 }
+
+@media (max-width: 480px) {
+  .modalHeader {
+    padding: 14px 16px 10px;
+  }
+  
+  .formContent {
+    padding: 16px;
+  }
+  
+  .formGrid {
+    gap: 12px;
+  }
+  
+  .fileDropArea {
+    padding: 16px 12px;
+    height: 80px;
+  }
+  
+  .fileDropIcon {
+    font-size: 20px;
+  }
+}
+
+/* ===== ACCESSIBILITY ===== */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ===== FOCUS STYLES FOR ACCESSIBILITY ===== */
+.input:focus-visible,
+.select:focus-visible,
+.textarea:focus-visible,
+.lembretesButton:focus-visible,
+.addTagButton:focus-visible,
+.removeTagButton:focus-visible,
+.cancelButton:focus-visible,
+.submitButton:focus-visible,
+.closeButton:focus-visible {
+  outline: 2px solid #667eea;
+  outline-offset: 2px;
+}
+
+/* ===== DARK MODE SUPPORT (OPTIONAL) ===== */
+@media (prefers-color-scheme: dark) {
+  .modalContent {
+    background: #1f2937;
+    color: #f9fafb;
+  }
+  
+  .modalHeader {
+    border-bottom-color: #374151;
+  }
+  
+  .label {
+    color: #d1d5db;
+  }
+  
+  .input,
+  .select,
+  .textarea,
+  .lembretesButton {
+    background: #374151;
+    border-color: #4b5563;
+    color: #f9fafb;
+  }
+  
+  .input:hover,
+  .select:hover,
+  .textarea:hover,
+  .lembretesButton:hover {
+    border-color: #6b7280;
+  }
+  
+  .lembretesMenu {
+    background: #374151;
+    border-color: #4b5563;
+  }
+  
+  .lembreteOption:hover {
+    background: #4b5563;
+  }
+  
+  .fileDropArea {
+    background: #374151;
+    border-color: #4b5563;
+  }
+  
+  .fileDropArea:hover {
+    background: #4b5563;
+  }
+  
+  .cancelButton {
+    background: #374151;
+    color: #d1d5db;
+    border-color: #4b5563;
+  }
+  
+  .cancelButton:hover {
+    background: #4b5563;
+  }
+  
+  .formActions {
+    border-top-color: #374151;
+    background: #1f2937;
+  }
+  
+  .formContent::-webkit-scrollbar-track {
+    background: #374151;
+  }
+  
+  .formContent::-webkit-scrollbar-thumb {
+    background: #4b5563;
+  }
+  
+  .formContent::-webkit-scrollbar-thumb:hover {
+    background: #6b7280;
+  }
+}
+

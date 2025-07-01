@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import Header from './Header';
 import Sidebar from './Sidebar';
 import styles from './Dashboard.module.css';
-import TaskForm from './TaskForm';
-import EditTaskForm from './EditTaskForm';
+import TaskForm from './TaskForm'; 
+import EditTaskForm from './EditTaskForm'; 
 import DeleteConfirmModal from './DeleteConfirmModal';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
@@ -46,23 +46,76 @@ function Dashboard() {
   };
 
   
-  const handleUpdateTask = async (formData) => {
+  // FUNÇÃO CORRIGIDA: Atualizar tarefa com suporte a exclusão de arquivos
+  const handleUpdateTask = async (taskId, taskData) => {
     try {
+      const formData = new FormData();
+
+      // Campos básicos
+      formData.append('title', taskData.title || '');
+      formData.append('description', taskData.description || '');
+      formData.append('status', taskData.status || 'pending');
+      formData.append('due_date', taskData.due_date || '');
+      formData.append('prioridade', taskData.prioridade || '');
+      formData.append('categoria', taskData.categoria || '');
+      formData.append('relacionadoA', taskData.relacionadoA || '');
+
+      // Lembretes e tags como JSON
+      formData.append('lembretes', JSON.stringify(taskData.lembretes || []));
+      formData.append('tags', JSON.stringify(taskData.tags || []));
+
+      // Processar anexos
+      const existingFiles = [];
+      const newFiles = [];
+
+      (taskData.anexos || []).forEach(anexo => {
+        if (anexo.isExisting && !anexo.file) {
+          // Arquivo existente no servidor
+          existingFiles.push(anexo.name);
+        } else if (anexo.file) {
+          // Novo arquivo para upload
+          newFiles.push(anexo.file);
+        }
+      });
+
+      // Anexos existentes que devem ser mantidos
+      formData.append('existing_files', JSON.stringify(existingFiles));
+
+      // NOVO: Anexos que devem ser removidos fisicamente
+      formData.append('files_to_remove', JSON.stringify(taskData.removedFiles || []));
+
+      // Novos arquivos para upload
+      newFiles.forEach(file => {
+        formData.append('new_files', file);
+      });
+
+      console.log('Enviando para o backend:');
+      console.log('- Arquivos existentes:', existingFiles);
+      console.log('- Novos arquivos:', newFiles.map(f => f.name));
+      console.log('- Arquivos a remover:', taskData.removedFiles || []);
+
       const response = await axios.put(
-        `http://localhost:5000/api/tasks/${editingTask.id}`,
+        `http://localhost:5000/api/tasks/${taskId}`,
         formData,
-        { withCredentials: true }
+        { 
+          withCredentials: true,
+          headers: {
+            'Content-Type': 'multipart/form-data'
+          }
+        }
       );
 
-      setTasks(prev =>
-        prev.map(t => t.id === editingTask.id ? response.data : t)
-      );
+      // Atualizar a lista de tarefas
+      setTasks(prev => prev.map(t => t.id === taskId ? response.data : t));
+      
+      console.log('Tarefa atualizada com sucesso:', response.data);
 
-      setEditingTask(null);
     } catch (error) {
       console.error('Erro ao atualizar tarefa:', error);
+      alert('Erro ao atualizar tarefa. Tente novamente.');
     }
   };
+
 
   const sortedTasks = [...filteredTasks].sort((a, b) => {
     if (sortBy === 'title') return a.title.localeCompare(b.title);
@@ -71,21 +124,22 @@ function Dashboard() {
   });
 
   useEffect(() => {
-    const fetchTasks = async () => {
-      try {
-        const response = await axios.get('http://localhost:5000/api/tasks', {
-          withCredentials: true,
-        });
-        setTasks(response.data);
-      } catch (error) {
-        console.error('Erro ao buscar tarefas:', error);
-        alert('Erro ao buscar tarefas. Faça login novamente.');
-      } finally {
-        setLoading(false);
-      }
-    };
+  const fetchTasks = async () => {
+    try {
+      const response = await axios.get('http://localhost:5000/api/tasks', {
+        withCredentials: true,
+      });
+      console.log('Tarefas recebidas no frontend:', response.data);
+      setTasks(response.data);
+    } catch (error) {
+      console.error('Erro ao buscar tarefas:', error);
+      alert('Erro ao buscar tarefas. Faça login novamente.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    fetchTasks();
+  fetchTasks();
 
     const handleResize = () => {
       if (window.innerWidth <= 768) {
@@ -129,20 +183,13 @@ function Dashboard() {
     setSidebarOpen(!sidebarOpen);
   };
 
-  const handleAddTask = async (newTask) => {
-    try {
-      const response = await axios.post('http://localhost:5000/api/tasks', newTask, {
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        withCredentials: true,
-      });
-
-      setTasks((prev) => [...prev, response.data]);
-    } catch (err) {
-      console.error(err);
-      alert('Erro ao adicionar tarefa.');
-    }
+  // Função corrigida para adicionar nova tarefa
+  const handleAddTask = (newTask) => {
+    console.log('Nova tarefa recebida:', newTask);
+    // Adicionar a nova tarefa ao estado
+    setTasks((prev) => [...prev, newTask]);
+    // Fechar o modal
+    setShowTaskForm(false);
   };
   
   if (loading) {
@@ -274,12 +321,8 @@ const confirmDelete = async () => {
         </main>
         {showTaskForm && (
           <TaskForm
-            onClose={() => {
-              setShowTaskForm(false);
-              setEditingTask(null);
-            }}
-            onSubmit={editingTask ? handleUpdateTask : handleAddTask}
-            initialData={editingTask}
+            onClose={() => setShowTaskForm(false)}
+            onSubmit={handleAddTask}
           />
         )}
         {editingTask && (
@@ -301,3 +344,4 @@ const confirmDelete = async () => {
 }
 
 export default Dashboard;
+

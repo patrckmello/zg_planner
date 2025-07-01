@@ -1,0 +1,81 @@
+.previewContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 8px;
+  position: relative;
+  transition: all 0.2s ease;
+  height: 100px;
+  width: 100px;
+  box-sizing: border-box;
+}
+
+.previewContainer:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.fileIcon {
+  font-size: 28px;
+  margin-bottom: 4px;
+  color: #64748b;
+}
+
+.fileName {
+  font-size: 9px;
+  text-align: center;
+  line-height: 1.2;
+  color: #475569;
+  font-weight: 500;
+  word-break: break-word;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.fileSize {
+  font-size: 8px;
+  text-align: center;
+  color: #6b7280;
+  font-weight: 400;
+}
+
+/* ===== BOTÃO DE REMOÇÃO DE ANEXO - PERFEITAMENTE REDONDO ===== */
+.removeButton {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  min-height: 20px;
+  border-radius: 50%;
+  background: #ef4444;
+  color: white;
+  border: none;
+  font-size: 12px;
+  line-height: 1;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  flex-shrink: 0;
+  padding: 0;
+  margin: 0;
+}
+
+.removeButton:hover {
+  background: #dc2626;
+  transform: scale(1.1);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+

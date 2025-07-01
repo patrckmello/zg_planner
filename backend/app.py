@@ -1,13 +1,17 @@
-from flask import Flask, request, jsonify, session, make_response, abort, redirect, url_for
+from flask import Flask, request, jsonify, session, make_response, abort, redirect, url_for, send_from_directory
 from dotenv import load_dotenv
 import os
 from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.utils import secure_filename
 from functools import wraps
 from extensions import db
 from models.user_model import User
 from flask_cors import CORS
 from flask_migrate import Migrate
 from models import User, Task
+import json
+from datetime import datetime
+
 
 load_dotenv()
 
@@ -16,9 +20,13 @@ app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
 
+UPLOAD_FOLDER = os.path.join(os.getcwd(), 'uploads')
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
 migrate = Migrate(app, db)
 
-CORS(app, supports_credentials=True, origins=["http://localhost:5173"])  # endereço do seu React dev server
+CORS(app, supports_credentials=True, resources={r"/api/*": {"origins": "http://localhost:5173"}})
 
 db.init_app(app)
 
@@ -122,54 +130,116 @@ def get_tasks():
 
     tasks = query.all()
 
-    tasks_data = [task.to_dict() for task in tasks]
+    # Enriquecer dados dos anexos com URLs completas
+    tasks_data = []
+    for task in tasks:
+        task_dict = task.to_dict()
+        
+        # Transformar anexos em objetos com URLs completas
+        if task_dict.get('anexos'):
+            anexos_enriched = []
+            for anexo in task_dict['anexos']:
+                if isinstance(anexo, str):
+                    # Se anexo é apenas um nome de arquivo (formato antigo)
+                    anexo_obj = {
+                        'id': anexo,
+                        'name': anexo,
+                        'url': f"http://localhost:5000/uploads/{anexo}",
+                        'size': 0,
+                        'type': 'application/octet-stream'
+                    }
+                else:
+                    # Se anexo já é um objeto (formato novo)
+                    anexo_obj = anexo.copy()
+                    if 'url' not in anexo_obj:
+                        anexo_obj['url'] = f"http://localhost:5000/uploads/{anexo_obj.get('name', '')}"
+                
+                anexos_enriched.append(anexo_obj)
+            
+            task_dict['anexos'] = anexos_enriched
+        
+        tasks_data.append(task_dict)
 
     return jsonify(tasks_data)
 
 @app.route('/api/tasks', methods=['POST'])
 @login_required
 def add_task():
-    from datetime import datetime
-    data = request.get_json()
-    user_id = session['user_id']
+    from datetime import datetime 
+    try:
+        user_id = session['user_id']
 
-    # Validação mínima
-    if not data.get('title'):
-        return jsonify({'error': 'O campo título é obrigatório.'}), 400
+        if request.content_type.startswith('multipart/form-data'):
+            data = request.form
+            files = request.files.getlist('anexos')
+        else:
+            return jsonify({'error': 'Tipo de requisição inválido. Envie como multipart/form-data.'}), 400
 
-    # Converte data se existir
-    due_date = None
-    if data.get('due_date'):
+        if not data.get('title'):
+            return jsonify({'error': 'O campo título é obrigatório.'}), 400
+
+        due_date = None
+        if data.get('due_date'):
+            try:
+                due_date = datetime.fromisoformat(data['due_date'])
+            except ValueError:
+                return jsonify({'error': 'Formato inválido para due_date. Use ISO 8601.'}), 400
+
+        # Processar anexos com metadados completos
+        anexos_data = []
+        for file in files:
+            if file.filename:
+                filename = secure_filename(file.filename)
+                filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                file.save(filepath)
+                
+                # Criar objeto anexo com metadados
+                anexo_obj = {
+                    'id': filename,
+                    'name': filename,
+                    'size': os.path.getsize(filepath),
+                    'type': file.content_type or 'application/octet-stream',
+                    'url': f"http://localhost:5000/uploads/{filename}"
+                }
+                anexos_data.append(anexo_obj)
+
+        # Desserializa lembretes e tags JSON string para listas Python
         try:
-            due_date = datetime.fromisoformat(data['due_date'])
-        except ValueError:
-            return jsonify({'error': 'Formato inválido para due_date. Use ISO 8601.'}), 400
+            lembretes = json.loads(data.get('lembretes', '[]'))
+        except Exception:
+            lembretes = []
 
-    # Cria nova tarefa com todos os campos possíveis
-    new_task = Task(
-        title=data['title'],
-        description=data.get('description'),
-        status=data.get('status', 'pending'),
-        due_date=due_date,
-        user_id=user_id,
+        try:
+            tags = json.loads(data.get('tags', '[]'))
+        except Exception:
+            tags = []
 
-        # 🆕 Novos campos:
-        prioridade=data.get('prioridade'),
-        categoria=data.get('categoria'),
-        status_inicial=data.get('status_inicial'),
-        tempo_estimado=data.get('tempo_estimado'),
-        tempo_unidade=data.get('tempo_unidade'),
-        relacionado_a=data.get('relacionado_a'),
-        lembretes=data.get('lembretes'),     # Deve ser uma lista
-        tags=data.get('tags'),               # Deve ser uma lista
-        anexos=data.get('anexos')            # Lista de links ou nomes
-    )
+        new_task = Task(
+            title=data['title'],
+            description=data.get('description'),
+            status=data.get('status', 'pending'),
+            due_date=due_date,
+            user_id=user_id,
+            prioridade=data.get('prioridade'),
+            categoria=data.get('categoria'),
+            status_inicial=data.get('status_inicial'),
+            tempo_estimado=data.get('tempo_estimado'),
+            tempo_unidade=data.get('tempo_unidade'),
+            relacionado_a=data.get('relacionado_a'),
+            lembretes=lembretes,
+            tags=tags,
+            anexos=anexos_data  # Salvar objetos completos em vez de apenas nomes
+        )
 
-    db.session.add(new_task)
-    db.session.commit()
+        db.session.add(new_task)
+        db.session.commit()
 
-    return jsonify(new_task.to_dict()), 201
+        return jsonify(new_task.to_dict()), 201
 
+    except Exception as e:
+        import traceback
+        print(traceback.format_exc())
+        return jsonify({'error': 'Erro interno no servidor', 'message': str(e)}), 500
 
 @app.route('/api/tasks/<int:task_id>', methods=['GET'])
 @login_required
@@ -183,12 +253,40 @@ def get_task(task_id):
     if task.user_id != user_id:
         return jsonify({'error': 'Acesso negado'}), 403
 
-    return jsonify(task.to_dict())
+    task_dict = task.to_dict()
+    
+    # Enriquecer anexos com URLs completas
+    if task_dict.get('anexos'):
+        anexos_enriched = []
+        for anexo in task_dict['anexos']:
+            if isinstance(anexo, str):
+                # Se anexo é apenas um nome de arquivo (formato antigo)
+                anexo_obj = {
+                    'id': anexo,
+                    'name': anexo,
+                    'url': f"http://localhost:5000/uploads/{anexo}",
+                    'size': 0,
+                    'type': 'application/octet-stream'
+                }
+            else:
+                # Se anexo já é um objeto (formato novo)
+                anexo_obj = anexo.copy()
+                if 'url' not in anexo_obj:
+                    anexo_obj['url'] = f"http://localhost:5000/uploads/{anexo_obj.get('name', '')}"
+            
+            anexos_enriched.append(anexo_obj)
+        
+        task_dict['anexos'] = anexos_enriched
+
+    return jsonify(task_dict)
 
 @app.route('/api/tasks/<int:task_id>', methods=['PUT'])
 @login_required
 def update_task(task_id):
-    from datetime import datetime
+    print("Headers:", request.headers)
+    print("Form data:", request.form)
+    print("Files:", request.files)
+
     user_id = session['user_id']
     task = Task.query.get(task_id)
 
@@ -198,51 +296,163 @@ def update_task(task_id):
     if task.user_id != user_id:
         return jsonify({'error': 'Acesso negado'}), 403
 
-    data = request.get_json()
+    if request.content_type and request.content_type.startswith('multipart/form-data'):
+        data = request.form
+        files = request.files.getlist('new_files')
 
-    # Atualizar campos básicos se vierem no JSON
-    if 'title' in data:
-        task.title = data['title']
-    if 'description' in data:
-        task.description = data['description']
-    if 'status' in data:
-        if data['status'] not in ['pending', 'done']:
+        # Pega anexos existentes que devem ser mantidos
+        existing_files_json = data.get('existing_files', '[]')
+        try:
+            existing_files = json.loads(existing_files_json)
+        except Exception:
+            existing_files = []
+
+        # Pega anexos que devem ser removidos (NOVA FUNCIONALIDADE)
+        files_to_remove_json = data.get('files_to_remove', '[]')
+        try:
+            files_to_remove = json.loads(files_to_remove_json)
+        except Exception:
+            files_to_remove = []
+
+        print(f"Arquivos a serem mantidos: {existing_files}")
+        print(f"Arquivos a serem removidos: {files_to_remove}")
+
+        # Remover arquivos fisicamente da pasta uploads
+        for filename in files_to_remove:
+            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            if os.path.exists(filepath):
+                try:
+                    os.remove(filepath)
+                    print(f"Arquivo removido fisicamente: {filepath}")
+                except Exception as e:
+                    print(f"Erro ao remover arquivo {filepath}: {e}")
+
+        # Manter anexos existentes (objetos completos)
+        anexos_mantidos = []
+        current_anexos = task.anexos or []
+        
+        for anexo_atual in current_anexos:
+            if isinstance(anexo_atual, str):
+                # Formato antigo: apenas nome do arquivo
+                if anexo_atual in existing_files:
+                    anexo_obj = {
+                        'id': anexo_atual,
+                        'name': anexo_atual,
+                        'url': f"http://localhost:5000/uploads/{anexo_atual}",
+                        'size': 0,
+                        'type': 'application/octet-stream'
+                    }
+                    anexos_mantidos.append(anexo_obj)
+            else:
+                # Formato novo: objeto completo
+                if anexo_atual.get('name') in existing_files:
+                    anexos_mantidos.append(anexo_atual)
+
+        # Processar novos arquivos
+        novos_anexos = []
+        for file in files:
+            if file and file.filename:
+                filename = secure_filename(file.filename)
+                filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                file.save(filepath)
+                
+                # Criar objeto anexo com metadados
+                anexo_obj = {
+                    'id': filename,
+                    'name': filename,
+                    'size': os.path.getsize(filepath),
+                    'type': file.content_type or 'application/octet-stream',
+                    'url': f"http://localhost:5000/uploads/{filename}"
+                }
+                novos_anexos.append(anexo_obj)
+
+        # Combinar anexos mantidos + novos anexos
+        task.anexos = anexos_mantidos + novos_anexos
+
+        # Atualiza os demais campos
+        if 'title' in data:
+            task.title = data['title']
+        if 'description' in data:
+            task.description = data['description']
+
+        if 'status' in data:
+            if data['status'] not in ['pending', 'in_progress', 'done', 'cancelled']:
+                return jsonify({'error': 'Status inválido'}), 400
+            task.status = data['status']
+
+        if 'due_date' in data:
+            if not data['due_date']:
+                task.due_date = None
+            else:
+                try:
+                    task.due_date = datetime.fromisoformat(data['due_date'])
+                except ValueError:
+                    return jsonify({'error': 'Formato inválido para due_date. Use ISO 8601.'}), 400
+
+        task.prioridade = data.get('prioridade', task.prioridade)
+        task.categoria = data.get('categoria', task.categoria)
+        task.status_inicial = data.get('status_inicial', task.status_inicial)
+        task.tempo_estimado = data.get('tempo_estimado', task.tempo_estimado)
+        task.tempo_unidade = data.get('tempo_unidade', task.tempo_unidade)
+        task.relacionado_a = data.get('relacionadoA', task.relacionado_a)
+
+        try:
+            task.lembretes = json.loads(data.get('lembretes', '[]'))
+        except Exception:
+            task.lembretes = task.lembretes or []
+
+        try:
+            task.tags = json.loads(data.get('tags', '[]'))
+        except Exception:
+            task.tags = task.tags or []
+
+    else:
+        # Caso queira aceitar JSON puro
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'Dados inválidos'}), 400
+
+        task.title = data.get('title', task.title)
+        task.description = data.get('description', task.description)
+
+        status = data.get('status', task.status)
+        if status not in ['pending', 'in_progress', 'done', 'cancelled']:
             return jsonify({'error': 'Status inválido'}), 400
-        task.status = data['status']
-    if 'due_date' in data:
-        if data['due_date'] is None:
-            task.due_date = None
-        else:
+        task.status = status
+
+        due_date_str = data.get('due_date')
+        if due_date_str:
             try:
-                task.due_date = datetime.fromisoformat(data['due_date'])
+                task.due_date = datetime.fromisoformat(due_date_str)
             except ValueError:
                 return jsonify({'error': 'Formato inválido para due_date. Use ISO 8601.'}), 400
+        else:
+            task.due_date = None
 
-    # 🆕 Atualizar campos novos
-    if 'prioridade' in data:
-        task.prioridade = data['prioridade']
-    if 'categoria' in data:
-        task.categoria = data['categoria']
-    if 'status_inicial' in data:
-        task.status_inicial = data['status_inicial']
-    if 'tempo_estimado' in data:
-        task.tempo_estimado = data['tempo_estimado']
-    if 'tempo_unidade' in data:
-        task.tempo_unidade = data['tempo_unidade']
-    if 'relacionado_a' in data:
-        task.relacionado_a = data['relacionado_a']
-    if 'lembretes' in data:
-        task.lembretes = data['lembretes']  # espera lista de strings
-    if 'tags' in data:
-        task.tags = data['tags']            # espera lista de strings
-    if 'anexos' in data:
-        task.anexos = data['anexos']        # espera lista de strings
+        task.prioridade = data.get('prioridade', task.prioridade)
+        task.categoria = data.get('categoria', task.categoria)
+        task.status_inicial = data.get('status_inicial', task.status_inicial)
+        task.tempo_estimado = data.get('tempo_estimado', task.tempo_estimado)
+        task.tempo_unidade = data.get('tempo_unidade', task.tempo_unidade)
+        task.relacionado_a = data.get('relacionadoA', task.relacionado_a)
+
+        try:
+            task.lembretes = data.get('lembretes', task.lembretes or [])
+            if isinstance(task.lembretes, str):
+                task.lembretes = json.loads(task.lembretes)
+        except Exception:
+            task.lembretes = task.lembretes or []
+
+        try:
+            task.tags = data.get('tags', task.tags or [])
+            if isinstance(task.tags, str):
+                task.tags = json.loads(task.tags)
+        except Exception:
+            task.tags = task.tags or []
 
     db.session.commit()
 
     return jsonify(task.to_dict())
-
-
 
 @app.route('/api/tasks/<int:task_id>', methods=['DELETE'])
 @login_required
@@ -256,16 +466,34 @@ def delete_task(task_id):
     if task.user_id != user_id:
         return jsonify({'error': 'Acesso negado'}), 403
 
+    # Remover arquivos anexados do sistema de arquivos
+    if task.anexos:
+        for anexo in task.anexos:
+            if isinstance(anexo, str):
+                filename = anexo
+            else:
+                filename = anexo.get("name")
+            
+            if filename:
+                filepath = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+                if os.path.exists(filepath):
+                    try:
+                        os.remove(filepath)
+                        print(f"Arquivo removido: {filepath}")
+                    except Exception as e:
+                        print(f"Erro ao remover arquivo {filepath}: {e}")
+
     db.session.delete(task)
     db.session.commit()
 
-    return jsonify({'message': 'Tarefa excluída com sucesso!'})
+    return jsonify({"message": "Tarefa excluída com sucesso!"})
 
-@app.route('/api/check-session')
-def check_session():
-    print('Sessão atual:', session.get('user_id'))
-    return jsonify({'logged_in': 'user_id' in session})
-
+@app.route('/uploads/<filename>')
+def uploaded_file(filename):
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    with app.app_context():
+        db.create_all()
+    app.run(debug=True, host='0.0.0.0', port=5000)
+
