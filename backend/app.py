@@ -6,7 +6,7 @@ from seeds import run_seeds
 from dotenv import load_dotenv
 import os
 from functools import wraps
-from decorators import login_required
+from flask_jwt_extended import jwt_required
 from flask_jwt_extended import JWTManager
 from datetime import timedelta
 
@@ -21,6 +21,7 @@ from routes.auth_routes import auth_bp
 from routes.user_routes import user_bp
 from routes.team_routes import team_bp
 from routes.task_routes import task_bp
+from routes.role_routes import role_bp
 
 load_dotenv()
 
@@ -35,7 +36,7 @@ app.register_blueprint(auth_bp)
 app.register_blueprint(user_bp)
 app.register_blueprint(team_bp)
 app.register_blueprint(task_bp)
-
+app.register_blueprint(role_bp)
 
 load_dotenv()
 
@@ -69,7 +70,7 @@ def index():
         return redirect(url_for('login'))  # Ou para uma rota de frontend: redirect("http://localhost:5173/login")
 
 @app.route('/api/dashboard')
-@login_required
+@jwt_required()
 def dashboard():
     return jsonify({'message': 'Bem-vindo ao dashboard!'})
 

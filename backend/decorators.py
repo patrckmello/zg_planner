@@ -19,7 +19,32 @@ def admin_required(fn):
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if 'user_id' not in session:
-            return jsonify({'error': 'Login requerido'}), 401
+        verify_jwt_in_request()  # Valida se o token JWT está presente e correto
+        user_id = get_jwt_identity()  # Extrai o user_id do token
+        user = User.query.get(user_id)
+
+        if not user or not user.is_active:
+            return jsonify({'error': 'Usuário inválido ou inativo'}), 401
+
         return f(*args, **kwargs)
+
     return decorated_function
+
+
+def requires_permission(permission):
+    def decorator(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwargs):
+            verify_jwt_in_request()
+            user_id = get_jwt_identity()
+            user = User.query.get(user_id)
+
+            if not user or not user.is_active:
+                return jsonify({'msg': 'Usuário inválido ou inativo'}), 401
+            
+            if not user.has_permission(permission):
+                return jsonify({'msg': 'Permissão negada'}), 403
+
+            return fn(*args, **kwargs)
+        return wrapper
+    return decorator

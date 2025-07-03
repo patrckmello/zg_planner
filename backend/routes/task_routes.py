@@ -2,37 +2,47 @@ from flask import Blueprint, request, jsonify, session, send_from_directory, cur
 from models.task_model import Task
 from extensions import db
 from decorators import login_required
+from flask_jwt_extended import jwt_required, get_jwt_identity
 from werkzeug.utils import secure_filename
 import os
 import json
 from datetime import datetime
-
+from models.user_model import User
 task_bp = Blueprint('tasks', __name__, url_prefix='/api')
 
-
-
-@task_bp.route('/api/tasks', methods=['GET'])
-@login_required
+@task_bp.route('/tasks', methods=['GET'])
+@jwt_required()
 def get_tasks():
-    user_id = session['user_id']
+    user_id = get_jwt_identity()  # pega o ID do usuário logado
+    user = User.query.get(user_id)
 
-    # Pega os parâmetros da URL para filtros
-    status = request.args.get('status')   
-    due_before = request.args.get('due_before') 
-    due_after = request.args.get('due_after')     
-    search = request.args.get('search')           
+    if not user or not user.is_active:
+        return jsonify({'msg': 'Usuário inválido ou inativo'}), 401
 
-    query = Task.query.filter_by(user_id=user_id)
+    status = request.args.get('status')
+    due_before = request.args.get('due_before')
+    due_after = request.args.get('due_after')
+    search = request.args.get('search')
 
-    # Filtra por status se fornecido
+    if user.is_admin:
+        query = Task.query  # admin vê todas as tarefas
+    else:
+        managed_team_ids = [assoc.team_id for assoc in user.teams if assoc.is_manager]
+
+        if managed_team_ids:
+            query = Task.query.filter(
+                (Task.user_username == user_id) | (Task.team_id.in_(managed_team_ids))
+            )
+        else:
+            query = Task.query.filter(Task.user_id == user_id)
+
     if status:
-        if status not in ['pending', 'done']:
+        if status not in ['pending', 'done', 'in_progress', 'cancelled']:
             return jsonify({'error': 'Status inválido para filtro.'}), 400
         query = query.filter(Task.status == status)
 
     from datetime import datetime
 
-    # Filtra por data de vencimento antes de determinada data
     if due_before:
         try:
             due_before_date = datetime.fromisoformat(due_before)
@@ -40,7 +50,6 @@ def get_tasks():
         except ValueError:
             return jsonify({'error': 'Formato inválido para due_before. Use ISO 8601.'}), 400
 
-    # Filtra por data de vencimento depois de determinada data
     if due_after:
         try:
             due_after_date = datetime.fromisoformat(due_after)
@@ -48,23 +57,20 @@ def get_tasks():
         except ValueError:
             return jsonify({'error': 'Formato inválido para due_after. Use ISO 8601.'}), 400
 
-    # Filtra por busca no título (case insensitive)
     if search:
         query = query.filter(Task.title.ilike(f'%{search}%'))
 
     tasks = query.all()
 
-    # Enriquecer dados dos anexos com URLs completas
+    # Enriquecer dados dos anexos com URLs completas (mantendo seu código)
     tasks_data = []
     for task in tasks:
         task_dict = task.to_dict()
-        
-        # Transformar anexos em objetos com URLs completas
+
         if task_dict.get('anexos'):
             anexos_enriched = []
             for anexo in task_dict['anexos']:
                 if isinstance(anexo, str):
-                    # Se anexo é apenas um nome de arquivo (formato antigo)
                     anexo_obj = {
                         'id': anexo,
                         'name': anexo,
@@ -73,25 +79,22 @@ def get_tasks():
                         'type': 'application/octet-stream'
                     }
                 else:
-                    # Se anexo já é um objeto (formato novo)
                     anexo_obj = anexo.copy()
                     if 'url' not in anexo_obj:
                         anexo_obj['url'] = f"http://localhost:5555/uploads/{anexo_obj.get('name', '')}"
-                
                 anexos_enriched.append(anexo_obj)
-            
             task_dict['anexos'] = anexos_enriched
-        
+
         tasks_data.append(task_dict)
 
     return jsonify(tasks_data)
 
-@task_bp.route('/api/tasks', methods=['POST'])
-@login_required
+@task_bp.route('/tasks', methods=['POST'])
+@jwt_required()
 def add_task():
     from datetime import datetime 
     try:
-        user_id = session['user_id']
+        user_id = get_jwt_identity()
 
         if request.content_type.startswith('multipart/form-data'):
             data = request.form
@@ -165,10 +168,10 @@ def add_task():
         print(traceback.format_exc())
         return jsonify({'error': 'Erro interno no servidor', 'message': str(e)}), 500
 
-@task_bp.route('/api/tasks/<int:task_id>', methods=['GET'])
-@login_required
+@task_bp.route('/tasks/<int:task_id>', methods=['GET'])
+@jwt_required()
 def get_task(task_id):
-    user_id = session['user_id']
+    user_id = get_jwt_identity()
     task = Task.query.get(task_id)
 
     if task is None:
@@ -204,20 +207,23 @@ def get_task(task_id):
 
     return jsonify(task_dict)
 
-@task_bp.route('/api/tasks/<int:task_id>', methods=['PUT'])
-@login_required
+@task_bp.route('/tasks/<int:task_id>', methods=['PUT'])
+@jwt_required()
 def update_task(task_id):
-    print("Headers:", request.headers)
-    print("Form data:", request.form)
-    print("Files:", request.files)
+    from flask_jwt_extended import get_jwt_identity
 
-    user_id = session['user_id']
+    user_id = get_jwt_identity()
+    print(f"[DEBUG] Usuário autenticado: {user_id}")
+
     task = Task.query.get(task_id)
 
-    if task is None:
+    if not task:
         return jsonify({'error': 'Tarefa não encontrada'}), 404
 
-    if task.user_id != user_id:
+    print(f"[DEBUG] Tarefa encontrada: user_id={task.user_id}")
+
+    if str(task.user_id) != str(user_id):
+        print("[DEBUG] Acesso negado: user_id não corresponde ao dono da tarefa")
         return jsonify({'error': 'Acesso negado'}), 403
 
     if request.content_type and request.content_type.startswith('multipart/form-data'):
@@ -378,16 +384,19 @@ def update_task(task_id):
 
     return jsonify(task.to_dict())
 
-@task_bp.route('/api/tasks/<int:task_id>', methods=['DELETE'])
-@login_required
+@task_bp.route('/tasks/<int:task_id>', methods=['DELETE'])
+@jwt_required()
 def delete_task(task_id):
-    user_id = session['user_id']
+    user_id = get_jwt_identity()
     task = Task.query.get(task_id)
 
-    if task is None:
+    if not task:
         return jsonify({'error': 'Tarefa não encontrada'}), 404
 
-    if task.user_id != user_id:
+    print(f"[DEBUG] Tarefa encontrada: user_id={task.user_id}")
+
+    if str(task.user_id) != str(user_id):
+        print("[DEBUG] Acesso negado: user_id não corresponde ao dono da tarefa")
         return jsonify({'error': 'Acesso negado'}), 403
 
     # Remover arquivos anexados do sistema de arquivos

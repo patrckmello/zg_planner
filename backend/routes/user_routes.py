@@ -33,6 +33,8 @@ def update_user(user_id):
     user.username = data.get('username', user.username)
     user.email = data.get('email', user.email)
     user.is_admin = data.get('is_admin', user.is_admin)
+    user.is_active = data.get('is_active', user.is_active)  # Aqui!
+
     db.session.commit()
     return jsonify(user.to_dict())
 

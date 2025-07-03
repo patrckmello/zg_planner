@@ -12,13 +12,16 @@ def login():
     password = data.get('password')
 
     user = User.query.filter_by(email=email).first()
+
     if not user or not user.check_password(password):
         return jsonify({'error': 'Credenciais inválidas'}), 401
 
-    # Criação dos tokens
+    if not user.is_active:
+        return jsonify({'error': 'Usuário inativo. Contate o administrador.'}), 403
+
     access_token = create_access_token(identity=str(user.id))
     refresh_token = create_refresh_token(identity=str(user.id))
-
+    
     return jsonify({
         'message': 'Login realizado com sucesso!',
         'access_token': access_token,

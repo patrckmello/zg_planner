@@ -10,3 +10,4 @@ class UserTeam(db.Model):
 
     user = db.relationship('User', back_populates='teams')
     team = db.relationship('Team', back_populates='members')
+    

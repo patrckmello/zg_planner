@@ -16,11 +16,15 @@ def seed_admin():
         admin = User(
             username='Administrador',
             email='admin@admin.com',
-            is_admin=True
+            is_admin=True,
+            is_active=True
         )
-        admin.set_password('admin')  # Aqui seta a senha corretamente
+        admin.set_password('admin')
         db.session.add(admin)
-        db.session.commit()
+    else:
+        admin.is_active = True  # Força ficar ativo mesmo que já exista
+    db.session.commit()
+
 
 def run_seeds():
     seed_roles()
