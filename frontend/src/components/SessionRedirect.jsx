@@ -5,7 +5,7 @@ const SessionRedirect = () => {
   const navigate = useNavigate()
 
   useEffect(() => {
-    fetch('http://localhost:5000/api/check-session', {
+    fetch('http://localhost:5555/api/check-session', {
       credentials: 'include'
     })
       .then(res => res.json())

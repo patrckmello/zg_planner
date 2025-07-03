@@ -31,7 +31,7 @@ function Dashboard() {
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 768);
   const toggleTaskStatus = async (taskId, newStatus) => {
     try {
-      const response = await axios.put(`http://localhost:5000/api/tasks/${taskId}`, {
+      const response = await axios.put(`http://localhost:5555/api/tasks/${taskId}`, {
         status: newStatus
       }, { withCredentials: true });
 
@@ -95,7 +95,7 @@ function Dashboard() {
       console.log('- Arquivos a remover:', taskData.removedFiles || []);
 
       const response = await axios.put(
-        `http://localhost:5000/api/tasks/${taskId}`,
+        `http://localhost:5555/api/tasks/${taskId}`,
         formData,
         { 
           withCredentials: true,
@@ -126,7 +126,7 @@ function Dashboard() {
   useEffect(() => {
   const fetchTasks = async () => {
     try {
-      const response = await axios.get('http://localhost:5000/api/tasks', {
+      const response = await axios.get('http://localhost:5555/api/tasks', {
         withCredentials: true,
       });
       console.log('Tarefas recebidas no frontend:', response.data);
@@ -171,7 +171,7 @@ function Dashboard() {
 
   const handleLogout = async () => {
     try {
-      await axios.post('http://localhost:5000/api/logout', {}, { withCredentials: true });
+      await axios.post('http://localhost:5555/api/logout', {}, { withCredentials: true });
     } catch (err) {
       console.error('Erro ao fazer logout:', err);
     } finally {
@@ -209,7 +209,7 @@ const confirmDelete = async () => {
   if (!taskToDelete) return;
 
   try {
-    await axios.delete(`http://localhost:5000/api/tasks/${taskToDelete.id}`, {
+    await axios.delete(`http://localhost:5555/api/tasks/${taskToDelete.id}`, {
       withCredentials: true,
     });
     setTasks(prev => prev.filter(t => t.id !== taskToDelete.id));
