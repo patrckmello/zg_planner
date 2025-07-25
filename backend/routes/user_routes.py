@@ -2,8 +2,17 @@ from flask import Blueprint, request, jsonify
 from models.user_model import User
 from extensions import db
 from decorators import admin_required
+from flask_jwt_extended import jwt_required, get_jwt_identity
 
 user_bp = Blueprint('user_bp', __name__, url_prefix='/api/users')
+
+@user_bp.route('/me')
+@jwt_required()
+def get_me():
+    print(request.headers.get('Authorization'))  # Deve mostrar "Bearer <token>"
+    current_user_id = get_jwt_identity()
+    user = User.query.get(current_user_id)
+    return jsonify(user.to_dict())
 
 @user_bp.route('/', methods=['GET'])
 @admin_required

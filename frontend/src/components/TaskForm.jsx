@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import styles from './TaskForm.module.css';
 import Checkbox from './Checkbox/Checkbox';
 import AnexoItemPreview from './AnexoItemPreview';
+import api from '../services/axiosInstance';
 
 const TaskForm = ({ onClose, onSubmit }) => {
   // Estados do formulário
@@ -61,13 +62,16 @@ const TaskForm = ({ onClose, onSubmit }) => {
   ];
 
   // Função para atualizar campos do formulário
-  const updateField = (field, value) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+ const updateField = (field, value) => {
+    setFormData(prev => {
+      // Se o valor não mudou, retorna o estado anterior para evitar render desnecessária
+      if (JSON.stringify(prev[field]) === JSON.stringify(value)) return prev;
+      return { ...prev, [field]: value };
+    });
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: null }));
     }
   };
-
   // Validação do formulário
   const validateForm = () => {
     const newErrors = {};
@@ -96,41 +100,30 @@ const TaskForm = ({ onClose, onSubmit }) => {
       formDataToSend.append('status_inicial', formData.statusInicial);
       formDataToSend.append('categoria', formData.categoria);
 
-      // Converter data para ISO string completa
       const dueDateISO = formData.dataVencimento ? new Date(formData.dataVencimento).toISOString() : '';
       formDataToSend.append('due_date', dueDateISO);
 
       formDataToSend.append('relacionado_a', formData.relacionadoA);
-
-      // Enviar lembretes e tags como JSON strings
       formDataToSend.append('lembretes', JSON.stringify(formData.lembretes));
       formDataToSend.append('tags', JSON.stringify(formData.tags));
 
-      // Enviar anexos com o nome correto do campo esperado no backend
       formData.anexos.forEach((anexoObj) => {
         formDataToSend.append('anexos', anexoObj.file);
       });
 
-      const response = await fetch('http://localhost:5555/api/tasks', {
-        method: 'POST',
-        body: formDataToSend,
-        credentials: 'include'
+      const response = await api.post('/tasks', formDataToSend, {
+        headers: {
+          'Content-Type': 'multipart/form-data', // O axios já cuida disso, mas deixar explícito não faz mal
+        },
       });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Erro ao enviar tarefa: ${response.status} - ${errorText}`);
-      }
-
-      const newTask = await response.json();
+      const newTask = response.data;
       console.log('Tarefa criada com sucesso:', newTask);
 
-      // Chamar a função onSubmit do Dashboard para atualizar a lista
       if (onSubmit) {
         onSubmit(newTask);
       }
 
-      // Fechar o modal
       onClose();
 
     } catch (err) {
@@ -140,6 +133,7 @@ const TaskForm = ({ onClose, onSubmit }) => {
       setIsSubmitting(false);
     }
   };
+
 
   // Gerenciamento de tags
   const addTag = () => {
@@ -161,12 +155,6 @@ const TaskForm = ({ onClose, onSubmit }) => {
   };
 
   // Gerenciamento de lembretes
-  const toggleLembrete = (value) => {
-    const newLembretes = formData.lembretes.includes(value)
-      ? formData.lembretes.filter(l => l !== value)
-      : [...formData.lembretes, value];
-    updateField('lembretes', newLembretes);
-  };
 
   const getLembretesText = () => {
     if (formData.lembretes.length === 0) return 'Selecionar lembretes...';
@@ -372,12 +360,20 @@ const TaskForm = ({ onClose, onSubmit }) => {
                       {lembretesOptions.map(option => (
                         <div key={option.value} className={styles.lembreteOption}>
                           <Checkbox
+                            id={`lembrete-${option.value}`} // <-- ID dinâmico aqui
                             checked={formData.lembretes.includes(option.value)}
-                            onChange={() => toggleLembrete(option.value)}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                updateField('lembretes', [...formData.lembretes, option.value]);
+                              } else {
+                                updateField('lembretes', formData.lembretes.filter(l => l !== option.value));
+                              }
+                            }}
                             label={option.label}
                           />
                         </div>
                       ))}
+
                     </div>
                   )}
                 </div>

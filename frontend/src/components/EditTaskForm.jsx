@@ -315,7 +315,7 @@ const EditTaskForm = ({ initialData, onSubmit, onClose }) => {
                   className={styles.textarea}
                   value={formData.descricao}
                   onChange={(e) => updateField('descricao', e.target.value)}
-                  placeholder="Descreva os detalhes da tarefa"
+                  placeholder="Descreva os detalhes da tarefa" rows="6"
                 />
               </div>
 

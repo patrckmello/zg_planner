@@ -302,6 +302,7 @@
 .lembreteOption {
   padding: 6px 14px;
   border-bottom: 1px solid #f3f4f6;
+  color: #1f2937;
 }
 
 .lembreteOption:last-child {

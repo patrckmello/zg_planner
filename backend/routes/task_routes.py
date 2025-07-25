@@ -9,6 +9,7 @@ import json
 from datetime import datetime
 from models.user_model import User
 from models.team_model import Team
+from tasks.reminder_jobs import agendar_lembretes
 
 task_bp = Blueprint('tasks', __name__, url_prefix='/api')
 
@@ -250,8 +251,9 @@ def update_task(task_id):
 
     print(f"[DEBUG] Tarefa encontrada: user_id={task.user_id}")
 
-    if str(task.user_id) != str(user_id):
-        print("[DEBUG] Acesso negado: user_id não corresponde ao dono da tarefa")
+    user = User.query.get(user_id)
+    if not user.is_admin and str(task.user_id) != str(user_id):
+        print("[DEBUG] Acesso negado: user_id não corresponde ao dono da tarefa e não é admin")
         return jsonify({'error': 'Acesso negado'}), 403
 
     if request.content_type and request.content_type.startswith('multipart/form-data'):
@@ -409,7 +411,7 @@ def update_task(task_id):
             task.tags = task.tags or []
 
     db.session.commit()
-
+    agendar_lembretes(current_app.scheduler)
     return jsonify(task.to_dict())
 
 @task_bp.route('/tasks/<int:task_id>', methods=['DELETE'])
@@ -423,8 +425,9 @@ def delete_task(task_id):
 
     print(f"[DEBUG] Tarefa encontrada: user_id={task.user_id}")
 
-    if str(task.user_id) != str(user_id):
-        print("[DEBUG] Acesso negado: user_id não corresponde ao dono da tarefa")
+    user = User.query.get(user_id)
+    if not user.is_admin and str(task.user_id) != str(user_id):
+        print("[DEBUG] Acesso negado: user_id não corresponde ao dono da tarefa e não é admin")
         return jsonify({'error': 'Acesso negado'}), 403
 
     # Remover arquivos anexados do sistema de arquivos

@@ -57,7 +57,7 @@
   justify-content: space-between;
   padding: 20px 28px 16px;
   border-bottom: 1px solid #e5e7eb;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: black;
   color: white;
   flex-shrink: 0;
 }
@@ -302,6 +302,7 @@
 .lembreteOption {
   padding: 6px 14px;
   border-bottom: 1px solid #f3f4f6;
+  color: #1f2937;
 }
 
 .lembreteOption:last-child {
@@ -366,7 +367,7 @@
 .tagItem {
   display: flex;
   align-items: center;
-  background: linear-gradient(135deg, #667eea, #764ba2);
+  background: black;
   color: white;
   padding: 4px 10px;
   border-radius: 16px;
@@ -525,7 +526,7 @@
 }
 
 .submitButton {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: black;
   color: white;
 }
 
@@ -679,81 +680,3 @@
   outline: 2px solid #667eea;
   outline-offset: 2px;
 }
-
-/* ===== DARK MODE SUPPORT (OPTIONAL) ===== */
-@media (prefers-color-scheme: dark) {
-  .modalContent {
-    background: #1f2937;
-    color: #f9fafb;
-  }
-  
-  .modalHeader {
-    border-bottom-color: #374151;
-  }
-  
-  .label {
-    color: #d1d5db;
-  }
-  
-  .input,
-  .select,
-  .textarea,
-  .lembretesButton {
-    background: #374151;
-    border-color: #4b5563;
-    color: #f9fafb;
-  }
-  
-  .input:hover,
-  .select:hover,
-  .textarea:hover,
-  .lembretesButton:hover {
-    border-color: #6b7280;
-  }
-  
-  .lembretesMenu {
-    background: #374151;
-    border-color: #4b5563;
-  }
-  
-  .lembreteOption:hover {
-    background: #4b5563;
-  }
-  
-  .fileDropArea {
-    background: #374151;
-    border-color: #4b5563;
-  }
-  
-  .fileDropArea:hover {
-    background: #4b5563;
-  }
-  
-  .cancelButton {
-    background: #374151;
-    color: #d1d5db;
-    border-color: #4b5563;
-  }
-  
-  .cancelButton:hover {
-    background: #4b5563;
-  }
-  
-  .formActions {
-    border-top-color: #374151;
-    background: #1f2937;
-  }
-  
-  .formContent::-webkit-scrollbar-track {
-    background: #374151;
-  }
-  
-  .formContent::-webkit-scrollbar-thumb {
-    background: #4b5563;
-  }
-  
-  .formContent::-webkit-scrollbar-thumb:hover {
-    background: #6b7280;
-  }
-}
-
