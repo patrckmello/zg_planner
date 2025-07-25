@@ -5,7 +5,7 @@ import styles from './Dashboard.module.css';
 import TaskForm from './TaskForm'; 
 import EditTaskForm from './EditTaskForm'; 
 import DeleteConfirmModal from './DeleteConfirmModal';
-import axios from 'axios';
+import api from '../services/axiosInstance';
 import { useNavigate } from 'react-router-dom';
 import { FiFilter, FiArrowDownCircle } from 'react-icons/fi';
 import Checkbox from "./Checkbox/Checkbox";
@@ -31,9 +31,9 @@ function Dashboard() {
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 768);
   const toggleTaskStatus = async (taskId, newStatus) => {
     try {
-      const response = await axios.put(`http://localhost:5555/api/tasks/${taskId}`, {
+      const response = await api.put(`/tasks/${taskId}`, {
         status: newStatus
-      }, { withCredentials: true });
+      });
 
       setTasks(prevTasks =>
         prevTasks.map(t =>
@@ -45,8 +45,7 @@ function Dashboard() {
     }
   };
 
-  
-  // FUNÇÃO CORRIGIDA: Atualizar tarefa com suporte a exclusão de arquivos
+  // Atualizar tarefa com suporte a exclusão de arquivos
   const handleUpdateTask = async (taskId, taskData) => {
     try {
       const formData = new FormData();
@@ -94,11 +93,10 @@ function Dashboard() {
       console.log('- Novos arquivos:', newFiles.map(f => f.name));
       console.log('- Arquivos a remover:', taskData.removedFiles || []);
 
-      const response = await axios.put(
-        `http://localhost:5555/api/tasks/${taskId}`,
+      const response = await api.put(
+        `/tasks/${taskId}`,
         formData,
-        { 
-          withCredentials: true,
+        {
           headers: {
             'Content-Type': 'multipart/form-data'
           }
@@ -126,9 +124,7 @@ function Dashboard() {
   useEffect(() => {
   const fetchTasks = async () => {
     try {
-      const response = await axios.get('http://localhost:5555/api/tasks', {
-        withCredentials: true,
-      });
+      const response = await api.get('/tasks'); 
       console.log('Tarefas recebidas no frontend:', response.data);
       setTasks(response.data);
     } catch (error) {
@@ -171,7 +167,7 @@ function Dashboard() {
 
   const handleLogout = async () => {
     try {
-      await axios.post('http://localhost:5555/api/logout', {}, { withCredentials: true });
+      await api.post('/logout');
     } catch (err) {
       console.error('Erro ao fazer logout:', err);
     } finally {
@@ -209,9 +205,7 @@ const confirmDelete = async () => {
   if (!taskToDelete) return;
 
   try {
-    await axios.delete(`http://localhost:5555/api/tasks/${taskToDelete.id}`, {
-      withCredentials: true,
-    });
+    await api.delete(`/tasks/${taskToDelete.id}`);
     setTasks(prev => prev.filter(t => t.id !== taskToDelete.id));
   } catch (error) {
     console.error('Erro ao excluir tarefa:', error);
