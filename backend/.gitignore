@@ -1,2 +1,6 @@
 .env
 uploads
+build/
+dist/
+static/
+templates/

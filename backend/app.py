@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, session, redirect, url_for
+from flask import Flask, jsonify, session, redirect, url_for, send_from_directory, render_template
 from extensions import db
 from flask_cors import CORS
 from flask_migrate import Migrate
@@ -26,9 +26,7 @@ from routes.role_routes import role_bp
 load_dotenv()
 
 
-app = Flask(__name__)
-
-
+app = Flask(__name__, static_folder="static", template_folder="templates")
 
 
 # REGISTRA OS BLUEPRINTS
@@ -56,18 +54,20 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 migrate = Migrate(app, db)
 
-CORS(app, supports_credentials=True, resources={r"/api/*": {"origins": "http://localhost:5173"}})
+CORS(app, supports_credentials=True, resources={r"/api/*": {"origins": "*"}})
 
 jwt = JWTManager(app)
 
 db.init_app(app)
 
-@app.route('/')
-def index():
-    if 'user_id' in session:
-        return redirect(url_for('dashboard'))
-    else:
-        return redirect(url_for('login'))  # Ou para uma rota de frontend: redirect("http://localhost:5173/login")
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def serve_frontend(path):
+    if path.startswith('api/') or path.startswith('uploads/'):
+        return jsonify({'error': 'API ou upload não encontrados'}), 404
+    if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
+        return send_from_directory(app.static_folder, path)
+    return render_template("index.html")
 
 @app.route('/api/dashboard')
 @jwt_required()

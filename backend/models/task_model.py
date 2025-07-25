@@ -28,6 +28,8 @@ class Task(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     user = db.relationship('User', back_populates='tasks')
 
+    team_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=True)
+
     def to_dict(self):
         return {
             "id": self.id,

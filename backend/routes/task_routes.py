@@ -8,12 +8,14 @@ import os
 import json
 from datetime import datetime
 from models.user_model import User
+from models.team_model import Team
+
 task_bp = Blueprint('tasks', __name__, url_prefix='/api')
 
 @task_bp.route('/tasks', methods=['GET'])
 @jwt_required()
 def get_tasks():
-    user_id = get_jwt_identity()  # pega o ID do usuário logado
+    user_id = get_jwt_identity()
     user = User.query.get(user_id)
 
     if not user or not user.is_active:
@@ -24,16 +26,20 @@ def get_tasks():
     due_after = request.args.get('due_after')
     search = request.args.get('search')
 
+    # Se admin, vê tudo
     if user.is_admin:
-        query = Task.query  # admin vê todas as tarefas
+        query = Task.query
     else:
+        # Pega os ids dos times que o user é manager
         managed_team_ids = [assoc.team_id for assoc in user.teams if assoc.is_manager]
 
         if managed_team_ids:
+            # Tarefas do usuário + tarefas dos times que gerencia
             query = Task.query.filter(
-                (Task.user_username == user_id) | (Task.team_id.in_(managed_team_ids))
+                (Task.user_id == user_id) | (Task.team_id.in_(managed_team_ids))
             )
         else:
+            # Só tarefas pessoais do usuário
             query = Task.query.filter(Task.user_id == user_id)
 
     if status:
@@ -62,7 +68,7 @@ def get_tasks():
 
     tasks = query.all()
 
-    # Enriquecer dados dos anexos com URLs completas (mantendo seu código)
+    # Enriquecer dados dos anexos com URLs completas
     tasks_data = []
     for task in tasks:
         task_dict = task.to_dict()
@@ -89,12 +95,14 @@ def get_tasks():
 
     return jsonify(tasks_data)
 
+
 @task_bp.route('/tasks', methods=['POST'])
 @jwt_required()
 def add_task():
     from datetime import datetime 
     try:
         user_id = get_jwt_identity()
+        user = User.query.get(user_id)
 
         if request.content_type.startswith('multipart/form-data'):
             data = request.form
@@ -112,6 +120,25 @@ def add_task():
             except ValueError:
                 return jsonify({'error': 'Formato inválido para due_date. Use ISO 8601.'}), 400
 
+        # 🔑 Lógica para validar criação de tarefa de equipe
+        team_id = data.get('team_id')
+        if team_id:
+            try:
+                team_id = int(team_id)
+            except ValueError:
+                return jsonify({'error': 'team_id inválido'}), 400
+
+            team = Team.query.get(team_id)
+            if not team:
+                return jsonify({'error': 'Time não encontrado.'}), 404
+
+            # Verifica se o user é manager da equipe
+            is_manager = any(assoc.is_manager and assoc.team_id == team.id for assoc in user.teams)
+            if not is_manager:
+                return jsonify({'error': 'Você não tem permissão para criar tarefas neste time.'}), 403
+        else:
+            team_id = None  # tarefa pessoal
+
         # Processar anexos com metadados completos
         anexos_data = []
         for file in files:
@@ -120,7 +147,6 @@ def add_task():
                 filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
                 file.save(filepath)
                 
-                # Criar objeto anexo com metadados
                 anexo_obj = {
                     'id': filename,
                     'name': filename,
@@ -130,7 +156,6 @@ def add_task():
                 }
                 anexos_data.append(anexo_obj)
 
-        # Desserializa lembretes e tags JSON string para listas Python
         try:
             lembretes = json.loads(data.get('lembretes', '[]'))
         except Exception:
@@ -141,12 +166,14 @@ def add_task():
         except Exception:
             tags = []
 
+        # Criação da task
         new_task = Task(
             title=data['title'],
             description=data.get('description'),
             status=data.get('status', 'pending'),
             due_date=due_date,
             user_id=user_id,
+            team_id=team_id,
             prioridade=data.get('prioridade'),
             categoria=data.get('categoria'),
             status_inicial=data.get('status_inicial'),
@@ -155,7 +182,7 @@ def add_task():
             relacionado_a=data.get('relacionado_a'),
             lembretes=lembretes,
             tags=tags,
-            anexos=anexos_data  # Salvar objetos completos em vez de apenas nomes
+            anexos=anexos_data
         )
 
         db.session.add(new_task)
@@ -167,6 +194,7 @@ def add_task():
         import traceback
         print(traceback.format_exc())
         return jsonify({'error': 'Erro interno no servidor', 'message': str(e)}), 500
+
 
 @task_bp.route('/tasks/<int:task_id>', methods=['GET'])
 @jwt_required()

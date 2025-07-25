@@ -48,13 +48,16 @@ function Login() {
     }
 
     try {
-      await axios.post(
+      const res = await axios.post(
         'http://localhost:5555/api/login',
-        { email, password },
-        { withCredentials: true }
+        { email, password }
       );
 
-      localStorage.setItem('auth', 'true');
+      // ✅ Salva o access token no localStorage
+      localStorage.setItem('access_token', res.data.access_token);
+      localStorage.setItem('refresh_token', res.data.refresh_token);
+      localStorage.setItem('user', JSON.stringify(res.data.user));
+
       navigate('/dashboard');
     } catch (err) {
       setError(err.response?.data.error || 'Erro no login');
