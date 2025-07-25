@@ -1,49 +1,64 @@
 .container {
-  max-width: 350px;
-  padding: 30px;
-  border: 1px solid #ddd;
-  border-radius: 12px;
-  background-color: #f9f9f9;
-  font-family: Arial, sans-serif;
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
-}
-
-.wrapper {
+  width: 100vw;
+  height: 100dvh;
+  background-color: #ffffff;
   display: flex;
-  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  font-family: 'Segoe UI', sans-serif;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
+/* Cartão central que divide login e logo */
+.card {
+  width: 850px;
+  max-width: 100%;
+  height: 500px; 
+  display: flex;
+  border-radius: 13px;
+  overflow: hidden;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
+  background-color: #ffffff;
+}
+
+/* Esquerda: Login */
 .leftPanel {
+  flex: 1;
+  padding: 48px 38px;
   display: flex;
   flex-direction: column;
+  justify-content: center;
+  align-items: center; /* opcional, para centralizar no eixo X */
+  box-sizing: border-box; /* garante que o padding não aumente a altura real */
 }
 
 .title {
-  text-align: center;
-  margin-bottom: 24px;
+  font-size: 1.85rem;
   font-weight: 700;
-  font-size: 1.8rem;
-  color: #38bdf8;
+  color: #1e293b;
+  margin-bottom: 20px;
+  margin-top: 0;
+  text-align: center;
 }
 
 .form {
   display: flex;
   flex-direction: column;
+  gap: 18px;
+  width: 100%;
+  max-width: 380px;
 }
 
 .input {
-  background-color: #334155;
-  border: none;
-  border-radius: 6px;
-  padding: 12px 16px;
-  margin-bottom: 18px;
-  color: #f8fafc;
-  font-size: 1rem;
-  transition: background-color 0.3s ease;
+  background-color: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  padding: 12px;
+  border-radius: 7px;
+  font-size: 15px;
+  width: 100%;
+  box-sizing: border-box;
+  color: #1e293b;
 }
 
 .input::placeholder {
@@ -52,93 +67,129 @@
 
 .input:focus {
   outline: none;
-  background-color: #475569;
-  box-shadow: 0 0 0 2px #38bdf8;
-}
-
-/* ✅ Botão exclusivo do Login */
-.submitBtn {
-  background: linear-gradient(90deg, #2563eb 0%, #3b82f6 100%);
-  border: none;
-  border-radius: 8px;
-  padding: 14px 0;
-  color: white;
-  font-weight: 700;
-  font-size: 1.1rem;
-  cursor: pointer;
-  transition: background 0.3s ease, transform 0.2s ease;
-}
-
-.submitBtn:active:not(:disabled) {
-  transform: scale(0.97);
-}
-
-.submitBtn:disabled {
-  background: #64748b;
-  cursor: not-allowed;
-  opacity: 0.6;
-}
-
-.submitBtn:hover:not(:disabled) {
-  background: linear-gradient(90deg, #3b82f6 0%, #2563eb 100%);
-}
-
-.error {
-  margin-top: 10px;
-  color: #f87171;
-  font-weight: 600;
-  text-align: center;
-  user-select: none;
+  border-color: #2563eb;
+  background-color: #fff;
+  box-shadow: 0 0 0 3px #3b82f666;
 }
 
 .passwordWrapper {
   position: relative;
+  width: 100%;
   display: flex;
   align-items: center;
 }
 
 .passwordWrapper .input {
-  flex: 1;
-  padding-right: 40px;
+  width: 100%;
+  padding-right: 42px;
 }
 
 .showPasswordBtn {
   position: absolute;
-  right: 10px;
-  bottom: 45%;
+  top: 50%;
+  right: 0.1px;
+  transform: translateY(-50%);
   background: transparent;
   border: none;
-  color: #94a3b8;
+  color: #64748b;
+  font-size: 1.1rem;
   cursor: pointer;
-  font-size: 1.3rem;
-  padding: 0;
-  width: 24px;
-  height: 24px;
-  user-select: none;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: color 0.2s ease;
+  height: 100%;
 }
 
 .showPasswordBtn:hover {
   color: #2563eb;
 }
 
-.showPasswordBtn:focus,
-.showPasswordBtn:focus-visible {
-  outline: none !important;
-  box-shadow: none !important;
-  border-radius: 0 !important;
+.submitBtn {
+  background-color: #000000;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  padding: 14px;
+  font-weight: 600;
+  font-size: 1.1rem;
+  cursor: pointer;
+  box-shadow: 0 0 12px rgba(0, 0, 0, 0.6);
+  transition: transform 0.2s ease, box-shadow 0.3s ease;
 }
 
+.submitBtn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 0 18px rgba(0, 0, 0, 0.8);
+}
+
+.submitBtn:disabled {
+  background-color: #cbd5e1;
+  cursor: not-allowed;
+}
+
+.error {
+  color: #ef4444;
+  margin-top: 10px;
+  text-align: center;
+  font-weight: 500;
+}
+
+/* Direita: Logo */
 .rightPanel {
+  flex: 1;
+  background-color: #000000;
   display: flex;
-  justify-content: center;
   align-items: center;
-  margin-top: 30px;
+  justify-content: center;
+  padding: 20px;
 }
 
 .logo {
-  max-width: 120px;
+  width: 100%;
+  max-width: 300px;
+  height: auto;
+  transition: transform 0.3s ease;
+}
+
+.logo:hover {
+  transform: scale(1.05);
+}
+
+/* Mobile: empilha */
+@media (max-width: 768px) {
+  .card {
+    flex-direction: column;
+    height: auto;
+    width: 100%;
+  }
+
+  .leftPanel,
+  .rightPanel {
+    width: 100%;
+    padding: 40px 20px;
+  }
+
+  .rightPanel {
+    order: -1;
+  }
+
+  .logo {
+    max-width: 250px;
+  }
+
+  .title {
+    font-size: 1.6rem;
+    margin-bottom: 18px;
+  }
+
+  .input {
+    font-size: 0.9rem;
+    padding: 9px;
+  }
+
+  .submitBtn {
+    font-size: 0.9rem;
+    padding: 10px;
+  }
 }

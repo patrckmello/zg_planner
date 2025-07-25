@@ -3,6 +3,7 @@ import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import styles from './Login.module.css';
 import { FaEye, FaEyeSlash } from 'react-icons/fa';
+import logo from "../assets/zg.png";
 
 function Login() {
   const [email, setEmail] = useState(() => localStorage.getItem('email') || '');
@@ -48,12 +49,8 @@ function Login() {
     }
 
     try {
-      const res = await axios.post(
-        'http://localhost:5555/api/login',
-        { email, password }
-      );
+      const res = await axios.post('http://localhost:5555/api/login', { email, password });
 
-      // ✅ Salva o access token no localStorage
       localStorage.setItem('access_token', res.data.access_token);
       localStorage.setItem('refresh_token', res.data.refresh_token);
       localStorage.setItem('user', JSON.stringify(res.data.user));
@@ -68,9 +65,9 @@ function Login() {
 
   return (
     <div className={styles.container}>
-      <div className={styles.wrapper}>
+      <main className={styles.card}>
         <div className={styles.leftPanel}>
-          <h2 className={styles.title}>Entrar no Sistema</h2>
+          <h2 className={styles.title}>Entrar no sistema</h2>
           <form onSubmit={handleSubmit} className={styles.form}>
             <input
               type="email"
@@ -120,13 +117,9 @@ function Login() {
         </div>
 
         <div className={styles.rightPanel}>
-          <img
-            src="/ZGlogo.png"
-            alt="Zavagna Gralha Advogados"
-            className={styles.logo}
-          />
+          <img src={logo} alt="Zavagna Gralha" className={styles.logo} />
         </div>
-      </div>
+      </main>
     </div>
   );
 }

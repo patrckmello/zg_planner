@@ -46,7 +46,7 @@ function Sidebar({ isOpen }) {
       </nav>
       
       <div className={styles.sidebarFooter}>
-        <span>Planner v1.0</span>
+        <span>{String.fromCodePoint(0x00A9)} Desenvolvido por TI Zavagna Gralha</span>
       </div>
     </aside>
   );
