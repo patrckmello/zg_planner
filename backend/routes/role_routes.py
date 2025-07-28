@@ -3,15 +3,17 @@ from models.role_model import Role
 from extensions import db
 from decorators import admin_required
 
+# REMOVA a barra final do url_prefix
 role_bp = Blueprint('role_bp', __name__, url_prefix='/api/roles')
 
-@role_bp.route('/', methods=['GET'])
+# REMOVA as barras finais de todas as rotas
+@role_bp.route('', methods=['GET'])  # Era '/', agora é ''
 @admin_required
 def list_roles():
     roles = Role.query.all()
     return jsonify([role.to_dict() for role in roles])
 
-@role_bp.route('/', methods=['POST'])
+@role_bp.route('', methods=['POST'])  # Era '/', agora é ''
 @admin_required
 def create_role():
     data = request.json

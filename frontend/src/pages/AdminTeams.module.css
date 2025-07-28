@@ -1,0 +1,722 @@
+/* O container de toda a página */
+.adminTeamsPage {
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+}
+
+.pageBody {
+  display: flex;
+  height: calc(100vh - 60px); 
+  margin-top: 60px; 
+  position: relative;
+}
+
+.contentArea {
+  flex-grow: 1; 
+  background-color: #f5f5f5;
+  padding: 32px;
+  overflow-y: auto; 
+  display: flex;
+  justify-content: center; 
+}
+
+.teamsWrapper {
+  width: 98%;
+  max-width: 1200px; 
+  transition: width 0.3s ease-in-out;
+}
+
+.teamsHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.teamsHeader h2 {
+  font-size: 28px;
+  color: #333;
+}
+
+.addTeamBtn {
+  background-color: #3498db;
+  color: white;
+  border: none;
+  padding: 12px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 15px;
+  transition: background-color 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.addTeamBtn:hover {
+  background-color: #2980b9;
+}
+
+.btnIcon {
+  font-size: 16px;
+}
+
+.teamsList {
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.07);
+}
+
+.teamItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px;
+  border-bottom: 1px solid #f0f0f0;
+  transition: all 0.3s ease;
+}
+
+.teamItem:last-child {
+  border-bottom: none;
+}
+
+.teamItem:hover {
+  background-color: #f8f9fa;
+}
+
+.teamInfo {
+  display: flex;
+  align-items: center;
+  flex-grow: 1;
+}
+
+.teamIcon {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background-color: #e8f5e8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 16px;
+}
+
+.iconUsers {
+  font-size: 24px;
+  color: #28a745;
+}
+
+.teamDetails {
+  flex-grow: 1;
+}
+
+.teamName {
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 4px;
+}
+
+.teamDescription {
+  font-size: 14px;
+  color: #6c757d;
+  margin-bottom: 6px;
+}
+
+.teamStats {
+  font-size: 13px;
+  color: #28a745;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.statsIcon {
+  font-size: 12px;
+}
+
+.managerIndicator {
+  margin-left: 12px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: #ffc107;
+}
+
+.managerIcon {
+  font-size: 12px;
+}
+
+.teamActions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.membersBtn, .editBtn, .moreBtn {
+  background-color: #f8f9fa;
+  border: 1px solid #dee2e6;
+  padding: 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.membersBtn {
+  color: #28a745;
+}
+
+.membersBtn:hover {
+  background-color: #28a745;
+  color: white;
+  border-color: #28a745;
+}
+
+.editBtn {
+  color: #3498db;
+}
+
+.editBtn:hover {
+  background-color: #3498db;
+  color: white;
+  border-color: #3498db;
+}
+
+.moreBtn {
+  color: #6c757d;
+}
+
+.moreBtn:hover {
+  background-color: #e9ecef;
+  color: #333;
+}
+
+/* Dropdown */
+.dropdown {
+  position: relative;
+}
+
+.dropdownMenu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background: white;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 100;
+  min-width: 160px;
+  overflow: hidden;
+}
+
+.dropdownItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 12px 16px;
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  font-size: 14px;
+  color: #333;
+  transition: background-color 0.2s;
+}
+
+.dropdownItem:hover {
+  background-color: #f8f9fa;
+}
+
+.dropdownItem.dangerItem {
+  color: #dc3545;
+}
+
+.dropdownItem.dangerItem:hover {
+  background-color: #f8d7da;
+}
+
+.dropdownIcon {
+  font-size: 14px;
+}
+
+.emptyTeams {
+  text-align: center;
+  padding: 40px;
+  color: #888;
+  font-size: 16px;
+}
+
+.spinnerContainer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: #f2f4f8;
+  z-index: 9999;
+}
+
+.spinner {
+  width: 50px;
+  height: 50px;
+  border: 6px solid #e0e0e0;
+  border-top: 6px solid #4e79a7;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.errorContainer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: #f2f4f8;
+  z-index: 9999;
+}
+
+.errorMessage {
+  background-color: white;
+  padding: 40px;
+  border-radius: 8px;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+  text-align: center;
+  max-width: 400px;
+}
+
+.errorMessage h2 {
+  color: #e74c3c;
+  margin-bottom: 16px;
+}
+
+.errorMessage p {
+  color: #666;
+  margin-bottom: 24px;
+}
+
+.errorMessage button {
+  background-color: #3498db;
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.controls {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.controlGroup {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.9rem;
+}
+
+.controlLabel {
+  font-weight: 500;
+  color: #333;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.select {
+  margin-top: 0.2rem;
+  padding: 6px 10px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  background-color: #fdfdfd;
+  color: #333;
+  font-size: 0.95rem;
+  transition: all 0.2s ease;
+}
+
+.select:hover,
+.select:focus {
+  border-color: #888;
+  outline: none;
+  background-color: #f5f5f5;
+  cursor: pointer;
+}
+
+.icon {
+  font-size: 1.2rem;
+  color: #666;
+  margin-right: 4px;
+}
+
+/* ===== MODAL STYLES ===== */
+.modalOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.modalContent {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  width: 100%;
+  max-width: 600px;
+  max-height: 80vh;
+  overflow: hidden;
+  animation: slideUp 0.3s ease-out;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.modalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 28px 16px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #333;
+  color: white;
+  flex-shrink: 0;
+}
+
+.modalTitle {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0;
+  color: white;
+}
+
+.closeButton {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  border-radius: 8px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.closeButton:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: scale(1.05);
+}
+
+.modalBody {
+  padding: 28px;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.formGroup {
+  margin-bottom: 24px;
+}
+
+.label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: #374151;
+  font-size: 14px;
+}
+
+.input, .textarea {
+  width: 100%;
+  padding: 12px 16px;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 16px;
+  transition: all 0.2s ease;
+  background-color: #f9fafb;
+  font-family: inherit;
+}
+
+.input:focus, .textarea:focus {
+  outline: none;
+  border-color: #3b82f6;
+  background-color: white;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.section {
+  margin-bottom: 32px;
+}
+
+.sectionTitle {
+  font-size: 16px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.membersList, .availableUsersList {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.memberItem, .availableUserItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  background-color: #f9fafb;
+}
+
+.memberInfo, .userInfo {
+  flex-grow: 1;
+}
+
+.memberName, .userName {
+  font-weight: 600;
+  color: #374151;
+  display: block;
+  margin-bottom: 2px;
+}
+
+.memberEmail, .userEmail {
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.managerBadge {
+  background-color: #fbbf24;
+  color: #92400e;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.badgeIcon {
+  font-size: 10px;
+}
+
+.memberActions {
+  display: flex;
+  gap: 8px;
+}
+
+.toggleBtn, .removeBtn, .addBtn {
+  background-color: #f3f4f6;
+  border: 1px solid #d1d5db;
+  padding: 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.toggleBtn {
+  color: #6b7280;
+}
+
+.toggleBtn.active {
+  background-color: #fbbf24;
+  color: #92400e;
+  border-color: #fbbf24;
+}
+
+.toggleBtn:hover {
+  background-color: #fbbf24;
+  color: #92400e;
+  border-color: #fbbf24;
+}
+
+.removeBtn {
+  color: #dc2626;
+}
+
+.removeBtn:hover {
+  background-color: #dc2626;
+  color: white;
+  border-color: #dc2626;
+}
+
+.addBtn {
+  color: #059669;
+}
+
+.addBtn:hover {
+  background-color: #059669;
+  color: white;
+  border-color: #059669;
+}
+
+.emptyMessage {
+  text-align: center;
+  color: #6b7280;
+  font-style: italic;
+  padding: 20px;
+}
+
+.modalFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 20px 28px;
+  border-top: 1px solid #e5e7eb;
+  background-color: #f9fafb;
+}
+
+.cancelBtn {
+  background-color: #6b7280;
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 14px;
+  transition: all 0.2s ease;
+}
+
+.cancelBtn:hover {
+  background-color: #4b5563;
+  transform: translateY(-1px);
+}
+
+.saveBtn {
+  background-color: #3b82f6;
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 14px;
+  transition: all 0.2s ease;
+}
+
+.saveBtn:hover {
+  background-color: #2563eb;
+  transform: translateY(-1px);
+}
+
+/* Responsividade */
+@media (max-width: 768px) {
+  .teamsHeader {
+    flex-direction: column;
+    gap: 16px;
+    align-items: stretch;
+  }
+
+  .teamsHeader h2 {
+    font-size: 24px;
+  }
+
+  .teamItem {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+  }
+
+  .teamActions {
+    justify-content: space-between;
+  }
+
+  .controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .modalContent {
+    width: 95%;
+    margin: 20px;
+    max-height: 90vh;
+  }
+
+  .modalBody {
+    padding: 20px;
+  }
+
+  .modalHeader {
+    padding: 16px 20px;
+  }
+
+  .modalFooter {
+    padding: 16px 20px;
+  }
+
+  .memberItem, .availableUserItem {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .memberActions {
+    justify-content: center;
+  }
+}
+

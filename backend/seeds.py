@@ -19,7 +19,7 @@ def seed_admin():
             is_admin=True,
             is_active=True
         )
-        admin.set_password('admin')
+        admin.set_password('adminadmin')
         db.session.add(admin)
     else:
         admin.is_active = True  # Força ficar ativo mesmo que já exista

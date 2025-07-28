@@ -1,0 +1,578 @@
+import React, { useState, useEffect } from 'react';
+import Header from '../components/Header';
+import Sidebar from '../components/Sidebar';
+import DeleteConfirmModal from '../components/DeleteConfirmModal';
+import styles from './AdminTeams.module.css';
+import api from '../services/axiosInstance';
+import { useNavigate } from 'react-router-dom';
+import { 
+  FiFilter, 
+  FiArrowDownCircle, 
+  FiPlus, 
+  FiEdit, 
+  FiUsers,
+  FiMoreHorizontal,
+  FiTrash2,
+  FiUserPlus,
+  FiUserMinus,
+  FiShield,
+  FiUser
+} from 'react-icons/fi';
+
+function AdminTeams() {
+  const navigate = useNavigate();
+  const [teams, setTeams] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [showTeamForm, setShowTeamForm] = useState(false);
+  const [editingTeam, setEditingTeam] = useState(null);
+  const [showMembersModal, setShowMembersModal] = useState(false);
+  const [selectedTeam, setSelectedTeam] = useState(null);
+  const [sortBy, setSortBy] = useState('name');
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [teamToDelete, setTeamToDelete] = useState(null);
+  const [showDropdown, setShowDropdown] = useState(null);
+
+  // Estado para nova equipe
+  const [newTeam, setNewTeam] = useState({
+    name: '',
+    description: '',
+  });
+
+  // Manteremos a sidebar aberta por padrão em telas maiores
+  const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 768);
+
+  const sortedTeams = [...teams].sort((a, b) => {
+    if (sortBy === 'name') return a.name.localeCompare(b.name);
+    if (sortBy === 'description') return (a.description || '').localeCompare(b.description || '');
+    if (sortBy === 'members_count') return (b.members?.length || 0) - (a.members?.length || 0);
+    return 0;
+  });
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [teamsResponse, usersResponse] = await Promise.all([
+          api.get('/teams'),
+          api.get('/users')
+        ]);
+        
+        console.log('Equipes recebidas no frontend:', teamsResponse.data);
+        console.log('Usuários recebidos no frontend:', usersResponse.data);
+        
+        setTeams(teamsResponse.data);
+        setUsers(usersResponse.data);
+      } catch (error) {
+        console.error('Erro ao buscar dados:', error);
+        setError('Erro ao buscar dados. Verifique suas permissões.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+
+    const handleResize = () => {
+      if (window.innerWidth <= 768) {
+        setSidebarOpen(false);
+      }
+    };
+
+    const handleClickOutside = () => {
+      setShowDropdown(null);
+    };
+
+    window.addEventListener('resize', handleResize);
+    document.addEventListener('click', handleClickOutside);
+    
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      document.removeEventListener('click', handleClickOutside);
+    };
+  }, []);
+
+  useEffect(() => {
+    const savedSort = localStorage.getItem('teamSortBy');
+    if (savedSort) setSortBy(savedSort);
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('teamSortBy', sortBy);
+  }, [sortBy]);
+
+  const handleLogout = async () => {
+    try {
+      await api.post('/logout');
+    } catch (err) {
+      console.error('Erro ao fazer logout:', err);
+    } finally {
+      localStorage.removeItem('auth');
+      navigate('/login');
+    }
+  };
+
+  const toggleSidebar = () => {
+    setSidebarOpen(!sidebarOpen);
+  };
+
+  const resetForm = () => {
+    setNewTeam({ name: '', description: '' });
+  };
+
+  const handleCreateTeam = async () => {
+    if (!newTeam.name) {
+      alert('O nome da equipe é obrigatório!');
+      return;
+    }
+
+    try {
+      const response = await api.post('/teams/', newTeam);
+      setTeams([...teams, response.data]);
+      resetForm();
+      setShowTeamForm(false);
+      console.log('Equipe criada com sucesso:', response.data);
+    } catch (error) {
+      console.error('Erro ao criar equipe:', error);
+      alert('Erro ao criar equipe. Tente novamente.');
+    }
+  };
+
+  const handleUpdateTeam = async (teamId, teamData) => {
+    try {
+      const response = await api.put(`/teams/${teamId}`, teamData);
+      setTeams(prev => prev.map(t => t.id === teamId ? response.data : t));
+      setEditingTeam(null);
+      console.log('Equipe atualizada com sucesso:', response.data);
+    } catch (error) {
+      console.error('Erro ao atualizar equipe:', error);
+      alert('Erro ao atualizar equipe. Tente novamente.');
+    }
+  };
+
+  const handleAddMember = async (teamId, userId) => {
+    try {
+      const response = await api.post(`/teams/${teamId}/members`, { user_id: userId });
+      setTeams(prev => prev.map(t => t.id === teamId ? response.data : t));
+      console.log('Membro adicionado com sucesso');
+    } catch (error) {
+      console.error('Erro ao adicionar membro:', error);
+      alert('Erro ao adicionar membro à equipe.');
+    }
+  };
+
+  const handleRemoveMember = async (teamId, userId) => {
+    try {
+      const response = await api.delete(`/teams/${teamId}/members/${userId}`);
+      setTeams(prev => prev.map(t => t.id === teamId ? response.data : t));
+      console.log('Membro removido com sucesso');
+    } catch (error) {
+      console.error('Erro ao remover membro:', error);
+      alert('Erro ao remover membro da equipe.');
+    }
+  };
+
+  const handleToggleManager = async (teamId, userId, isManager) => {
+    try {
+      const response = await api.put(`/teams/${teamId}/members/${userId}`, { 
+        is_manager: !isManager 
+      });
+      setTeams(prev => prev.map(t => t.id === teamId ? response.data : t));
+      console.log('Status de gerente alterado com sucesso');
+    } catch (error) {
+      console.error('Erro ao alterar status de gerente:', error);
+      alert('Erro ao alterar status de gerente.');
+    }
+  };
+
+  const cancelDelete = () => {
+    setTeamToDelete(null);
+    setShowDeleteModal(false);
+  };
+
+  const confirmDelete = async () => {
+    if (!teamToDelete) return;
+
+    try {
+      await api.delete(`/teams/${teamToDelete.id}`);
+      setTeams(prev => prev.filter(t => t.id !== teamToDelete.id));
+    } catch (error) {
+      console.error('Erro ao excluir equipe:', error);
+      alert('Erro ao excluir equipe.');
+    } finally {
+      setTeamToDelete(null);
+      setShowDeleteModal(false);
+      setShowDropdown(null);
+    }
+  };
+
+  const openMembersModal = (team) => {
+    setSelectedTeam(team);
+    setShowMembersModal(true);
+  };
+
+  const getAvailableUsers = () => {
+    if (!selectedTeam) return [];
+    const teamMemberIds = selectedTeam.members?.map(m => m.id) || [];
+    return users.filter(user => !teamMemberIds.includes(user.id));
+  };
+
+  if (loading) {
+    return (
+      <div className={styles.spinnerContainer}>
+        <div className={styles.spinner}></div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className={styles.errorContainer}>
+        <div className={styles.errorMessage}>
+          <h2>Erro</h2>
+          <p>{error}</p>
+          <button onClick={() => window.location.reload()}>Tentar Novamente</button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={styles.adminTeamsPage}>
+      <Header onLogout={handleLogout} onMenuToggle={toggleSidebar} />
+
+      <div className={styles.pageBody}>
+        <Sidebar isOpen={sidebarOpen} />
+        
+        <main className={styles.contentArea}>
+          <div className={styles.teamsWrapper}>
+            <div className={styles.teamsHeader}>
+              <h2>Administração de Equipes</h2>
+              <button className={styles.addTeamBtn} onClick={() => setShowTeamForm(true)}>
+                <FiPlus className={styles.btnIcon} />
+                Nova Equipe
+              </button>
+            </div>
+            
+            <div className={styles.controls}>
+              <div className={styles.controlGroup}>
+                <label className={styles.controlLabel}>
+                  <FiArrowDownCircle className={styles.icon} />
+                  Ordenar por:
+                  <select 
+                    className={styles.select} 
+                    value={sortBy} 
+                    onChange={(e) => setSortBy(e.target.value)}
+                  >
+                    <option value="name">Nome</option>
+                    <option value="description">Descrição</option>
+                    <option value="members_count">Número de membros</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+
+            <div className={styles.teamsList}>
+              {sortedTeams.length === 0 ? (
+                <div className={styles.emptyTeams}>
+                  Nenhuma equipe cadastrada.
+                </div>
+              ) : (
+                sortedTeams.map(team => (
+                  <div key={team.id} className={styles.teamItem}>
+                    <div className={styles.teamInfo}>
+                      <div className={styles.teamIcon}>
+                        <FiUsers className={styles.iconUsers} />
+                      </div>
+                      <div className={styles.teamDetails}>
+                        <div className={styles.teamName}>
+                          {team.name}
+                        </div>
+                        <div className={styles.teamDescription}>
+                          {team.description || 'Sem descrição'}
+                        </div>
+                        <div className={styles.teamStats}>
+                          <FiUser className={styles.statsIcon} />
+                          {team.members?.length || 0} membro(s)
+                          {team.members?.some(m => m.is_manager) && (
+                            <span className={styles.managerIndicator}>
+                              <FiShield className={styles.managerIcon} />
+                              Com gerente
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div className={styles.teamActions}>
+                      <button
+                        className={styles.membersBtn}
+                        onClick={() => openMembersModal(team)}
+                        title="Gerenciar membros"
+                      >
+                        <FiUserPlus />
+                      </button>
+                      <button
+                        className={styles.editBtn}
+                        onClick={() => setEditingTeam(team)}
+                        title="Editar equipe"
+                      >
+                        <FiEdit />
+                      </button>
+                      <div className={styles.dropdown}>
+                        <button
+                          className={styles.moreBtn}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowDropdown(showDropdown === team.id ? null : team.id);
+                          }}
+                          title="Mais opções"
+                        >
+                          <FiMoreHorizontal />
+                        </button>
+                        {showDropdown === team.id && (
+                          <div className={styles.dropdownMenu}>
+                            <button
+                              className={`${styles.dropdownItem} ${styles.dangerItem}`}
+                              onClick={() => {
+                                setTeamToDelete(team);
+                                setShowDeleteModal(true);
+                              }}
+                            >
+                              <FiTrash2 className={styles.dropdownIcon} />
+                              Excluir Equipe
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </main>
+
+        {/* Modal para criar nova equipe */}
+        {showTeamForm && (
+          <div className={styles.modalOverlay}>
+            <div className={styles.modalContent}>
+              <div className={styles.modalHeader}>
+                <h3 className={styles.modalTitle}>Nova Equipe</h3>
+                <button 
+                  className={styles.closeButton}
+                  onClick={() => {
+                    setShowTeamForm(false);
+                    resetForm();
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+              <div className={styles.modalBody}>
+                <div className={styles.formGroup}>
+                  <label className={styles.label}>Nome da equipe</label>
+                  <input
+                    type="text"
+                    className={styles.input}
+                    value={newTeam.name}
+                    onChange={(e) => setNewTeam({ ...newTeam, name: e.target.value })}
+                    placeholder="Digite o nome da equipe"
+                  />
+                </div>
+                <div className={styles.formGroup}>
+                  <label className={styles.label}>Descrição</label>
+                  <textarea
+                    className={styles.textarea}
+                    value={newTeam.description}
+                    onChange={(e) => setNewTeam({ ...newTeam, description: e.target.value })}
+                    placeholder="Digite uma descrição para a equipe (opcional)"
+                    rows="3"
+                  />
+                </div>
+              </div>
+              <div className={styles.modalFooter}>
+                <button 
+                  className={styles.cancelBtn}
+                  onClick={() => {
+                    setShowTeamForm(false);
+                    resetForm();
+                  }}
+                >
+                  Cancelar
+                </button>
+                <button 
+                  className={styles.saveBtn}
+                  onClick={handleCreateTeam}
+                >
+                  Criar Equipe
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal para editar equipe */}
+        {editingTeam && (
+          <div className={styles.modalOverlay}>
+            <div className={styles.modalContent}>
+              <div className={styles.modalHeader}>
+                <h3 className={styles.modalTitle}>Editar Equipe</h3>
+                <button 
+                  className={styles.closeButton}
+                  onClick={() => setEditingTeam(null)}
+                >
+                  ×
+                </button>
+              </div>
+              <div className={styles.modalBody}>
+                <div className={styles.formGroup}>
+                  <label className={styles.label}>Nome da equipe</label>
+                  <input
+                    type="text"
+                    className={styles.input}
+                    value={editingTeam.name}
+                    onChange={(e) => setEditingTeam({ ...editingTeam, name: e.target.value })}
+                    placeholder="Digite o nome da equipe"
+                  />
+                </div>
+                <div className={styles.formGroup}>
+                  <label className={styles.label}>Descrição</label>
+                  <textarea
+                    className={styles.textarea}
+                    value={editingTeam.description || ''}
+                    onChange={(e) => setEditingTeam({ ...editingTeam, description: e.target.value })}
+                    placeholder="Digite uma descrição para a equipe (opcional)"
+                    rows="3"
+                  />
+                </div>
+              </div>
+              <div className={styles.modalFooter}>
+                <button 
+                  className={styles.cancelBtn}
+                  onClick={() => setEditingTeam(null)}
+                >
+                  Cancelar
+                </button>
+                <button 
+                  className={styles.saveBtn}
+                  onClick={() => handleUpdateTeam(editingTeam.id, editingTeam)}
+                >
+                  Salvar Alterações
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal para gerenciar membros */}
+        {showMembersModal && selectedTeam && (
+          <div className={styles.modalOverlay}>
+            <div className={styles.modalContent}>
+              <div className={styles.modalHeader}>
+                <h3 className={styles.modalTitle}>Gerenciar Membros - {selectedTeam.name}</h3>
+                <button 
+                  className={styles.closeButton}
+                  onClick={() => {
+                    setShowMembersModal(false);
+                    setSelectedTeam(null);
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+              <div className={styles.modalBody}>
+                {/* Membros atuais */}
+                <div className={styles.section}>
+                  <h4 className={styles.sectionTitle}>Membros Atuais</h4>
+                  {selectedTeam.members && selectedTeam.members.length > 0 ? (
+                    <div className={styles.membersList}>
+                      {selectedTeam.members.map(member => (
+                        <div key={member.id} className={styles.memberItem}>
+                          <div className={styles.memberInfo}>
+                            <span className={styles.memberName}>{member.username}</span>
+                            <span className={styles.memberEmail}>{member.email}</span>
+                            {member.is_manager && (
+                              <span className={styles.managerBadge}>
+                                <FiShield className={styles.badgeIcon} />
+                                Gerente
+                              </span>
+                            )}
+                          </div>
+                          <div className={styles.memberActions}>
+                            <button
+                              className={`${styles.toggleBtn} ${member.is_manager ? styles.active : ''}`}
+                              onClick={() => handleToggleManager(selectedTeam.id, member.id, member.is_manager)}
+                              title={member.is_manager ? "Remover como gerente" : "Tornar gerente"}
+                            >
+                              <FiShield />
+                            </button>
+                            <button
+                              className={styles.removeBtn}
+                              onClick={() => handleRemoveMember(selectedTeam.id, member.id)}
+                              title="Remover da equipe"
+                            >
+                              <FiUserMinus />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className={styles.emptyMessage}>Nenhum membro na equipe.</p>
+                  )}
+                </div>
+
+                {/* Adicionar novos membros */}
+                <div className={styles.section}>
+                  <h4 className={styles.sectionTitle}>Adicionar Membros</h4>
+                  {getAvailableUsers().length > 0 ? (
+                    <div className={styles.availableUsersList}>
+                      {getAvailableUsers().map(user => (
+                        <div key={user.id} className={styles.availableUserItem}>
+                          <div className={styles.userInfo}>
+                            <span className={styles.userName}>{user.username}</span>
+                            <span className={styles.userEmail}>{user.email}</span>
+                          </div>
+                          <button
+                            className={styles.addBtn}
+                            onClick={() => handleAddMember(selectedTeam.id, user.id)}
+                            title="Adicionar à equipe"
+                          >
+                            <FiUserPlus />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className={styles.emptyMessage}>Todos os usuários já estão na equipe.</p>
+                  )}
+                </div>
+              </div>
+              <div className={styles.modalFooter}>
+                <button 
+                  className={styles.cancelBtn}
+                  onClick={() => {
+                    setShowMembersModal(false);
+                    setSelectedTeam(null);
+                  }}
+                >
+                  Fechar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <DeleteConfirmModal 
+          isOpen={showDeleteModal} 
+          onCancel={cancelDelete} 
+          onConfirm={confirmDelete} 
+          taskTitle={teamToDelete?.name || ''} 
+        />
+      </div>
+    </div>
+  );
+}
+
+export default AdminTeams;
+

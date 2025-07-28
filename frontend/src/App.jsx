@@ -5,6 +5,8 @@ import Dashboard from './components/Dashboard'
 import PrivateRoute from './components/PrivateRoute'
 import SessionRedirect from './components/SessionRedirect'
 import AdminUsers from './pages/AdminUsers'
+import AdminRoles from './pages/AdminRoles'
+import AdminTeams from './pages/AdminTeams'
 
 
 function App() {
@@ -22,6 +24,8 @@ function App() {
         {/* Protegendo rotas de admin */}
         <Route element={<PrivateRoute adminOnly={true} />}>
           <Route path="/admin/users" element={<AdminUsers />} />
+          <Route path="/admin/cargos" element={<AdminRoles />} />
+          <Route path="/admin/equipes" element={<AdminTeams />} />
         </Route>
       </Routes>
     </Router>
@@ -29,3 +33,4 @@ function App() {
 }
 
 export default App
+
