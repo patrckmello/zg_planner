@@ -3,6 +3,9 @@ from models.team_model import Team
 from extensions import db
 from decorators import admin_required
 from models.user_model import User
+from models.user_team_model import UserTeam
+from flask_jwt_extended import jwt_required, get_jwt_identity
+from models.task_model import Task
 
 team_bp = Blueprint('team_bp', __name__, url_prefix='/api/teams')
 
@@ -48,7 +51,10 @@ def delete_team(team_id):
 def add_user_to_team(team_id):
     team = Team.query.get_or_404(team_id)
     data = request.json
+
     user_id = data.get('user_id')
+    is_manager = data.get('is_manager', False)
+
     if not user_id:
         return jsonify({'error': 'user_id é obrigatório'}), 400
 
@@ -56,8 +62,101 @@ def add_user_to_team(team_id):
     if not user:
         return jsonify({'error': 'Usuário não encontrado'}), 404
 
-    if user not in team.users:
-        team.users.append(user)
-        db.session.commit()
+    # Verifica se já existe a associação
+    existing = UserTeam.query.filter_by(user_id=user_id, team_id=team_id).first()
+    if existing:
+        return jsonify({'error': 'Usuário já faz parte desse time.'}), 400
 
-    return jsonify({'message': f'Usuário {user.name} adicionado ao time {team.name}.'})
+    # Cria o vínculo com a flag de gerente
+    user_team = UserTeam(user_id=user_id, team_id=team_id, is_manager=is_manager)
+    db.session.add(user_team)
+    db.session.commit()
+
+    return jsonify({'message': f'Usuário {user.username} adicionado ao time {team.name} com sucesso.'})
+
+@team_bp.route('/<int:team_id>/users', methods=['GET'])
+@admin_required
+def list_team_users(team_id):
+    team = Team.query.get_or_404(team_id)
+    members = [
+        {
+            'user_id': ut.user.id,
+            'name': ut.user.username,
+            'email': ut.user.email,
+            'is_manager': ut.is_manager
+        }
+        for ut in team.members
+    ]
+    return jsonify(members)
+
+@team_bp.route('/<int:team_id>/users/<int:user_id>', methods=['DELETE'])
+@admin_required
+def remove_user_from_team(team_id, user_id):
+    association = UserTeam.query.filter_by(user_id=user_id, team_id=team_id).first()
+    if not association:
+        return jsonify({'error': 'Associação não encontrada'}), 404
+
+    db.session.delete(association)
+    db.session.commit()
+    return jsonify({'message': f'Usuário removido do time com sucesso.'})
+
+@team_bp.route('/<int:team_id>/users/<int:user_id>', methods=['PUT'])
+@admin_required
+def update_user_in_team(team_id, user_id):
+    from models.user_team_model import UserTeam  # importa o model de associação
+
+    data = request.json
+    is_manager = data.get('is_manager')
+
+    # Busca a relação específica entre usuário e time
+    user_team = UserTeam.query.filter_by(user_id=user_id, team_id=team_id).first()
+
+    if not user_team:
+        return jsonify({'error': 'Usuário não está associado a este time.'}), 404
+
+    if is_manager is not None:
+        user_team.is_manager = is_manager
+
+    db.session.commit()
+
+    return jsonify({
+        'message': f'Usuário atualizado no time com sucesso.',
+        'user_id': user_id,
+        'team_id': team_id,
+        'is_manager': user_team.is_manager
+    })
+
+
+@team_bp.route('/<int:team_id>/productivity', methods=['GET'])
+@jwt_required()
+def team_productivity(team_id):
+    user_id = get_jwt_identity()
+    user = User.query.get(user_id)
+    if not user or not user.is_active:
+        return jsonify({'error': 'Usuário inválido ou inativo'}), 401
+
+    # Permissão: admin OU gestor da equipe
+    if not user.is_admin:
+        manager_link = UserTeam.query.filter_by(user_id=user_id, team_id=team_id, is_manager=True).first()
+        if not manager_link:
+            return jsonify({'error': 'Acesso negado. Apenas gestores ou admins podem ver este relatório.'}), 403
+
+    team = Team.query.get_or_404(team_id)
+
+    user_teams = UserTeam.query.filter_by(team_id=team_id).all()
+
+    data = []
+    for ut in user_teams:
+        member = ut.user
+        total_tasks = Task.query.filter_by(user_id=member.id).count()
+        completed_tasks = Task.query.filter_by(user_id=member.id, status='done').count()
+
+        data.append({
+            'user_id': member.id,
+            'user_name': member.username,
+            'total_tasks': total_tasks,
+            'completed_tasks': completed_tasks,
+            'completion_rate': f'{(completed_tasks / total_tasks * 100) if total_tasks else 0:.1f}%'
+        })
+
+    return jsonify({'team_id': team.id, 'team_name': team.name, 'productivity': data}), 200

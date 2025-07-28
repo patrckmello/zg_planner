@@ -35,7 +35,7 @@
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background-color: #6c5ce7;
+  background-color: #3498db;
   color: white;
   display: flex;
   align-items: center;
@@ -44,10 +44,9 @@
   margin-right: 15px;
 }
 
-/* CORREÇÃO APLICADA AQUI */
 .userDetails {
   display: flex;
-  flex-direction: column; /* Organiza nome e email um em cima do outro */
+  flex-direction: column; 
 }
 
 .userName {
@@ -56,17 +55,41 @@
   color: #333;
 }
 
+.userName,
+.userEmail {
+  max-width: 140px; 
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .userEmail {
   font-size: 13px;
   color: #777;
 }
-/* FIM DA CORREÇÃO */
-
 
 .navigation {
   flex-grow: 1;
   padding: 10px 0;
 }
+
+.icon {
+  stroke: #3498db;
+  transition: stroke 0.3s ease;
+}
+
+.navigation li a:hover .icon {
+  stroke: #194b6d;
+}
+
+.sectionLabel {
+  font-size: 12px;
+  color: #888;
+  text-transform: uppercase;
+  padding: 8px 20px 4px 20px;
+  font-weight: bold;
+}
+
 
 .navigation ul {
   list-style: none;

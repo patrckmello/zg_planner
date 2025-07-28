@@ -1,5 +1,3 @@
-# backend/models/task_model.py
-
 from extensions import db
 from datetime import datetime
 from sqlalchemy.dialects.postgresql import JSONB
@@ -11,7 +9,6 @@ class Task(db.Model):
     status = db.Column(db.String(20), default='pending')  # ou 'done'
     due_date = db.Column(db.DateTime, nullable=True)
 
-    # 🆕 Novos campos
     prioridade = db.Column(db.String(20))  # Alta, Média, Baixa
     categoria = db.Column(db.String(50))   # Processo, Reunião, etc
     status_inicial = db.Column(db.String(50))  # A fazer, Em andamento, etc
@@ -29,6 +26,7 @@ class Task(db.Model):
     user = db.relationship('User', back_populates='tasks')
 
     team_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=True)
+    team = db.relationship('Team', backref='tasks')
 
     def to_dict(self):
         return {
@@ -36,17 +34,18 @@ class Task(db.Model):
             "title": self.title,
             "description": self.description,
             "status": self.status,
-            "due_date": self.due_date,
+            "due_date": self.due_date.isoformat() if self.due_date else None,
             "prioridade": self.prioridade,
             "categoria": self.categoria,
             "status_inicial": self.status_inicial,
             "tempo_estimado": self.tempo_estimado,
-            "tempo_unidade": self.tempo_unidade,
             "relacionado_a": self.relacionado_a,
             "lembretes": self.lembretes,
             "tags": self.tags,
             "anexos": self.anexos,
-            "created_at": self.created_at,
-            "updated_at": self.updated_at,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "user_id": self.user_id,
+            "team_id": self.team_id,
+            "team_name": self.team.name if self.team else None
         }

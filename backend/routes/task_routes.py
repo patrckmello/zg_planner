@@ -9,7 +9,6 @@ import json
 from datetime import datetime
 from models.user_model import User
 from models.team_model import Team
-from tasks.reminder_jobs import agendar_lembretes
 
 task_bp = Blueprint('tasks', __name__, url_prefix='/api')
 
@@ -27,21 +26,25 @@ def get_tasks():
     due_after = request.args.get('due_after')
     search = request.args.get('search')
 
-    # Se admin, vê tudo
     if user.is_admin:
         query = Task.query
     else:
-        # Pega os ids dos times que o user é manager
-        managed_team_ids = [assoc.team_id for assoc in user.teams if assoc.is_manager]
+        # Verifica se o usuário é gestor de algum time
+        manager_team_ids = [
+            assoc.team_id for assoc in user.teams if assoc.is_manager
+        ]
 
-        if managed_team_ids:
-            # Tarefas do usuário + tarefas dos times que gerencia
+        # Se for gestor, pega tarefas pessoais + tarefas da equipe que ele gerencia
+        if manager_team_ids:
             query = Task.query.filter(
-                (Task.user_id == user_id) | (Task.team_id.in_(managed_team_ids))
+                (Task.user_id == user_id) | (Task.team_id.in_(manager_team_ids))
             )
         else:
-            # Só tarefas pessoais do usuário
-            query = Task.query.filter(Task.user_id == user_id)
+            # User comum: tarefas pessoais + tarefas das equipes em que participa
+            member_team_ids = [assoc.team_id for assoc in user.teams]
+            query = Task.query.filter(
+                (Task.user_id == user_id) | (Task.team_id.in_(member_team_ids))
+            )
 
     if status:
         if status not in ['pending', 'done', 'in_progress', 'cancelled']:
@@ -411,7 +414,6 @@ def update_task(task_id):
             task.tags = task.tags or []
 
     db.session.commit()
-    agendar_lembretes(current_app.scheduler)
     return jsonify(task.to_dict())
 
 @task_bp.route('/tasks/<int:task_id>', methods=['DELETE'])

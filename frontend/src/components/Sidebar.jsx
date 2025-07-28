@@ -2,6 +2,17 @@ import { Link } from 'react-router-dom';
 import React, { useEffect, useState } from 'react';
 import api from '../services/axiosInstance';
 import styles from './Sidebar.module.css';
+import {
+  Home,
+  ClipboardList,
+  BarChart2,
+  Users,
+  Folder,
+  PieChart,
+  User,
+  Briefcase,
+  Settings,
+} from 'lucide-react';
 
 function Sidebar({ isOpen }) {
   const [user, setUser] = useState(null);
@@ -43,30 +54,90 @@ function Sidebar({ isOpen }) {
 
       <nav className={styles.navigation}>
         <ul>
-          <li className={styles.active}>
-            <Link to="/">
-              <span className={styles.icon}>📋</span>
+          <li>
+            <Link to="/dashboard">
+              <Home size={20} className={styles.icon} />
+              <span>Dashboard</span>
+            </Link>
+          </li>
+
+          <li className={styles.sectionLabel}>Minhas Atividades</li>
+          <li>
+            <Link to="/minhas-tarefas">
+              <ClipboardList size={20} className={styles.icon} />
               <span>Minhas Tarefas</span>
             </Link>
           </li>
-          {/* <li>
-            <Link to="/equipe">
-              <span className={styles.icon}>👥</span>
-              <span>Equipe</span>
+          <li>
+            <Link to="/meus-relatorios">
+              <BarChart2 size={20} className={styles.icon} />
+              <span>Relatórios Pessoais</span>
             </Link>
           </li>
+
+          {user?.equipes?.length > 0 && (
+            <>
+              <li className={styles.sectionLabel}>Equipes</li>
+              <li>
+                <Link to="/equipes">
+                  <Users size={20} className={styles.icon} />
+                  <span>Minhas Equipes</span>
+                </Link>
+              </li>
+              <li>
+                <Link to="/tarefas-equipe">
+                  <Folder size={20} className={styles.icon} />
+                  <span>Tarefas da Equipe</span>
+                </Link>
+              </li>
+              {user?.is_manager && (
+                <li>
+                  <Link to="/relatorios-equipe">
+                    <PieChart size={20} className={styles.icon} />
+                    <span>Relatórios da Equipe</span>
+                  </Link>
+                </li>
+              )}
+            </>
+          )}
+
+          {user?.is_admin && (
+            <>
+              <li className={styles.sectionLabel}>Administração</li>
+              <li>
+                <Link to="/admin/usuarios">
+                  <User size={20} className={styles.icon} />
+                  <span>Usuários</span>
+                </Link>
+              </li>
+              <li>
+                <Link to="/admin/cargos">
+                  <Briefcase size={20} className={styles.icon} />
+                  <span>Cargos</span>
+                </Link>
+              </li>
+              <li>
+                <Link to="/admin/equipes">
+                  <Users size={20} className={styles.icon} />
+                  <span>Equipes</span>
+                </Link>
+              </li>
+              <li>
+                <Link to="/admin/config">
+                  <Settings size={20} className={styles.icon} />
+                  <span>Configurações</span>
+                </Link>
+              </li>
+            </>
+          )}
+
+          <li className={styles.sectionLabel}>Conta</li>
           <li>
-            <Link to="/calendario">
-              <span className={styles.icon}>📅</span>
-              <span>Calendário</span>
+            <Link to="/meu-perfil">
+              <User size={20} className={styles.icon} />
+              <span>Meu Perfil</span>
             </Link>
           </li>
-          <li>
-            <Link to="/configuracoes">
-              <span className={styles.icon}>⚙️</span>
-              <span>Configurações</span>
-            </Link>
-          </li> */}
         </ul>
       </nav>
 

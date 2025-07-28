@@ -103,20 +103,9 @@ from routes.team_routes import team_bp
 from routes.task_routes import task_bp
 from routes.role_routes import role_bp
 
-from utils.mail import enviar_email_reminder
-
-from tasks.reminder_jobs import agendar_lembretes
-from apscheduler.schedulers.background import BackgroundScheduler
-
 load_dotenv()
-print(f"[DEBUG] MAIL_USERNAME = {os.getenv('MAIL_USERNAME')}")
-print(f"[DEBUG] MAIL_PASSWORD = {'****' if os.getenv('MAIL_PASSWORD') else 'não definido'}")
 
 app = Flask(__name__)
-
-scheduler = BackgroundScheduler()
-scheduler.start()
-app.scheduler = scheduler
 
 # Configurações do Flask
 app.config['JWT_SECRET_KEY'] = 'sua_chave_secreta'
@@ -139,15 +128,6 @@ migrate = Migrate(app, db)
 CORS(app, supports_credentials=True, resources={r"/api/*": {"origins": "http://localhost:5173"}})
 jwt = JWTManager(app)
 
-@app.route('/test-email')
-def test_email():
-    destinatario = 'patrick.mello@zavagnagralha.com.br'  # coloca um email que você controla, pra receber
-    assunto = 'Teste de e-mail - ZG Planner'
-    corpo = 'Este é um teste para verificar se o envio de e-mail está funcionando direitinho.'
-
-    sucesso = enviar_email_reminder(destinatario, assunto, corpo)
-    return jsonify({'email_enviado': sucesso})
-
 # Registra blueprints
 app.register_blueprint(auth_bp)
 app.register_blueprint(user_bp)
@@ -156,13 +136,6 @@ app.register_blueprint(task_bp)
 app.register_blueprint(role_bp)
 
 primeira_vez = True
-
-@app.before_request
-def agendar_primeira_vez():
-    global primeira_vez
-    if primeira_vez:
-        agendar_lembretes(app.scheduler)
-        primeira_vez = False
 
 @app.route('/')
 def index():
@@ -181,5 +154,4 @@ if __name__ == '__main__':
         db.create_all()
         
         run_seeds()
-        agendar_lembretes(app.scheduler)
     app.run(debug=True, host='0.0.0.0', port=5555)

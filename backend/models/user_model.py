@@ -43,5 +43,16 @@ class User(db.Model):
             'username': self.username,
             'email': self.email,
             'is_admin': self.is_admin,
-            'is_active': self.is_active
+            'is_active': self.is_active,
+            # Lista das equipes desse usuário com info se ele é manager
+            'equipes': [
+                {
+                    'id': assoc.team.id,
+                    'name': assoc.team.name,
+                    'is_manager': assoc.is_manager
+                }
+                for assoc in self.teams
+            ],
+            # Para facilitar, um boolean que indica se o user é manager de alguma equipe
+            'is_manager': any(assoc.is_manager for assoc in self.teams)
         }
