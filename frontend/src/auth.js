@@ -1,15 +1,14 @@
-import axios from 'axios';
-
+// frontend/src/auth.js
 export async function isAuthenticated() {
+  const token = localStorage.getItem('access_token');
+  const userStr = localStorage.getItem('user');
+
+  if (!token || !userStr) return null;
+
   try {
-    const token = localStorage.getItem('access_token');
-    await axios.get('http://localhost:5555/api/dashboard', {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    });
-    return true;
+    const user = JSON.parse(userStr);
+    return user; // deve conter is_admin
   } catch {
-    return false;
+    return null;
   }
 }

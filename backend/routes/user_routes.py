@@ -14,7 +14,7 @@ def get_me():
     user = User.query.get(current_user_id)
     return jsonify(user.to_dict())
 
-@user_bp.route('/', methods=['GET'])
+@user_bp.route('', methods=['GET'])
 @admin_required
 def list_users():
     users = User.query.all()

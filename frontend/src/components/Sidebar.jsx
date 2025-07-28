@@ -75,29 +75,21 @@ function Sidebar({ isOpen }) {
             </Link>
           </li>
 
-          {user?.equipes?.length > 0 && (
+          {user?.equipes?.length > 0 && user.is_manager && (
             <>
               <li className={styles.sectionLabel}>Equipes</li>
-              <li>
-                <Link to="/equipes">
-                  <Users size={20} className={styles.icon} />
-                  <span>Minhas Equipes</span>
-                </Link>
-              </li>
               <li>
                 <Link to="/tarefas-equipe">
                   <Folder size={20} className={styles.icon} />
                   <span>Tarefas da Equipe</span>
                 </Link>
               </li>
-              {user?.is_manager && (
-                <li>
-                  <Link to="/relatorios-equipe">
-                    <PieChart size={20} className={styles.icon} />
-                    <span>Relatórios da Equipe</span>
-                  </Link>
-                </li>
-              )}
+              <li>
+                <Link to="/relatorios-equipe">
+                  <PieChart size={20} className={styles.icon} />
+                  <span>Relatórios da Equipe</span>
+                </Link>
+              </li>
             </>
           )}
 
@@ -105,7 +97,7 @@ function Sidebar({ isOpen }) {
             <>
               <li className={styles.sectionLabel}>Administração</li>
               <li>
-                <Link to="/admin/usuarios">
+                <Link to="/admin/users/">
                   <User size={20} className={styles.icon} />
                   <span>Usuários</span>
                 </Link>
