@@ -461,6 +461,7 @@
   transition: all 0.2s ease;
   background-color: #f9fafb;
   font-family: inherit;
+  color: black;
 }
 
 .input:focus, .textarea:focus {

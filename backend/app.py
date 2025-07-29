@@ -42,7 +42,7 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 # Inicializa extensões
 db.init_app(app)
 migrate = Migrate(app, db)
-CORS(app, supports_credentials=True, resources={r"/api/*": {"origins": "http://localhost:5173"}})
+CORS(app, supports_credentials=True, resources={r"/api/*": {"origins": "http://10.1.39.126:5173"}})
 jwt = JWTManager(app)
 
 # Registra blueprints

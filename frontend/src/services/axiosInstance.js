@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: 'http://localhost:5555/api', // Altere para produção conforme necessário
+  baseURL: 'http://10.1.39.126:5555/api', // Altere para produção conforme necessário
   timeout: 10000, // 10 segundos de timeout
 });
 
@@ -100,16 +100,34 @@ api.interceptors.response.use(
  */
 function isAdminRoute(url) {
   if (!url) return false;
-  
+
+  // rotas que SÃO admin
   const adminRoutes = [
-    '/users',     // Gerenciamento de usuários
-    '/roles',     // Gerenciamento de cargos
-    '/teams',     // Gerenciamento de equipes
-    '/admin',     // Qualquer rota que comece com /admin
+    '/users',
+    '/roles',
+    '/teams',
+    // adiciona outras rotas admin aqui
   ];
-  
-  return adminRoutes.some(route => url.includes(route));
+
+  // rotas que NÃO SÃO admin mesmo dentro de /users, /roles etc
+  const excludedRoutes = [
+    '/users/me',
+    '/users/profile',
+  ];
+
+  // Se a url tá na lista de exclusão, não é admin
+  if (excludedRoutes.includes(url)) {
+    console.log(`[isAdminRoute] '${url}' EXCLUÍDA das rotas admin`);
+    return false;
+  }
+
+  // Checa se começa com /admin (tipo /admin/settings)
+  if (url.startsWith('/admin')) return true;
+
+  // Verifica se a url é ou começa com uma rota admin
+  return adminRoutes.some(route => url === route || url.startsWith(route + '/'));
 }
+
 
 /**
  * Manipula erros de autenticação (401)

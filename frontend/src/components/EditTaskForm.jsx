@@ -77,7 +77,7 @@ const EditTaskForm = ({ initialData, onSubmit, onClose }) => {
             name: anexo,
             size: 0,
             type: 'application/octet-stream',
-            url: `http://localhost:5555/uploads/${anexo}`,
+            url: `http://10.1.39.126:5555/uploads/${anexo}`,
             isExisting: true // Marca como arquivo existente
           };
         } else {
@@ -87,7 +87,7 @@ const EditTaskForm = ({ initialData, onSubmit, onClose }) => {
             name: anexo.name,
             size: anexo.size || 0,
             type: anexo.type || 'application/octet-stream',
-            url: anexo.url || `http://localhost:5555/uploads/${anexo.name}`,
+            url: anexo.url || `http://10.1.39.126:5555/uploads/${anexo.name}`,
             isExisting: true // Marca como arquivo existente
           };
         }

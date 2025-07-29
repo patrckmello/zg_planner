@@ -84,14 +84,14 @@ def get_tasks():
                     anexo_obj = {
                         'id': anexo,
                         'name': anexo,
-                        'url': f"http://localhost:5555/uploads/{anexo}",
+                        'url': f"http://10.1.39.126:5555/uploads/{anexo}",
                         'size': 0,
                         'type': 'application/octet-stream'
                     }
                 else:
                     anexo_obj = anexo.copy()
                     if 'url' not in anexo_obj:
-                        anexo_obj['url'] = f"http://localhost:5555/uploads/{anexo_obj.get('name', '')}"
+                        anexo_obj['url'] = f"http://10.1.39.126:5555/uploads/{anexo_obj.get('name', '')}"
                 anexos_enriched.append(anexo_obj)
             task_dict['anexos'] = anexos_enriched
 
@@ -156,7 +156,7 @@ def add_task():
                     'name': filename,
                     'size': os.path.getsize(filepath),
                     'type': file.content_type or 'application/octet-stream',
-                    'url': f"http://localhost:5555/uploads/{filename}"
+                    'url': f"http://10.1.39.126:5555/uploads/{filename}"
                 }
                 anexos_data.append(anexo_obj)
 
@@ -223,7 +223,7 @@ def get_task(task_id):
                 anexo_obj = {
                     'id': anexo,
                     'name': anexo,
-                    'url': f"http://localhost:5555/uploads/{anexo}",
+                    'url': f"http://10.1.39.126:5555/uploads/{anexo}",
                     'size': 0,
                     'type': 'application/octet-stream'
                 }
@@ -231,7 +231,7 @@ def get_task(task_id):
                 # Se anexo já é um objeto (formato novo)
                 anexo_obj = anexo.copy()
                 if 'url' not in anexo_obj:
-                    anexo_obj['url'] = f"http://localhost:5555/uploads/{anexo_obj.get('name', '')}"
+                    anexo_obj['url'] = f"http://10.1.39.126:5555/uploads/{anexo_obj.get('name', '')}"
             
             anexos_enriched.append(anexo_obj)
         
@@ -301,7 +301,7 @@ def update_task(task_id):
                     anexo_obj = {
                         'id': anexo_atual,
                         'name': anexo_atual,
-                        'url': f"http://localhost:5555/uploads/{anexo_atual}",
+                        'url': f"http://10.1.39.126:5555/uploads/{anexo_atual}",
                         'size': 0,
                         'type': 'application/octet-stream'
                     }
@@ -325,7 +325,7 @@ def update_task(task_id):
                     'name': filename,
                     'size': os.path.getsize(filepath),
                     'type': file.content_type or 'application/octet-stream',
-                    'url': f"http://localhost:5555/uploads/{filename}"
+                    'url': f"http://10.1.39.126:5555/uploads/{filename}"
                 }
                 novos_anexos.append(anexo_obj)
 
