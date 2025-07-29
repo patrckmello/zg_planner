@@ -57,15 +57,12 @@ function AdminTeams() {
           api.get('/teams'),
           api.get('/users')
         ]);
-        
-        console.log('Equipes recebidas no frontend:', teamsResponse.data);
-        console.log('Usuários recebidos no frontend:', usersResponse.data);
-        
+        console.log('Teams data:', teamsResponse.data);  // veja se members aparece aqui
         setTeams(teamsResponse.data);
         setUsers(usersResponse.data);
       } catch (error) {
-        console.error('Erro ao buscar dados:', error);
-        setError('Erro ao buscar dados. Verifique suas permissões.');
+        console.error(error);
+        setError('Erro ao buscar dados.');
       } finally {
         setLoading(false);
       }
@@ -127,7 +124,7 @@ function AdminTeams() {
     }
 
     try {
-      const response = await api.post('/teams/', newTeam);
+      const response = await api.post('/teams', newTeam);
       setTeams([...teams, response.data]);
       resetForm();
       setShowTeamForm(false);
@@ -152,8 +149,9 @@ function AdminTeams() {
 
   const handleAddMember = async (teamId, userId) => {
     try {
-      const response = await api.post(`/teams/${teamId}/members`, { user_id: userId });
+      const response = await api.post(`/teams/${teamId}/users`, { user_id: userId });
       setTeams(prev => prev.map(t => t.id === teamId ? response.data : t));
+      setSelectedTeam(response.data); // <---- ATUALIZA O TIME ABERTO NO MODAL
       console.log('Membro adicionado com sucesso');
     } catch (error) {
       console.error('Erro ao adicionar membro:', error);
@@ -163,8 +161,9 @@ function AdminTeams() {
 
   const handleRemoveMember = async (teamId, userId) => {
     try {
-      const response = await api.delete(`/teams/${teamId}/members/${userId}`);
+      const response = await api.delete(`/teams/${teamId}/users/${userId}`);
       setTeams(prev => prev.map(t => t.id === teamId ? response.data : t));
+      setSelectedTeam(response.data); // atualiza também o modal aberto
       console.log('Membro removido com sucesso');
     } catch (error) {
       console.error('Erro ao remover membro:', error);
@@ -174,10 +173,11 @@ function AdminTeams() {
 
   const handleToggleManager = async (teamId, userId, isManager) => {
     try {
-      const response = await api.put(`/teams/${teamId}/members/${userId}`, { 
+      const response = await api.put(`/teams/${teamId}/users/${userId}`, { 
         is_manager: !isManager 
       });
       setTeams(prev => prev.map(t => t.id === teamId ? response.data : t));
+      setSelectedTeam(response.data); // atualiza também o modal aberto
       console.log('Status de gerente alterado com sucesso');
     } catch (error) {
       console.error('Erro ao alterar status de gerente:', error);
@@ -213,10 +213,9 @@ function AdminTeams() {
 
   const getAvailableUsers = () => {
     if (!selectedTeam) return [];
-    const teamMemberIds = selectedTeam.members?.map(m => m.id) || [];
+    const teamMemberIds = selectedTeam.members?.map(m => m.user_id) || [];
     return users.filter(user => !teamMemberIds.includes(user.id));
   };
-
   if (loading) {
     return (
       <div className={styles.spinnerContainer}>
@@ -501,14 +500,14 @@ function AdminTeams() {
                           <div className={styles.memberActions}>
                             <button
                               className={`${styles.toggleBtn} ${member.is_manager ? styles.active : ''}`}
-                              onClick={() => handleToggleManager(selectedTeam.id, member.id, member.is_manager)}
+                              onClick={() => handleToggleManager(selectedTeam.id, member.user_id, member.is_manager)}
                               title={member.is_manager ? "Remover como gerente" : "Tornar gerente"}
                             >
                               <FiShield />
                             </button>
                             <button
                               className={styles.removeBtn}
-                              onClick={() => handleRemoveMember(selectedTeam.id, member.id)}
+                              onClick={() => handleRemoveMember(selectedTeam.id, member.user_id)}
                               title="Remover da equipe"
                             >
                               <FiUserMinus />

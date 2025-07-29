@@ -13,7 +13,17 @@ class Team(db.Model):
 
     def to_dict(self):
         return {
-            'id': self.id,
-            'name': self.name,
-            'created_at': self.created_at.isoformat() if self.created_at else None
+            "id": self.id,
+            "name": self.name,
+            "description": self.description,
+            "created_at": self.created_at.isoformat(),
+            "members": [
+                {
+                    "user_id": ut.user.id,
+                    "username": ut.user.username,
+                    "email": ut.user.email,
+                    "is_manager": ut.is_manager
+                }
+                for ut in self.members
+            ]
         }

@@ -10,11 +10,27 @@ from models.task_model import Task
 # REMOVA a barra final do url_prefix
 team_bp = Blueprint("team_bp", __name__, url_prefix="/api/teams")
 
-@team_bp.route("", methods=["GET"]) # Era '/', agora é ''
+@team_bp.route("", methods=["GET"])
 @admin_required
 def list_teams():
     teams = Team.query.all()
-    return jsonify([team.to_dict() for team in teams])
+    teams_data = []
+    for team in teams:
+        teams_data.append({
+            "id": team.id,
+            "name": team.name,
+            "description": team.description,
+            "created_at": team.created_at.isoformat(),
+            "members": [
+                {
+                    "user_id": ut.user.id,
+                    "username": ut.user.username,
+                    "email": ut.user.email,
+                    "is_manager": ut.is_manager
+                } for ut in team.members
+            ]
+        })
+    return jsonify(teams_data)
 
 @team_bp.route("", methods=["POST"]) # Era '/', agora é ''
 @admin_required
@@ -63,17 +79,17 @@ def add_user_to_team(team_id):
     if not user:
         return jsonify({"error": "Usuário não encontrado"}), 404
 
-    # Verifica se já existe a associação
     existing = UserTeam.query.filter_by(user_id=user_id, team_id=team_id).first()
     if existing:
         return jsonify({"error": "Usuário já faz parte desse time."}), 400
 
-    # Cria o vínculo com a flag de gerente
     user_team = UserTeam(user_id=user_id, team_id=team_id, is_manager=is_manager)
     db.session.add(user_team)
     db.session.commit()
 
-    return jsonify({"message": f"Usuário {user.username} adicionado ao time {team.name} com sucesso."})
+    # Atualiza o time para pegar os membros atualizados
+    updated_team = Team.query.get(team_id)
+    return jsonify(updated_team.to_dict()), 201
 
 @team_bp.route("/<int:team_id>/users", methods=["GET"])
 @admin_required
@@ -99,17 +115,32 @@ def remove_user_from_team(team_id, user_id):
 
     db.session.delete(association)
     db.session.commit()
-    return jsonify({"message": f"Usuário removido do time com sucesso."})
+
+    # Pega o time atualizado com membros atualizados
+    team = Team.query.get_or_404(team_id)
+    members = [
+        {
+            "user_id": ut.user.id,
+            "username": ut.user.username,
+            "email": ut.user.email,
+            "is_manager": ut.is_manager
+        }
+        for ut in team.members
+    ]
+
+    return jsonify({
+        "id": team.id,
+        "name": team.name,
+        "description": team.description,
+        "members": members
+    })
 
 @team_bp.route("/<int:team_id>/users/<int:user_id>", methods=["PUT"])
 @admin_required
 def update_user_in_team(team_id, user_id):
-    from models.user_team_model import UserTeam  # importa o model de associação
-
     data = request.json
     is_manager = data.get("is_manager")
 
-    # Busca a relação específica entre usuário e time
     user_team = UserTeam.query.filter_by(user_id=user_id, team_id=team_id).first()
 
     if not user_team:
@@ -120,11 +151,23 @@ def update_user_in_team(team_id, user_id):
 
     db.session.commit()
 
+    # Pega o time atualizado com membros atualizados
+    team = Team.query.get_or_404(team_id)
+    members = [
+        {
+            "user_id": ut.user.id,
+            "username": ut.user.username,
+            "email": ut.user.email,
+            "is_manager": ut.is_manager
+        }
+        for ut in team.members
+    ]
+
     return jsonify({
-        "message": f"Usuário atualizado no time com sucesso.",
-        "user_id": user_id,
-        "team_id": team_id,
-        "is_manager": user_team.is_manager
+        "id": team.id,
+        "name": team.name,
+        "description": team.description,
+        "members": members
     })
 
 
