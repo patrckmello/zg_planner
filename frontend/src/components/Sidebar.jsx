@@ -96,8 +96,8 @@ function Sidebar({ isOpen, onLogout }) {
               <li className={styles.sectionLabel}>Equipes</li>
               <li>
                 <Link 
-                  to="/tarefas-equipe"
-                  className={isActiveLink('/tarefas-equipe') ? styles.activeLink : ''}
+                  to="/equipes/tarefas"
+                  className={isActiveLink('/equipes/tarefas') ? styles.activeLink : ''}
                 >
                   <Folder size={20} className={styles.icon} />
                   <span>Tarefas da Equipe</span>

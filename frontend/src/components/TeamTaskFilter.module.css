@@ -1,0 +1,172 @@
+.filterContainer {
+  position: relative;
+  display: inline-block;
+}
+
+.filterButton {
+  background-color: #3498db;
+  color: white;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 14px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 200px;
+  justify-content: space-between;
+}
+
+.filterButton:hover {
+  background-color: #2980b9;
+  transform: translateY(-1px);
+}
+
+.filterButton:active {
+  transform: translateY(0);
+}
+
+.icon {
+  font-size: 16px;
+}
+
+.dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+  z-index: 1000;
+  min-width: 300px;
+  max-height: 400px;
+  overflow: hidden;
+  animation: dropdownFadeIn 0.2s ease-out;
+}
+
+@keyframes dropdownFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.dropdownHeader {
+  padding: 12px 16px;
+  border-bottom: 1px solid #f0f0f0;
+  display: flex;
+  gap: 8px;
+  background-color: #f8f9fa;
+}
+
+.actionButton {
+  background: none;
+  border: 1px solid #ddd;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  flex: 1;
+}
+
+.actionButton:first-child:hover {
+  background-color: #3498db;
+  color: white;
+  border-color: #3498db;
+}
+
+.actionButton:last-child:hover {
+  background-color: #e74c3c;
+  color: white;
+  border-color: #e74c3c;
+}
+
+.membersList {
+  max-height: 300px;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+.memberItem {
+  display: flex;
+  align-items: center;
+  padding: 10px 16px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  gap: 12px;
+  border: none;
+  background: none;
+  width: 100%;
+}
+
+.memberItem:hover {
+  background-color: #f8f9fa;
+}
+
+.memberInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+
+.memberName {
+  font-weight: 500;
+  color: #333;
+  font-size: 14px;
+}
+
+.memberTeam {
+  font-size: 12px;
+  color: #666;
+  font-style: italic;
+}
+
+/* Scrollbar personalizada */
+.membersList::-webkit-scrollbar {
+  width: 6px;
+}
+
+.membersList::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.membersList::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.membersList::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* Responsividade */
+@media (max-width: 768px) {
+  .dropdown {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 90vw;
+    max-width: 400px;
+    max-height: 70vh;
+  }
+  
+  .filterButton {
+    min-width: 180px;
+    font-size: 13px;
+    padding: 8px 12px;
+  }
+}
+
