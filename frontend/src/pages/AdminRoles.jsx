@@ -15,6 +15,8 @@ import {
   FiTrash2,
   FiUsers
 } from 'react-icons/fi';
+import { toast } from 'react-toastify';
+
 
 function AdminRoles() {
   const navigate = useNavigate();
@@ -109,19 +111,24 @@ function AdminRoles() {
 
   const handleCreateRole = async () => {
     if (!newRole.name) {
-      alert('O nome do cargo é obrigatório!');
+       toast.error('O nome do cargo é obrigatório!');
       return;
     }
 
     try {
-      const response = await api.post('/roles/', newRole);
+      const response = await api.post('/roles', newRole);
       setRoles([...roles, response.data]);
       resetForm();
       setShowRoleForm(false);
       console.log('Cargo criado com sucesso:', response.data);
     } catch (error) {
       console.error('Erro ao criar cargo:', error);
-      alert('Erro ao criar cargo. Tente novamente.');
+
+      if (error.response?.status === 400 && error.response.data?.error) {
+         toast.error(`Erro: ${error.response.data.error}`);
+      } else {
+         toast.error('Erro ao criar cargo. Tente novamente.');
+      }
     }
   };
 
@@ -133,7 +140,12 @@ function AdminRoles() {
       console.log('Cargo atualizado com sucesso:', response.data);
     } catch (error) {
       console.error('Erro ao atualizar cargo:', error);
-      alert('Erro ao atualizar cargo. Tente novamente.');
+
+      if (error.response?.status === 400 && error.response.data?.error) {
+         toast.error(`Erro: ${error.response.data.error}`);
+      } else {
+         toast.error('Erro ao atualizar cargo. Tente novamente.');
+      }
     }
   };
 
@@ -150,7 +162,7 @@ function AdminRoles() {
       setRoles(prev => prev.filter(r => r.id !== roleToDelete.id));
     } catch (error) {
       console.error('Erro ao excluir cargo:', error);
-      alert('Erro ao excluir cargo. Verifique se não há usuários vinculados a este cargo.');
+       toast.error('Erro ao excluir cargo. Verifique se não há usuários vinculados a este cargo.');
     } finally {
       setRoleToDelete(null);
       setShowDeleteModal(false);
