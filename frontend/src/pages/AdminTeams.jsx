@@ -18,6 +18,7 @@ import {
   FiShield,
   FiUser
 } from 'react-icons/fi';
+import { toast } from 'react-toastify';
 
 function AdminTeams() {
   const navigate = useNavigate();
@@ -119,7 +120,7 @@ function AdminTeams() {
 
   const handleCreateTeam = async () => {
     if (!newTeam.name) {
-      alert('O nome da equipe é obrigatório!');
+      toast.error('O nome da equipe é obrigatório!');
       return;
     }
 
@@ -130,9 +131,15 @@ function AdminTeams() {
       setShowTeamForm(false);
       console.log('Equipe criada com sucesso:', response.data);
     } catch (error) {
-      console.error('Erro ao criar equipe:', error);
-      alert('Erro ao criar equipe. Tente novamente.');
-    }
+        console.error('Erro ao criar equipe:', error);
+
+        // Se o backend retornou erro e mensagem, mostra ela
+        if (error.response && error.response.data && error.response.data.error) {
+          toast.error(error.response.data.error);
+        } else {
+          toast.error('Erro ao criar equipe. Tente novamente.');
+        }
+      }
   };
 
   const handleUpdateTeam = async (teamId, teamData) => {
@@ -142,9 +149,14 @@ function AdminTeams() {
       setEditingTeam(null);
       console.log('Equipe atualizada com sucesso:', response.data);
     } catch (error) {
-      console.error('Erro ao atualizar equipe:', error);
-      alert('Erro ao atualizar equipe. Tente novamente.');
-    }
+        console.error('Mensagem de erro:', error);
+
+        if (error.response?.data?.error) {
+          toast.error(error.response.data.error);
+        } else {
+          toast.error('Erro inesperado. Tente novamente.');
+        }
+      }
   };
 
   const handleAddMember = async (teamId, userId) => {
@@ -154,9 +166,14 @@ function AdminTeams() {
       setSelectedTeam(response.data); // <---- ATUALIZA O TIME ABERTO NO MODAL
       console.log('Membro adicionado com sucesso');
     } catch (error) {
-      console.error('Erro ao adicionar membro:', error);
-      alert('Erro ao adicionar membro à equipe.');
-    }
+        console.error('Mensagem de erro:', error);
+
+        if (error.response?.data?.error) {
+          toast.error(error.response.data.error);
+        } else {
+          toast.error('Erro inesperado. Tente novamente.');
+        }
+      }
   };
 
   const handleRemoveMember = async (teamId, userId) => {
@@ -166,9 +183,14 @@ function AdminTeams() {
       setSelectedTeam(response.data); // atualiza também o modal aberto
       console.log('Membro removido com sucesso');
     } catch (error) {
-      console.error('Erro ao remover membro:', error);
-      alert('Erro ao remover membro da equipe.');
-    }
+        console.error('Mensagem de erro:', error);
+
+        if (error.response?.data?.error) {
+          toast.error(error.response.data.error);
+        } else {
+          toast.error('Erro inesperado. Tente novamente.');
+        }
+      }
   };
 
   const handleToggleManager = async (teamId, userId, isManager) => {
@@ -178,11 +200,16 @@ function AdminTeams() {
       });
       setTeams(prev => prev.map(t => t.id === teamId ? response.data : t));
       setSelectedTeam(response.data); // atualiza também o modal aberto
-      console.log('Status de gerente alterado com sucesso');
+      console.log('Status de gestor alterado com sucesso');
     } catch (error) {
-      console.error('Erro ao alterar status de gerente:', error);
-      alert('Erro ao alterar status de gerente.');
-    }
+        console.error('Mensagem de erro:', error);
+
+        if (error.response?.data?.error) {
+          toast.error(error.response.data.error);
+        } else {
+          toast.error('Erro inesperado. Tente novamente.');
+        }
+      }
   };
 
   const cancelDelete = () => {
@@ -198,7 +225,7 @@ function AdminTeams() {
       setTeams(prev => prev.filter(t => t.id !== teamToDelete.id));
     } catch (error) {
       console.error('Erro ao excluir equipe:', error);
-      alert('Erro ao excluir equipe.');
+      toast.error('Erro ao excluir equipe.');
     } finally {
       setTeamToDelete(null);
       setShowDeleteModal(false);
@@ -296,7 +323,7 @@ function AdminTeams() {
                           {team.members?.some(m => m.is_manager) && (
                             <span className={styles.managerIndicator}>
                               <FiShield className={styles.managerIcon} />
-                              Com gerente
+                              Com gestor
                             </span>
                           )}
                         </div>
@@ -493,7 +520,7 @@ function AdminTeams() {
                             {member.is_manager && (
                               <span className={styles.managerBadge}>
                                 <FiShield className={styles.badgeIcon} />
-                                Gerente
+                                Gestor
                               </span>
                             )}
                           </div>
@@ -501,7 +528,7 @@ function AdminTeams() {
                             <button
                               className={`${styles.toggleBtn} ${member.is_manager ? styles.active : ''}`}
                               onClick={() => handleToggleManager(selectedTeam.id, member.user_id, member.is_manager)}
-                              title={member.is_manager ? "Remover como gerente" : "Tornar gerente"}
+                              title={member.is_manager ? "Remover como gestor" : "Tornar gestor"}
                             >
                               <FiShield />
                             </button>

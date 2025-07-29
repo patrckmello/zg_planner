@@ -32,14 +32,22 @@ def list_teams():
         })
     return jsonify(teams_data)
 
-@team_bp.route("", methods=["POST"]) # Era '/', agora é ''
+@team_bp.route("", methods=["POST"])
 @admin_required
 def create_team():
     data = request.json
-    team = Team(
-        name=data["name"],
-        description=data.get("description")
-    )
+    name = data.get("name", "").strip()
+    description = data.get("description")
+
+    if not name:
+        return jsonify({"error": "O nome da equipe é obrigatório."}), 400
+
+    # Verifica duplicidade do nome (case insensitive se quiser)
+    existing_team = Team.query.filter(Team.name.ilike(name)).first()
+    if existing_team:
+        return jsonify({"error": "Já existe uma equipe com esse nome."}), 400
+
+    team = Team(name=name, description=description)
     db.session.add(team)
     db.session.commit()
     return jsonify(team.to_dict()), 201
