@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import React, { useEffect, useState } from 'react';
 import api from '../services/axiosInstance';
 import styles from './Sidebar.module.css';
@@ -12,10 +12,12 @@ import {
   User,
   Briefcase,
   Settings,
+  LogOut,
 } from 'lucide-react';
 
-function Sidebar({ isOpen }) {
+function Sidebar({ isOpen, onLogout }) {
   const [user, setUser] = useState(null);
+  const location = useLocation();
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -29,6 +31,11 @@ function Sidebar({ isOpen }) {
 
     fetchUser();
   }, []);
+
+  // Função para verificar se o link está ativo
+  const isActiveLink = (path) => {
+    return location.pathname === path;
+  };
 
   if (!user) {
     return (
@@ -55,7 +62,10 @@ function Sidebar({ isOpen }) {
       <nav className={styles.navigation}>
         <ul>
           <li>
-            <Link to="/dashboard">
+            <Link 
+              to="/dashboard" 
+              className={isActiveLink('/dashboard') ? styles.activeLink : ''}
+            >
               <Home size={20} className={styles.icon} />
               <span>Dashboard</span>
             </Link>
@@ -63,13 +73,19 @@ function Sidebar({ isOpen }) {
 
           <li className={styles.sectionLabel}>Minhas Atividades</li>
           <li>
-            <Link to="/minhas-tarefas">
+            <Link 
+              to="/minhas-tarefas"
+              className={isActiveLink('/minhas-tarefas') ? styles.activeLink : ''}
+            >
               <ClipboardList size={20} className={styles.icon} />
               <span>Minhas Tarefas</span>
             </Link>
           </li>
           <li>
-            <Link to="/meus-relatorios">
+            <Link 
+              to="/meus-relatorios"
+              className={isActiveLink('/meus-relatorios') ? styles.activeLink : ''}
+            >
               <BarChart2 size={20} className={styles.icon} />
               <span>Relatórios Pessoais</span>
             </Link>
@@ -79,13 +95,19 @@ function Sidebar({ isOpen }) {
             <>
               <li className={styles.sectionLabel}>Equipes</li>
               <li>
-                <Link to="/tarefas-equipe">
+                <Link 
+                  to="/tarefas-equipe"
+                  className={isActiveLink('/tarefas-equipe') ? styles.activeLink : ''}
+                >
                   <Folder size={20} className={styles.icon} />
                   <span>Tarefas da Equipe</span>
                 </Link>
               </li>
               <li>
-                <Link to="/relatorios-equipe">
+                <Link 
+                  to="/relatorios-equipe"
+                  className={isActiveLink('/relatorios-equipe') ? styles.activeLink : ''}
+                >
                   <PieChart size={20} className={styles.icon} />
                   <span>Relatórios da Equipe</span>
                 </Link>
@@ -97,25 +119,37 @@ function Sidebar({ isOpen }) {
             <>
               <li className={styles.sectionLabel}>Administração</li>
               <li>
-                <Link to="/admin/users/">
+                <Link 
+                  to="/admin/users/"
+                  className={isActiveLink('/admin/users/') || isActiveLink('/admin/users') ? styles.activeLink : ''}
+                >
                   <User size={20} className={styles.icon} />
                   <span>Usuários</span>
                 </Link>
               </li>
               <li>
-                <Link to="/admin/cargos">
+                <Link 
+                  to="/admin/cargos"
+                  className={isActiveLink('/admin/cargos') ? styles.activeLink : ''}
+                >
                   <Briefcase size={20} className={styles.icon} />
                   <span>Cargos</span>
                 </Link>
               </li>
               <li>
-                <Link to="/admin/equipes">
+                <Link 
+                  to="/admin/equipes"
+                  className={isActiveLink('/admin/equipes') ? styles.activeLink : ''}
+                >
                   <Users size={20} className={styles.icon} />
                   <span>Equipes</span>
                 </Link>
               </li>
               <li>
-                <Link to="/admin/config">
+                <Link 
+                  to="/admin/config"
+                  className={isActiveLink('/admin/config') ? styles.activeLink : ''}
+                >
                   <Settings size={20} className={styles.icon} />
                   <span>Configurações</span>
                 </Link>
@@ -125,13 +159,23 @@ function Sidebar({ isOpen }) {
 
           <li className={styles.sectionLabel}>Conta</li>
           <li>
-            <Link to="/meu-perfil">
+            <Link 
+              to="/meu-perfil"
+              className={isActiveLink('/meu-perfil') ? styles.activeLink : ''}
+            >
               <User size={20} className={styles.icon} />
               <span>Meu Perfil</span>
             </Link>
           </li>
         </ul>
       </nav>
+
+      <div className={styles.sidebarActions}>
+        <button className={styles.logoutBtn} onClick={onLogout}>
+          <LogOut size={20} className={styles.logoutIcon} />
+          <span>Sair</span>
+        </button>
+      </div>
 
       <div className={styles.sidebarFooter}>
         <span>{String.fromCodePoint(0x00A9)} Desenvolvido por TI Zavagna Gralha</span>
@@ -141,3 +185,4 @@ function Sidebar({ isOpen }) {
 }
 
 export default Sidebar;
+

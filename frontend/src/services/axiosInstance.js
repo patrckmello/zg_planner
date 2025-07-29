@@ -128,7 +128,6 @@ function isAdminRoute(url) {
   return adminRoutes.some(route => url === route || url.startsWith(route + '/'));
 }
 
-
 /**
  * Manipula erros de autenticação (401)
  */

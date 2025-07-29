@@ -79,7 +79,7 @@
 }
 
 .navigation li a:hover .icon {
-  stroke: #194b6d;
+  stroke: #2980b9;
 }
 
 .sectionLabel {
@@ -89,7 +89,6 @@
   padding: 8px 20px 4px 20px;
   font-weight: bold;
 }
-
 
 .navigation ul {
   list-style: none;
@@ -104,18 +103,67 @@
   margin: 0 10px 4px 10px;
   color: #4a4a4a;
   text-decoration: none;
-  border-radius: 6px;
-  transition: background-color 0.2s, color 0.2s;
+  border-radius: 8px;
+  transition: all 0.3s ease;
   font-weight: 500;
+  position: relative;
+  overflow: hidden;
 }
 
+/* Estado hover melhorado */
 .navigation li a:hover {
-  background-color: #f4f4f4;
+  background-color: #f8f9fa;
+  color: #2c3e50;
+  transform: translateX(2px);
 }
 
-.navigation li.active a {
-  background-color: #ddd6d6;
-  color: #565a72;
+.navigation li a:hover .icon {
+  stroke: #2980b9;
+  transform: scale(1.1);
+}
+
+/* Estado ativo - página atual */
+.navigation li a.activeLink {
+  background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+  color: #ffffff;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(52, 152, 219, 0.3);
+  border-left: 4px solid #1e6091;
+  margin-left: 6px;
+  padding-left: 16px;
+}
+
+.navigation li a.activeLink .icon {
+  stroke: #ffffff;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.1));
+}
+
+/* Efeito de brilho sutil no item ativo */
+.navigation li a.activeLink::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(45deg, transparent 30%, rgba(255, 255, 255, 0.1) 50%, transparent 70%);
+  animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Hover no item ativo */
+.navigation li a.activeLink:hover {
+  background: linear-gradient(135deg, #2980b9 0%, #1e6091 100%);
+  transform: translateX(0);
+  box-shadow: 0 4px 12px rgba(52, 152, 219, 0.4);
 }
 
 .icon {
@@ -123,6 +171,53 @@
   font-size: 20px;
   width: 24px;
   text-align: center;
+  transition: all 0.3s ease;
+}
+
+/* Seção de ações da sidebar (botão de logout) */
+.sidebarActions {
+  padding: 15px 20px;
+  border-top: 1px solid #f0f0f0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.logoutBtn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  background: linear-gradient(135deg, transparent 0%, rgba(231, 76, 60, 0.05) 100%);
+  border: 1px solid rgba(231, 76, 60, 0.2);
+  color: #e74c3c;
+  padding: 12px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+}
+
+.logoutBtn:hover {
+  background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+  border-color: #e74c3c;
+  color: white;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(231, 76, 60, 0.3);
+}
+
+.logoutBtn:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(231, 76, 60, 0.2);
+}
+
+.logoutIcon {
+  transition: all 0.3s ease;
+  stroke: currentColor;
+}
+
+.logoutBtn:hover .logoutIcon {
+  transform: scale(1.1);
 }
 
 .sidebarFooter {
@@ -130,5 +225,30 @@
   font-size: 12px;
   color: #aaa;
   text-align: center;
-  border-top: 1px solid #f0f0f0;
 }
+
+/* Animação suave para mudanças de estado */
+.navigation li a * {
+  transition: all 0.3s ease;
+}
+
+/* Melhor feedback visual em dispositivos touch */
+@media (hover: none) {
+  .navigation li a:hover {
+    transform: none;
+  }
+  
+  .navigation li a:active {
+    background-color: #e8f4f8;
+    transform: scale(0.98);
+  }
+  
+  .logoutBtn:hover {
+    transform: none;
+  }
+  
+  .logoutBtn:active {
+    transform: scale(0.98);
+  }
+}
+
