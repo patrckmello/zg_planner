@@ -1,0 +1,137 @@
+.selectGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 600;
+  color: #374151;
+  font-size: 14px;
+}
+
+.required {
+  color: #dc3545;
+  font-weight: 700;
+}
+
+.selectWrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.select {
+  width: 100%;
+  padding: 12px 40px 12px 16px;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 16px;
+  transition: all 0.2s ease;
+  background-color: #f9fafb;
+  color: #111827;
+  font-family: inherit;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+}
+
+.select:focus {
+  outline: none;
+  border-color: #3498db;
+  background-color: white;
+  box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+}
+
+.select:hover:not(:focus):not(.disabled) {
+  border-color: #d1d5db;
+  background-color: white;
+}
+
+.withIcon {
+  padding-left: 48px;
+}
+
+.icon {
+  position: absolute;
+  left: 16px;
+  color: #6b7280;
+  font-size: 18px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.chevron {
+  position: absolute;
+  right: 16px;
+  color: #6b7280;
+  pointer-events: none;
+  transition: transform 0.2s ease;
+}
+
+.select:focus + .chevron {
+  transform: rotate(180deg);
+}
+
+.error {
+  border-color: #dc3545;
+  background-color: #fef2f2;
+}
+
+.error:focus {
+  border-color: #dc3545;
+  box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.1);
+}
+
+.disabled {
+  background-color: #f3f4f6;
+  color: #9ca3af;
+  cursor: not-allowed;
+  border-color: #e5e7eb;
+}
+
+.disabled:hover {
+  border-color: #e5e7eb;
+  background-color: #f3f4f6;
+}
+
+.disabled + .chevron {
+  color: #9ca3af;
+}
+
+.errorMessage {
+  color: #dc3545;
+  font-size: 14px;
+  font-weight: 500;
+  margin-top: -4px;
+}
+
+/* Option styles */
+.select option {
+  padding: 8px 16px;
+  background-color: white;
+  color: #111827;
+}
+
+.select option:disabled {
+  color: #9ca3af;
+  font-style: italic;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .select {
+    font-size: 16px; /* Prevents zoom on iOS */
+    padding: 14px 40px 14px 16px;
+  }
+  
+  .withIcon {
+    padding-left: 48px;
+  }
+}
+

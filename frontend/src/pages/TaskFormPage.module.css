@@ -1,0 +1,355 @@
+/* Container principal da página */
+.taskFormPage {
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+}
+
+.pageBody {
+  display: flex;
+  height: calc(100vh - 60px);
+  margin-top: 60px;
+  position: relative;
+}
+
+.contentArea {
+  flex-grow: 1;
+  background-color: #f5f5f5;
+  padding: 32px;
+  overflow-y: auto;
+  display: flex;
+  justify-content: center;
+}
+
+.formWrapper {
+  width: 100%;
+  max-width: 1000px;
+  transition: width 0.3s ease-in-out;
+}
+
+/* Header da página */
+.pageHeader {
+  background: white;
+  border-radius: 12px;
+  padding: 24px 32px;
+  margin-bottom: 24px;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.07);
+  border-left: 4px solid #3498db;
+}
+
+.headerContent {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pageTitle {
+  font-size: 32px;
+  font-weight: 700;
+  color: #2c3e50;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.separator {
+  color: #d1d5db;
+  font-weight: 300;
+}
+
+.current {
+  color: #3498db;
+  font-weight: 600;
+}
+
+/* Formulário */
+.taskForm {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.07);
+  overflow: hidden;
+}
+
+.formContent {
+  padding: 0;
+}
+
+/* Seções do formulário */
+.formSection {
+  border-bottom: 1px solid #f0f0f0;
+  transition: all 0.3s ease;
+}
+
+.formSection:last-child {
+  border-bottom: none;
+}
+
+.formSection:hover {
+  background-color: #fafbfc;
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 24px 32px 16px;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border-bottom: 1px solid #e9ecef;
+}
+
+.sectionIcon {
+  font-size: 20px;
+  color: #3498db;
+  flex-shrink: 0;
+}
+
+.sectionTitle {
+  font-size: 18px;
+  font-weight: 600;
+  color: #2c3e50;
+  margin: 0;
+}
+
+.sectionContent {
+  padding: 24px 32px;
+}
+
+/* Grid do formulário */
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 20px;
+  align-items: start;
+}
+
+.fullWidth {
+  grid-column: 1 / -1;
+}
+
+/* Grid de checkboxes */
+.checkboxGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 16px;
+}
+
+.checkboxItem {
+  padding: 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  background-color: #fafbfc;
+}
+
+.checkboxItem:hover {
+  border-color: #3498db;
+  background-color: #f0f9ff;
+  transform: translateY(-1px);
+}
+
+/* Actions do formulário */
+.formActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 16px;
+  padding: 24px 32px;
+  background-color: #f8f9fa;
+  border-top: 1px solid #e9ecef;
+}
+
+/* Animações */
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.formSection {
+  animation: slideIn 0.4s ease-out;
+}
+
+.formSection:nth-child(1) { animation-delay: 0.1s; }
+.formSection:nth-child(2) { animation-delay: 0.2s; }
+.formSection:nth-child(3) { animation-delay: 0.3s; }
+.formSection:nth-child(4) { animation-delay: 0.4s; }
+.formSection:nth-child(5) { animation-delay: 0.5s; }
+.formSection:nth-child(6) { animation-delay: 0.6s; }
+.formSection:nth-child(7) { animation-delay: 0.7s; }
+
+/* Estados de loading */
+.formSection.loading {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+/* Responsividade */
+@media (max-width: 1024px) {
+  .formGrid {
+    grid-template-columns: 1fr;
+  }
+  
+  .contentArea {
+    padding: 24px;
+  }
+  
+  .formWrapper {
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 768px) {
+  .contentArea {
+    padding: 16px;
+  }
+  
+  .pageHeader {
+    padding: 20px 24px;
+    margin-bottom: 16px;
+  }
+  
+  .pageTitle {
+    font-size: 24px;
+  }
+  
+  .sectionHeader {
+    padding: 20px 24px 12px;
+  }
+  
+  .sectionContent {
+    padding: 20px 24px;
+  }
+  
+  .formActions {
+    padding: 20px 24px;
+    flex-direction: column;
+  }
+  
+  .checkboxGrid {
+    grid-template-columns: 1fr;
+  }
+  
+  .breadcrumb {
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .pageHeader {
+    padding: 16px 20px;
+  }
+  
+  .pageTitle {
+    font-size: 20px;
+  }
+  
+  .sectionHeader {
+    padding: 16px 20px 8px;
+  }
+  
+  .sectionTitle {
+    font-size: 16px;
+  }
+  
+  .sectionContent {
+    padding: 16px 20px;
+  }
+  
+  .formActions {
+    padding: 16px 20px;
+  }
+}
+
+/* Melhorias visuais */
+.formSection::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  background: linear-gradient(135deg, #3498db, #2980b9);
+  transition: width 0.3s ease;
+}
+
+.formSection:hover::before {
+  width: 4px;
+}
+
+.sectionHeader {
+  position: relative;
+  overflow: hidden;
+}
+
+.sectionHeader::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(52, 152, 219, 0.1),
+    transparent
+  );
+  transition: left 0.5s ease;
+}
+
+.formSection:hover .sectionHeader::after {
+  left: 100%;
+}
+
+/* Focus states melhorados */
+.formSection:focus-within {
+  background-color: #f8fafc;
+  box-shadow: inset 0 0 0 2px rgba(52, 152, 219, 0.1);
+}
+
+.formSection:focus-within .sectionHeader {
+  background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+}
+
+.formSection:focus-within .sectionIcon {
+  color: #2980b9;
+  transform: scale(1.1);
+}
+
+/* Smooth transitions */
+* {
+  transition: all 0.2s ease;
+}
+
+/* Custom scrollbar */
+.contentArea::-webkit-scrollbar {
+  width: 8px;
+}
+
+.contentArea::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+.contentArea::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+
+.contentArea::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+

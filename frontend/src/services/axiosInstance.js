@@ -103,9 +103,6 @@ function isAdminRoute(url) {
 
   // rotas que SÃO admin
   const adminRoutes = [
-    '/users',
-    '/roles',
-    '/teams',
     // adiciona outras rotas admin aqui
   ];
 

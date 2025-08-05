@@ -15,7 +15,7 @@ def get_me():
     return jsonify(user.to_dict())
 
 @user_bp.route('', methods=['GET'])
-@admin_required
+@jwt_required()
 def list_users():
     users = User.query.all()
     return jsonify([user.to_dict() for user in users])

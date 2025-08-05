@@ -2,8 +2,6 @@ import React, { useState, useEffect } from 'react';
 import Header from './Header';
 import Sidebar from './Sidebar';
 import styles from './Dashboard.module.css';
-import TaskForm from './TaskForm'; 
-import EditTaskForm from './EditTaskForm'; 
 import DeleteConfirmModal from './DeleteConfirmModal';
 import api from '../services/axiosInstance';
 import { useNavigate } from 'react-router-dom';
@@ -15,20 +13,17 @@ function Dashboard() {
   const navigate = useNavigate();
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showTaskForm, setShowTaskForm] = useState(false);
-  const [editingTask, setEditingTask] = useState(null);
   const [filterStatus, setFilterStatus] = useState('all');
   const [sortBy, setSortBy] = useState('due_date');
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState(null);
-
+  const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 768);
 
   const filteredTasks = tasks.filter(task => {
     if (filterStatus === 'all') return true;
     return task.status === filterStatus;
   });
-  // Manteremos a sidebar aberta por padrão em telas maiores
-  const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 768);
+
   const toggleTaskStatus = async (taskId, newStatus) => {
     try {
       const response = await api.put(`/tasks/${taskId}`, {
@@ -44,76 +39,6 @@ function Dashboard() {
       console.error('Erro ao atualizar status da tarefa', err);
     }
   };
-
-  // Atualizar tarefa com suporte a exclusão de arquivos
-  const handleUpdateTask = async (taskId, taskData) => {
-    try {
-      const formData = new FormData();
-
-      // Campos básicos
-      formData.append('title', taskData.title || '');
-      formData.append('description', taskData.description || '');
-      formData.append('status', taskData.status || 'pending');
-      formData.append('due_date', taskData.due_date || '');
-      formData.append('prioridade', taskData.prioridade || '');
-      formData.append('categoria', taskData.categoria || '');
-      formData.append('relacionadoA', taskData.relacionadoA || '');
-
-      // Lembretes e tags como JSON
-      formData.append('lembretes', JSON.stringify(taskData.lembretes || []));
-      formData.append('tags', JSON.stringify(taskData.tags || []));
-
-      // Processar anexos
-      const existingFiles = [];
-      const newFiles = [];
-
-      (taskData.anexos || []).forEach(anexo => {
-        if (anexo.isExisting && !anexo.file) {
-          // Arquivo existente no servidor
-          existingFiles.push(anexo.name);
-        } else if (anexo.file) {
-          // Novo arquivo para upload
-          newFiles.push(anexo.file);
-        }
-      });
-
-      // Anexos existentes que devem ser mantidos
-      formData.append('existing_files', JSON.stringify(existingFiles));
-
-      // NOVO: Anexos que devem ser removidos fisicamente
-      formData.append('files_to_remove', JSON.stringify(taskData.removedFiles || []));
-
-      // Novos arquivos para upload
-      newFiles.forEach(file => {
-        formData.append('new_files', file);
-      });
-
-      console.log('Enviando para o backend:');
-      console.log('- Arquivos existentes:', existingFiles);
-      console.log('- Novos arquivos:', newFiles.map(f => f.name));
-      console.log('- Arquivos a remover:', taskData.removedFiles || []);
-
-      const response = await api.put(
-        `/tasks/${taskId}`,
-        formData,
-        {
-          headers: {
-            'Content-Type': 'multipart/form-data'
-          }
-        }
-      );
-
-      // Atualizar a lista de tarefas
-      setTasks(prev => prev.map(t => t.id === taskId ? response.data : t));
-      
-      console.log('Tarefa atualizada com sucesso:', response.data);
-
-    } catch (error) {
-      console.error('Erro ao atualizar tarefa:', error);
-      alert('Erro ao atualizar tarefa. Tente novamente.');
-    }
-  };
-
 
   const sortedTasks = [...filteredTasks].sort((a, b) => {
     if (sortBy === 'title') return a.title.localeCompare(b.title);
@@ -178,15 +103,6 @@ function Dashboard() {
   const toggleSidebar = () => {
     setSidebarOpen(!sidebarOpen);
   };
-
-  // Função corrigida para adicionar nova tarefa
-  const handleAddTask = (newTask) => {
-    console.log('Nova tarefa recebida:', newTask);
-    // Adicionar a nova tarefa ao estado
-    setTasks((prev) => [...prev, newTask]);
-    // Fechar o modal
-    setShowTaskForm(false);
-  };
   
   if (loading) {
   return (
@@ -218,11 +134,11 @@ const confirmDelete = async () => {
   return (
     // O container de toda a página
     <div className={styles.dashboardPage}>
-      <Header onLogout={handleLogout} onMenuToggle={toggleSidebar} />
+      <Header onMenuToggle={toggleSidebar} />
 
       {/* O corpo da página, que contém a sidebar e o conteúdo */}
       <div className={styles.pageBody}>
-        <Sidebar isOpen={sidebarOpen} />
+        <Sidebar isOpen={sidebarOpen} onLogout={handleLogout} />
         
         {/* A área de conteúdo principal, que será nosso fundo cinza */}
         <main className={styles.contentArea}>
@@ -231,7 +147,7 @@ const confirmDelete = async () => {
           <div className={styles.tasksWrapper}>
             <div className={styles.tasksHeader}>
               <h2>Minhas Tarefas</h2>
-              <button className={styles.addTaskBtn} onClick={() => setShowTaskForm(true)}>+ Nova Tarefa</button>
+              <button className={styles.addTaskBtn} onClick={() => navigate('/tasks/new')}>+ Nova Tarefa</button>
             </div>
             
             <div className={styles.controls}>
@@ -292,7 +208,7 @@ const confirmDelete = async () => {
                       <div className={styles.taskActions}>
                         <button
                           className={styles.editBtn}
-                          onClick={() => setEditingTask(task)}
+                          onClick={() => navigate(`/tasks/${task.id}/edit`)}
                         >
                           Editar
                         </button>
@@ -313,19 +229,6 @@ const confirmDelete = async () => {
             </div>
           </div>
         </main>
-        {showTaskForm && (
-          <TaskForm
-            onClose={() => setShowTaskForm(false)}
-            onSubmit={handleAddTask}
-          />
-        )}
-        {editingTask && (
-          <EditTaskForm
-            initialData={editingTask}
-            onClose={() => setEditingTask(null)}
-            onSubmit={handleUpdateTask}
-          />
-        )}
         <DeleteConfirmModal 
           isOpen={showDeleteModal} 
           onCancel={cancelDelete} 

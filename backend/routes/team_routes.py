@@ -11,7 +11,7 @@ from models.task_model import Task
 team_bp = Blueprint("team_bp", __name__, url_prefix="/api/teams")
 
 @team_bp.route("", methods=["GET"])
-@admin_required
+@jwt_required()
 def list_teams():
     teams = Team.query.all()
     teams_data = []

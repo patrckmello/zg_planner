@@ -124,7 +124,7 @@ def get_tasks():
                 else:
                     anexo_obj = anexo.copy()
                     if "url" not in anexo_obj:
-                        anexo_obj["url"] = f"http://10.1.39.126:5555/uploads/{anexo_obj.get("name", "")}"
+                        anexo_obj["url"] = f"http://10.1.39.126:5555/uploads/{anexo_obj.get('name', '')}"
                 anexos_enriched.append(anexo_obj)
             task_dict["anexos"] = anexos_enriched
 
@@ -295,7 +295,7 @@ def get_task(task_id):
                 # Se anexo já é um objeto (formato novo)
                 anexo_obj = anexo.copy()
                 if "url" not in anexo_obj:
-                    anexo_obj["url"] = f"http://10.1.39.126:5555/uploads/{anexo_obj.get("name", "")}"
+                    anexo_obj["url"] = f"http://10.1.39.126:5555/uploads/{anexo_obj.get('name', '')}"
             
             anexos_enriched.append(anexo_obj)
         
