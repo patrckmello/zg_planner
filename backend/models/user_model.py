@@ -19,8 +19,13 @@ class User(db.Model):
     role_id = db.Column(db.Integer, db.ForeignKey('roles.id'), nullable=True)
     roles = db.relationship('Role', secondary=user_roles, back_populates='users')
 
-    tasks = db.relationship('Task', back_populates='user', lazy=True)
-    teams = db.relationship('UserTeam', back_populates='user')  # Nome da classe como string não é necessário porque tá no mesmo projeto
+    tasks = db.relationship(
+        'Task',
+        back_populates='user',
+        foreign_keys='Task.user_id',
+        lazy=True
+    )
+    teams = db.relationship('UserTeam', back_populates='user') 
 
     @property
     def managed_teams(self):

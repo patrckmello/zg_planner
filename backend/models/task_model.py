@@ -6,14 +6,14 @@ class Task(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(150), nullable=False)
     description = db.Column(db.Text, nullable=True)
-    status = db.Column(db.String(20), default='pending')  # ou 'done'
+    status = db.Column(db.String(20), default='pending')
     due_date = db.Column(db.DateTime, nullable=True)
 
     prioridade = db.Column(db.String(20))  # Alta, Média, Baixa
     categoria = db.Column(db.String(50))   # Processo, Reunião, etc
     status_inicial = db.Column(db.String(50))  # A fazer, Em andamento, etc
     tempo_estimado = db.Column(db.Integer)     # número (ex: 2)
-    tempo_unidade = db.Column(db.String(10))   # 'horas' ou 'minutos'
+    tempo_unidade = db.Column(db.String(10))   # \'horas\' ou \'minutos\'
     relacionado_a = db.Column(db.String(200))  # texto livre
     lembretes = db.Column(JSONB, default=list)
     tags = db.Column(JSONB, default=list)
@@ -23,7 +23,16 @@ class Task(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    user = db.relationship('User', back_populates='tasks')
+    user = db.relationship(
+        'User',
+        back_populates='tasks',
+        foreign_keys=[user_id]
+    )
+
+    assigned_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    assigned_by_user = db.relationship('User', foreign_keys=[assigned_by_user_id])
+
+    collaborators = db.Column(JSONB, default=list) # Array de IDs de Usuários
 
     team_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=True)
     team = db.relationship('Team', backref='tasks')
@@ -46,6 +55,10 @@ class Task(db.Model):
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "user_id": self.user_id,
+            "assigned_by_user_id": self.assigned_by_user_id,
+            "collaborators": self.collaborators,
             "team_id": self.team_id,
             "team_name": self.team.name if self.team else None
         }
+
+

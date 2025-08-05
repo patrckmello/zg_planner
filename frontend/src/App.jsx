@@ -7,7 +7,6 @@ import SessionRedirect from './components/SessionRedirect'
 import AdminUsers from './pages/AdminUsers'
 import AdminRoles from './pages/AdminRoles'
 import AdminTeams from './pages/AdminTeams'
-import TeamTasks from './pages/TeamTasks'
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
@@ -21,7 +20,6 @@ function App() {
         {/* Protegendo rotas de usuário autenticado */}
         <Route element={<PrivateRoute />}>
           <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/equipes/tarefas" element={<TeamTasks />} />
         </Route>
 
         {/* Protegendo rotas de admin */}
