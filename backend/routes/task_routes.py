@@ -469,30 +469,44 @@ def update_task(task_id):
 @task_bp.route("/tasks/<int:task_id>", methods=["DELETE"])
 @jwt_required()
 def delete_task(task_id):
-    user_id = get_jwt_identity()
+    user_id = int(get_jwt_identity()) # Garante que user_id é um inteiro
     user = User.query.get(user_id)
     task = Task.query.get(task_id)
 
+    print(f"[DEBUG] User ID logado (int): {user_id}")
+    print(f"[DEBUG] Task ID: {task_id}")
+
     if not task:
+        print(f"[DEBUG] Tarefa {task_id} não encontrada.")
         return jsonify({"error": "Tarefa não encontrada"}), 404
 
-    # Lógica de permissões para exclusão:
-    # 1. Admin pode deletar qualquer tarefa
-    # 2. Dono da tarefa (user_id) pode deletar
-    # 3. Quem atribuiu a tarefa (assigned_by_user_id) pode deletar
-    # 4. Colaboradores NÃO podem deletar
+    print(f"[DEBUG] Task user_id (type {type(task.user_id)}): {task.user_id}")
+    print(f"[DEBUG] Task assigned_by_user_id (type {type(task.assigned_by_user_id)}): {task.assigned_by_user_id}")
+    print(f"[DEBUG] User is_admin: {user.is_admin}")
+
+    # Logs detalhados para cada parte da condição can_delete
+    print(f"[DEBUG] Condição 1 (user.is_admin): {user.is_admin}")
+    print(f"[DEBUG] Condição 2 (task.user_id == user_id): {task.user_id == user_id}")
+    print(f"[DEBUG] Condição 3 (task.assigned_by_user_id == user_id): {task.assigned_by_user_id == user_id}")
+    print(f"[DEBUG] Condição 4 (task.user_id == user_id and task.assigned_by_user_id is None): {task.user_id == user_id and task.assigned_by_user_id is None}")
+
     can_delete = (
         user.is_admin or 
         task.user_id == user_id or 
-        (task.assigned_by_user_id == user_id)
+        (task.assigned_by_user_id == user_id) or 
+        (task.user_id == user_id and task.assigned_by_user_id is None)
     )
     
+    print(f"[DEBUG] can_delete (final): {can_delete}")
+
     if not can_delete:
-        # Verificar se é colaborador para dar mensagem específica
-        is_collaborator = task.collaborators and user_id in task.collaborators
+        is_collaborator = user_id in (task.collaborators or [])
+        print(f"[DEBUG] is_collaborator: {is_collaborator}")
         if is_collaborator:
+            print("[DEBUG] Acesso negado: Colaborador.")
             return jsonify({"error": "Colaboradores não podem excluir tarefas. Apenas o criador, responsável ou gestor podem fazer isso."}), 403
         else:
+            print("[DEBUG] Acesso negado: Sem permissão geral.")
             return jsonify({"error": "Você não tem permissão para excluir esta tarefa."}), 403
 
     # Remover anexos físicos
@@ -507,15 +521,14 @@ def delete_task(task_id):
             if os.path.exists(filepath):
                 try:
                     os.remove(filepath)
-                except OSError:
-                    # Log do erro mas não falha a exclusão da tarefa
-                    print(f"Erro ao remover arquivo: {filepath}")
+                    print(f"[DEBUG] Arquivo removido: {filepath}")
+                except OSError as e:
+                    print(f"[DEBUG] Erro ao remover arquivo {filepath}: {e}")
 
     db.session.delete(task)
     db.session.commit()
 
     return jsonify({"message": "Tarefa excluída com sucesso"})
-
 
 @task_bp.route("/uploads/<filename>")
 def uploaded_file(filename):
@@ -526,7 +539,7 @@ def uploaded_file(filename):
 @task_bp.route("/teams/<int:team_id>/members", methods=["GET"])
 @jwt_required()
 def get_team_members(team_id):
-    user_id = get_jwt_identity()
+    user_id = int(get_jwt_identity())
     user = User.query.get(user_id)
     
     team = Team.query.get(team_id)
