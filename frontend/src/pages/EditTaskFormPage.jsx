@@ -11,6 +11,8 @@ import TeamMemberSelector from '../components/forms/TeamMemberSelector';
 import CollaboratorSelector from '../components/forms/CollaboratorSelector';
 import CustomDateTimePicker from '../components/forms/CustomDateTimePicker';
 import Checkbox from '../components/Checkbox/Checkbox';
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 import DeleteConfirmModal from '../components/DeleteConfirmModal';
 import styles from './EditTaskFormPage.module.css';
 import api from '../services/axiosInstance';
@@ -41,7 +43,6 @@ function EditTaskFormPage() {
   const [teams, setTeams] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
   const [errors, setErrors] = useState({});
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [removedFiles, setRemovedFiles] = useState([]);
 
   // Estados do formulário
@@ -187,7 +188,7 @@ function EditTaskFormPage() {
 
       } catch (error) {
         console.error('Erro ao carregar dados:', error);
-        alert('Erro ao carregar tarefa. Redirecionando...');
+        toast.error("Erro ao carregar tarefa. Redirecionando...");
         navigate('/dashboard');
       } finally {
         setInitialLoading(false);
@@ -334,23 +335,12 @@ function EditTaskFormPage() {
     } catch (err) {
       console.error('Erro ao atualizar tarefa:', err);
       if (err.response?.data?.error) {
-        alert(err.response.data.error);
+        toast.error(err.response.data.error);
       } else {
-        alert('Erro ao atualizar tarefa. Tente novamente.');
+        toast.error("Erro ao atualizar tarefa. Tente novamente.");
       }
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleDelete = async () => {
-    try {
-      await api.delete(`/tasks/${id}`);
-      console.log('Tarefa excluída com sucesso');
-      navigate('/dashboard');
-    } catch (error) {
-      console.error('Erro ao excluir tarefa:', error);
-      alert('Erro ao excluir tarefa. Tente novamente.');
     }
   };
 
@@ -393,10 +383,10 @@ function EditTaskFormPage() {
 
   return (
     <div className={styles.editTaskFormPage}>
-      <Header onLogout={handleLogout} onMenuToggle={toggleSidebar} />
+      <Header onMenuToggle={toggleSidebar} />
 
       <div className={styles.pageBody}>
-        <Sidebar isOpen={sidebarOpen} />
+        <Sidebar onLogout={handleLogout} isOpen={sidebarOpen} />
         
         <main className={styles.contentArea}>
           <div className={styles.formWrapper}>
@@ -706,15 +696,6 @@ function EditTaskFormPage() {
           </div>
         </main>
       </div>
-
-      {/* Modal de confirmação de exclusão */}
-      <DeleteConfirmModal
-        isOpen={showDeleteModal}
-        onClose={() => setShowDeleteModal(false)}
-        onConfirm={handleDelete}
-        title="Excluir Tarefa"
-        message={`Tem certeza que deseja excluir a tarefa "${originalTask?.title}"? Esta ação não pode ser desfeita.`}
-      />
     </div>
   );
 }

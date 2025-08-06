@@ -230,10 +230,10 @@ function AdminUsers() {
 
   return (
     <div className={styles.adminUsersPage}>
-      <Header onLogout={handleLogout} onMenuToggle={toggleSidebar} />
+      <Header onMenuToggle={toggleSidebar} />
 
       <div className={styles.pageBody}>
-        <Sidebar isOpen={sidebarOpen} />
+        <Sidebar isOpen={sidebarOpen} onLogout={handleLogout} />
         
         <main className={styles.contentArea}>
           <div className={styles.usersWrapper}>

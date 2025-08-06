@@ -484,12 +484,12 @@ def delete_task(task_id):
     can_delete = (
         user.is_admin or 
         task.user_id == user_id or 
-        (task.assigned_by_user_id and task.assigned_by_user_id == user_id)
+        (task.assigned_by_user_id == user_id)
     )
     
     if not can_delete:
         # Verificar se é colaborador para dar mensagem específica
-        is_collaborator = task.collaborator_ids and user_id in task.collaborator_ids
+        is_collaborator = task.collaborators and user_id in task.collaborators
         if is_collaborator:
             return jsonify({"error": "Colaboradores não podem excluir tarefas. Apenas o criador, responsável ou gestor podem fazer isso."}), 403
         else:

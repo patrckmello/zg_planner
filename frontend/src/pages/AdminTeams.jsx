@@ -265,10 +265,10 @@ function AdminTeams() {
 
   return (
     <div className={styles.adminTeamsPage}>
-      <Header onLogout={handleLogout} onMenuToggle={toggleSidebar} />
+      <Header onMenuToggle={toggleSidebar} />
 
       <div className={styles.pageBody}>
-        <Sidebar isOpen={sidebarOpen} />
+        <Sidebar onLogout={handleLogout} isOpen={sidebarOpen} />
         
         <main className={styles.contentArea}>
           <div className={styles.teamsWrapper}>
