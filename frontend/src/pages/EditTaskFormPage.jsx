@@ -44,7 +44,8 @@ function EditTaskFormPage() {
   const [currentUser, setCurrentUser] = useState(null);
   const [errors, setErrors] = useState({});
   const [removedFiles, setRemovedFiles] = useState([]);
-
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   // Estados do formulário
   const [formData, setFormData] = useState({
     title: '',
@@ -341,6 +342,22 @@ function EditTaskFormPage() {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    setIsDeleting(true);
+    try {
+      await api.delete(`/tasks/${id}`);
+      toast.success('Tarefa excluída com sucesso!');
+      navigate('/dashboard'); 
+    } catch (error) {
+      console.error('Erro ao excluir tarefa:', error);
+      toast.error('Ocorreu um erro ao excluir a tarefa. Tente novamente.');
+      // Fecha o modal mesmo se der erro, para o usuário poder tentar de novo.
+      setShowDeleteModal(false); 
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -696,6 +713,17 @@ function EditTaskFormPage() {
           </div>
         </main>
       </div>
+      {showDeleteModal && (
+        <DeleteConfirmModal
+          isOpen={showDeleteModal}
+          onClose={() => setShowDeleteModal(false)}
+          onConfirm={handleDelete}
+          isDeleting={isDeleting}
+          title="Confirmar Exclusão"
+          message={`Tem certeza que deseja excluir a tarefa "${formData.title}"? Esta ação não pode ser desfeita.`}
+        />
+      )}
+      <ToastContainer position="bottom-right" autoClose={5000} hideProgressBar={false} />
     </div>
   );
 }
