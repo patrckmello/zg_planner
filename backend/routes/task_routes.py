@@ -50,9 +50,7 @@ def get_tasks():
         query = Task.query.filter(
             (Task.user_id == user_id) |
             (Task.assigned_by_user_id == user_id) |
-            (Task.team_id.in_(manager_team_ids)) |
-            (Task.collaborators.contains([user_id])) |
-            (Task.team_id.in_(member_team_ids))
+            (Task.team_id.in_(manager_team_ids))
         )
 
     if status:

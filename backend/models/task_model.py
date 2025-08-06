@@ -102,18 +102,7 @@ class Task(db.Model):
         if user.id in (self.collaborators or []):
             return True
         
-        # Membros da equipe (se a tarefa pertence a uma equipe)
-        if self.team_id:
-            user_team_ids = [assoc.team_id for assoc in user.teams]
-            if self.team_id in user_team_ids:
-                return True
-        
-        # Gestores podem ver tarefas de suas equipes
-        manager_team_ids = [
-            assoc.team_id for assoc in user.teams if assoc.is_manager
-        ]
-        if self.team_id in manager_team_ids:
-            return True
+
         
         return False
 
