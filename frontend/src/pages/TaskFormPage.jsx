@@ -7,6 +7,9 @@ import Input from '../components/ui/Input';
 import Select from '../components/ui/Select';
 import TagInput from '../components/forms/TagInput';
 import FileUploadArea from '../components/forms/FileUploadArea';
+import TeamMemberSelector from '../components/forms/TeamMemberSelector';
+import CollaboratorSelector from '../components/forms/CollaboratorSelector';
+import CustomDateTimePicker from '../components/forms/CustomDateTimePicker';
 import Checkbox from '../components/Checkbox/Checkbox';
 import styles from './TaskFormPage.module.css';
 import api from '../services/axiosInstance';
@@ -22,15 +25,16 @@ import {
   FiCalendar,
   FiFlag,
   FiFolder,
-  FiFileText
+  FiFileText,
+  FiEye
 } from 'react-icons/fi';
 
 function TaskFormPage() {
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 768);
   const [loading, setLoading] = useState(false);
-  const [users, setUsers] = useState([]);
   const [teams, setTeams] = useState([]);
+  const [currentUser, setCurrentUser] = useState(null);
   const [errors, setErrors] = useState({});
 
   // Estados do formulário
@@ -41,15 +45,14 @@ function TaskFormPage() {
     due_date: '',
     prioridade: 'media',
     categoria: 'processo',
-    status_inicial: 'a_fazer',
     tempo_estimado: '',
     tempo_unidade: 'horas',
     relacionado_a: '',
     lembretes: [],
     tags: [],
     anexos: [],
-    assigned_by_user_id: '',
-    collaborators: [],
+    assigned_to_user_id: '',
+    collaborator_ids: [],
     team_id: ''
   });
 
@@ -66,13 +69,6 @@ function TaskFormPage() {
     { value: 'in_progress', label: '🔄 Em andamento' },
     { value: 'done', label: '✅ Concluído' },
     { value: 'cancelled', label: '❌ Cancelado' }
-  ];
-
-  const statusInicialOptions = [
-    { value: 'a_fazer', label: '📝 A fazer' },
-    { value: 'em_andamento', label: '🔄 Em andamento' },
-    { value: 'concluido', label: '✅ Concluído' },
-    { value: 'cancelado', label: '❌ Cancelado' }
   ];
 
   const categoriaOptions = [
@@ -104,12 +100,12 @@ function TaskFormPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [usersResponse, teamsResponse] = await Promise.all([
-          api.get('/users'),
-          api.get('/teams')
+        const [teamsResponse, userResponse] = await Promise.all([
+          api.get('/teams'),
+          api.get('/users/me')
         ]);
-        setUsers(usersResponse.data);
         setTeams(teamsResponse.data);
+        setCurrentUser(userResponse.data);
       } catch (error) {
         console.error('Erro ao carregar dados:', error);
       }
@@ -179,13 +175,11 @@ function TaskFormPage() {
       formDataToSend.append('status', formData.status);
       formDataToSend.append('prioridade', formData.prioridade);
       formDataToSend.append('categoria', formData.categoria);
-      formDataToSend.append('status_inicial', formData.status_inicial);
       formDataToSend.append('relacionado_a', formData.relacionado_a);
 
       // Data de vencimento
       if (formData.due_date) {
-        const dueDateISO = new Date(formData.due_date).toISOString();
-        formDataToSend.append('due_date', dueDateISO);
+        formDataToSend.append('due_date', formData.due_date);
       }
 
       // Tempo estimado
@@ -197,11 +191,11 @@ function TaskFormPage() {
       // Arrays JSON
       formDataToSend.append('lembretes', JSON.stringify(formData.lembretes));
       formDataToSend.append('tags', JSON.stringify(formData.tags));
-      formDataToSend.append('collaborators', JSON.stringify(formData.collaborators));
+      formDataToSend.append('collaborator_ids', JSON.stringify(formData.collaborator_ids));
 
       // IDs opcionais
-      if (formData.assigned_by_user_id) {
-        formDataToSend.append('assigned_by_user_id', formData.assigned_by_user_id);
+      if (formData.assigned_to_user_id) {
+        formDataToSend.append('assigned_to_user_id', formData.assigned_to_user_id);
       }
       if (formData.team_id) {
         formDataToSend.append('team_id', formData.team_id);
@@ -221,18 +215,38 @@ function TaskFormPage() {
       });
 
       console.log('Tarefa criada com sucesso:', response.data);
-      navigate('/dashboard'); // ou para onde você quiser redirecionar
+      navigate('/dashboard');
 
     } catch (err) {
       console.error('Erro ao criar tarefa:', err);
-      alert('Erro ao criar tarefa. Tente novamente.');
+      if (err.response?.data?.error) {
+        alert(err.response.data.error);
+      } else {
+        alert('Erro ao criar tarefa. Tente novamente.');
+      }
     } finally {
       setLoading(false);
     }
   };
 
   const handleCancel = () => {
-    navigate(-1); // Volta para a página anterior
+    navigate(-1);
+  };
+
+  // Verificar se o usuário atual é gestor de alguma equipe
+  const isManagerOfAnyTeam = () => {
+    if (!currentUser) return false;
+    return currentUser.is_admin || currentUser.is_manager;
+  };
+
+  // Verificar se o usuário atual é gestor da equipe selecionada
+  const isManagerOfSelectedTeam = () => {
+    if (!formData.team_id || !currentUser) return false;
+    const selectedTeam = teams.find(t => t.id === parseInt(formData.team_id));
+    if (!selectedTeam) return false;
+    return currentUser.is_admin || selectedTeam.members?.some(
+      member => member.user_id === currentUser.id && member.is_manager
+    );
   };
 
   return (
@@ -322,12 +336,21 @@ function TaskFormPage() {
                         options={categoriaOptions}
                       />
                       <Input
-                        type="date"
-                        label="Data de Vencimento"
-                        icon={<FiCalendar />}
-                        value={formData.due_date}
-                        onChange={(e) => updateField('due_date', e.target.value)}
+                        label="Relacionado a"
+                        value={formData.relacionado_a}
+                        onChange={(e) => updateField('relacionado_a', e.target.value)}
+                        placeholder="Nº do processo, cliente..."
                       />
+                      <div className={styles.fullWidth}>
+                        <CustomDateTimePicker
+                          label="Data de Vencimento"
+                          value={formData.due_date}
+                          onChange={(value) => updateField('due_date', value)}
+                          placeholder="Selecione data e hora"
+                          required={false}
+                          error={errors.due_date}
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -359,36 +382,71 @@ function TaskFormPage() {
                   </div>
                 </div>
 
-                {/* Seção Relacionamentos */}
+                {/* Seção Atribuição - Apenas para gestores */}
+                {isManagerOfAnyTeam() && (
+                  <div className={styles.formSection}>
+                    <div className={styles.sectionHeader}>
+                      <FiUsers className={styles.sectionIcon} />
+                      <h2 className={styles.sectionTitle}>Atribuição</h2>
+                    </div>
+                    <div className={styles.sectionContent}>
+                      <div className={styles.formGrid}>
+                        <div className={styles.fullWidth}>
+                          <Select
+                            label="Equipe"
+                            icon={<FiUsers />}
+                            value={formData.team_id}
+                            onChange={(e) => updateField('team_id', e.target.value)}
+                            options={teams.map(team => ({ value: team.id, label: team.name }))}
+                            placeholder="Selecione uma equipe"
+                          />
+                        </div>
+                        
+                        {formData.team_id && (
+                          <div className={styles.fullWidth}>
+                            <TeamMemberSelector
+                              teamId={parseInt(formData.team_id)}
+                              selectedMembers={formData.assigned_to_user_id ? [parseInt(formData.assigned_to_user_id)] : []}
+                              onSelectionChange={(members) => {
+                                updateField('assigned_to_user_id', members.length > 0 ? members[0] : '');
+                              }}
+                              label="Atribuir para"
+                              placeholder="Selecione um membro da equipe"
+                              allowMultiple={false}
+                              disabled={!isManagerOfSelectedTeam()}
+                            />
+                            {!isManagerOfSelectedTeam() && (
+                              <div className={styles.permissionNote}>
+                                <FiEye className={styles.noteIcon} />
+                                <span>Apenas gestores podem atribuir tarefas para outros membros da equipe</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Seção Colaboradores */}
                 <div className={styles.formSection}>
                   <div className={styles.sectionHeader}>
-                    <FiUsers className={styles.sectionIcon} />
-                    <h2 className={styles.sectionTitle}>Relacionamentos</h2>
+                    <FiEye className={styles.sectionIcon} />
+                    <h2 className={styles.sectionTitle}>Colaboradores/Observadores</h2>
                   </div>
                   <div className={styles.sectionContent}>
-                    <div className={styles.formGrid}>
-                      <Input
-                        label="Relacionado a"
-                        value={formData.relacionado_a}
-                        onChange={(e) => updateField('relacionado_a', e.target.value)}
-                        placeholder="Nº do processo, cliente..."
-                      />
-                      <Select
-                        label="Atribuído por"
-                        icon={<FiUser />}
-                        value={formData.assigned_by_user_id}
-                        onChange={(e) => updateField('assigned_by_user_id', e.target.value)}
-                        options={users.map(user => ({ value: user.id, label: user.username }))}
-                        placeholder="Selecione um usuário"
-                      />
-                      <Select
-                        label="Equipe"
-                        icon={<FiUsers />}
-                        value={formData.team_id}
-                        onChange={(e) => updateField('team_id', e.target.value)}
-                        options={teams.map(team => ({ value: team.id, label: team.name }))}
-                        placeholder="Selecione uma equipe"
-                      />
+                    <CollaboratorSelector
+                      selectedCollaborators={formData.collaborator_ids}
+                      onSelectionChange={(collaborators) => updateField('collaborator_ids', collaborators)}
+                      label="Adicionar colaboradores"
+                      placeholder="Selecione usuários para colaborar ou observar esta tarefa"
+                      excludeUserIds={[
+                        currentUser?.id,
+                        formData.assigned_to_user_id ? parseInt(formData.assigned_to_user_id) : null
+                      ].filter(Boolean)}
+                    />
+                    <div className={styles.collaboratorNote}>
+                      <span>Colaboradores podem visualizar e comentar na tarefa, mas não editá-la.</span>
                     </div>
                   </div>
                 </div>

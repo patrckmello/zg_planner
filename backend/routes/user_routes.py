@@ -9,9 +9,10 @@ user_bp = Blueprint('user_bp', __name__, url_prefix='/api/users')
 @user_bp.route('/me')
 @jwt_required()
 def get_me():
-    print(request.headers.get('Authorization'))  # Deve mostrar "Bearer <token>"
     current_user_id = get_jwt_identity()
     user = User.query.get(current_user_id)
+    if not user:
+        return jsonify({"error": "Usuário não encontrado"}), 404
     return jsonify(user.to_dict())
 
 @user_bp.route('', methods=['GET'])

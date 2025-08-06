@@ -1,25 +1,25 @@
 import React from 'react';
 import * as CheckboxPrimitive from '@radix-ui/react-checkbox';
 import styles from './Checkbox.module.css';
-import { Check } from 'phosphor-react'; // Ícone legal para o check, pode usar outro!
+import { Check } from 'phosphor-react';
 
 export default function Checkbox({ checked, onCheckedChange, label, id }) {
   return (
     <label
-      htmlFor={id} // garante link com input
-      style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
+      htmlFor={id}
+      className={styles.checkboxLabel}
     >
       <CheckboxPrimitive.Root
         className={styles.checkboxRoot}
         checked={checked}
         onCheckedChange={onCheckedChange}
-        id={id} // recebe o id dinâmico
+        id={id}
       >
         <CheckboxPrimitive.Indicator className={styles.checkboxIndicator}>
           <Check weight="bold" />
         </CheckboxPrimitive.Indicator>
       </CheckboxPrimitive.Root>
-      {label && <span>{label}</span>}
+      {label && <span className={styles.checkboxText}>{label}</span>}
     </label>
   );
 }

@@ -7,6 +7,9 @@ import Input from '../components/ui/Input';
 import Select from '../components/ui/Select';
 import TagInput from '../components/forms/TagInput';
 import FileUploadArea from '../components/forms/FileUploadArea';
+import TeamMemberSelector from '../components/forms/TeamMemberSelector';
+import CollaboratorSelector from '../components/forms/CollaboratorSelector';
+import CustomDateTimePicker from '../components/forms/CustomDateTimePicker';
 import Checkbox from '../components/Checkbox/Checkbox';
 import DeleteConfirmModal from '../components/DeleteConfirmModal';
 import styles from './EditTaskFormPage.module.css';
@@ -25,7 +28,8 @@ import {
   FiFlag,
   FiFolder,
   FiFileText,
-  FiEdit3
+  FiEdit3,
+  FiEye
 } from 'react-icons/fi';
 
 function EditTaskFormPage() {
@@ -34,8 +38,8 @@ function EditTaskFormPage() {
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 768);
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
-  const [users, setUsers] = useState([]);
   const [teams, setTeams] = useState([]);
+  const [currentUser, setCurrentUser] = useState(null);
   const [errors, setErrors] = useState({});
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [removedFiles, setRemovedFiles] = useState([]);
@@ -48,21 +52,20 @@ function EditTaskFormPage() {
     due_date: '',
     prioridade: 'media',
     categoria: 'processo',
-    status_inicial: 'a_fazer',
     tempo_estimado: '',
     tempo_unidade: 'horas',
     relacionado_a: '',
     lembretes: [],
     tags: [],
     anexos: [],
-    assigned_by_user_id: '',
-    collaborators: [],
+    assigned_to_user_id: '',
+    collaborator_ids: [],
     team_id: ''
   });
 
   const [originalTask, setOriginalTask] = useState(null);
 
-  // Opções para os selects (mesmas da TaskFormPage)
+  // Opções para os selects
   const prioridadeOptions = [
     { value: 'baixa', label: '🟢 Baixa' },
     { value: 'media', label: '🟡 Média' },
@@ -75,13 +78,6 @@ function EditTaskFormPage() {
     { value: 'in_progress', label: '🔄 Em andamento' },
     { value: 'done', label: '✅ Concluído' },
     { value: 'cancelled', label: '❌ Cancelado' }
-  ];
-
-  const statusInicialOptions = [
-    { value: 'a_fazer', label: '📝 A fazer' },
-    { value: 'em_andamento', label: '🔄 Em andamento' },
-    { value: 'concluido', label: '✅ Concluído' },
-    { value: 'cancelado', label: '❌ Cancelado' }
   ];
 
   const categoriaOptions = [
@@ -136,16 +132,16 @@ function EditTaskFormPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [taskResponse, usersResponse, teamsResponse] = await Promise.all([
+        const [taskResponse, teamsResponse, userResponse] = await Promise.all([
           api.get(`/tasks/${id}`),
-          api.get('/users'),
-          api.get('/teams')
+          api.get('/teams'),
+          api.get('/users/me')
         ]);
 
         const task = taskResponse.data;
         setOriginalTask(task);
-        setUsers(usersResponse.data);
         setTeams(teamsResponse.data);
+        setCurrentUser(userResponse.data);
 
         // Processar anexos vindos do backend
         const adaptAnexos = (task.anexos || []).map(anexo => {
@@ -175,18 +171,17 @@ function EditTaskFormPage() {
           title: task.title || '',
           description: task.description || '',
           status: task.status || 'pending',
-          due_date: task.due_date ? task.due_date.slice(0, 10) : '',
+          due_date: task.due_date || '',
           prioridade: task.prioridade || 'media',
           categoria: task.categoria || 'processo',
-          status_inicial: task.status_inicial || 'a_fazer',
           tempo_estimado: task.tempo_estimado || '',
           tempo_unidade: task.tempo_unidade || 'horas',
           relacionado_a: task.relacionado_a || '',
           lembretes: task.lembretes || [],
           tags: task.tags || [],
           anexos: adaptAnexos,
-          assigned_by_user_id: task.assigned_by_user_id || '',
-          collaborators: task.collaborators || [],
+          assigned_to_user_id: task.user_id || '',
+          collaborator_ids: task.collaborator_ids || [],
           team_id: task.team_id || ''
         });
 
@@ -281,13 +276,11 @@ function EditTaskFormPage() {
       formDataToSend.append('status', formData.status);
       formDataToSend.append('prioridade', formData.prioridade);
       formDataToSend.append('categoria', formData.categoria);
-      formDataToSend.append('status_inicial', formData.status_inicial);
       formDataToSend.append('relacionado_a', formData.relacionado_a);
 
       // Data de vencimento
       if (formData.due_date) {
-        const dueDateISO = new Date(formData.due_date).toISOString();
-        formDataToSend.append('due_date', dueDateISO);
+        formDataToSend.append('due_date', formData.due_date);
       }
 
       // Tempo estimado
@@ -299,21 +292,33 @@ function EditTaskFormPage() {
       // Arrays JSON
       formDataToSend.append('lembretes', JSON.stringify(formData.lembretes));
       formDataToSend.append('tags', JSON.stringify(formData.tags));
-      formDataToSend.append('collaborators', JSON.stringify(formData.collaborators));
-      formDataToSend.append('removedFiles', JSON.stringify(removedFiles));
+      formDataToSend.append('collaborator_ids', JSON.stringify(formData.collaborator_ids));
 
       // IDs opcionais
-      if (formData.assigned_by_user_id) {
-        formDataToSend.append('assigned_by_user_id', formData.assigned_by_user_id);
+      if (formData.assigned_to_user_id) {
+        formDataToSend.append('assigned_to_user_id', formData.assigned_to_user_id);
       }
       if (formData.team_id) {
         formDataToSend.append('team_id', formData.team_id);
       }
 
+      // Arquivos removidos
+      formDataToSend.append('files_to_remove', JSON.stringify(removedFiles));
+
+      // Anexos existentes
+      const existingFiles = formData.anexos.filter(f => f.isExisting).map(f => ({
+        id: f.id,
+        name: f.name,
+        size: f.size,
+        type: f.type,
+        url: f.url
+      }));
+      formDataToSend.append('existing_files', JSON.stringify(existingFiles));
+
       // Anexos novos
       formData.anexos.forEach((anexoObj) => {
-        if (anexoObj.file && anexoObj.isNew) {
-          formDataToSend.append('anexos', anexoObj.file);
+        if (anexoObj.file && !anexoObj.isExisting) {
+          formDataToSend.append('new_files', anexoObj.file);
         }
       });
 
@@ -328,7 +333,11 @@ function EditTaskFormPage() {
 
     } catch (err) {
       console.error('Erro ao atualizar tarefa:', err);
-      alert('Erro ao atualizar tarefa. Tente novamente.');
+      if (err.response?.data?.error) {
+        alert(err.response.data.error);
+      } else {
+        alert('Erro ao atualizar tarefa. Tente novamente.');
+      }
     } finally {
       setLoading(false);
     }
@@ -347,6 +356,30 @@ function EditTaskFormPage() {
 
   const handleCancel = () => {
     navigate(-1);
+  };
+
+  // Verificar se o usuário atual é gestor de alguma equipe
+  const isManagerOfAnyTeam = () => {
+    if (!currentUser) return false;
+    return currentUser.is_admin || currentUser.is_manager;
+  };
+
+  // Verificar se o usuário atual é gestor da equipe selecionada
+  const isManagerOfSelectedTeam = () => {
+    if (!formData.team_id || !currentUser) return false;
+    const selectedTeam = teams.find(t => t.id === parseInt(formData.team_id));
+    if (!selectedTeam) return false;
+    return currentUser.is_admin || selectedTeam.members?.some(
+      member => member.user_id === currentUser.id && member.is_manager
+    );
+  };
+
+  // Verificar se o usuário pode editar a tarefa
+  const canEditTask = () => {
+    if (!currentUser || !originalTask) return false;
+    return currentUser.is_admin || 
+           originalTask.user_id === currentUser.id || 
+           originalTask.assigned_by_user_id === currentUser.id;
   };
 
   if (initialLoading) {
@@ -453,12 +486,21 @@ function EditTaskFormPage() {
                         options={categoriaOptions}
                       />
                       <Input
-                        type="date"
-                        label="Data de Vencimento"
-                        icon={<FiCalendar />}
-                        value={formData.due_date}
-                        onChange={(e) => updateField('due_date', e.target.value)}
+                        label="Relacionado a"
+                        value={formData.relacionado_a}
+                        onChange={(e) => updateField('relacionado_a', e.target.value)}
+                        placeholder="Nº do processo, cliente..."
                       />
+                      <div className={styles.fullWidth}>
+                        <CustomDateTimePicker
+                          label="Data de Vencimento"
+                          value={formData.due_date}
+                          onChange={(value) => updateField('due_date', value)}
+                          placeholder="Selecione data e hora"
+                          required={false}
+                          error={errors.due_date}
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -490,36 +532,71 @@ function EditTaskFormPage() {
                   </div>
                 </div>
 
-                {/* Seção Relacionamentos */}
+                {/* Seção Atribuição - Apenas para gestores */}
+                {isManagerOfAnyTeam() && (
+                  <div className={styles.formSection}>
+                    <div className={styles.sectionHeader}>
+                      <FiUsers className={styles.sectionIcon} />
+                      <h2 className={styles.sectionTitle}>Atribuição</h2>
+                    </div>
+                    <div className={styles.sectionContent}>
+                      <div className={styles.formGrid}>
+                        <div className={styles.fullWidth}>
+                          <Select
+                            label="Equipe"
+                            icon={<FiUsers />}
+                            value={formData.team_id}
+                            onChange={(e) => updateField('team_id', e.target.value)}
+                            options={teams.map(team => ({ value: team.id, label: team.name }))}
+                            placeholder="Selecione uma equipe"
+                          />
+                        </div>
+                        
+                        {formData.team_id && (
+                          <div className={styles.fullWidth}>
+                            <TeamMemberSelector
+                              teamId={parseInt(formData.team_id)}
+                              selectedMembers={formData.assigned_to_user_id ? [parseInt(formData.assigned_to_user_id)] : []}
+                              onSelectionChange={(members) => {
+                                updateField('assigned_to_user_id', members.length > 0 ? members[0] : '');
+                              }}
+                              label="Atribuir para"
+                              placeholder="Selecione um membro da equipe"
+                              allowMultiple={false}
+                              disabled={!isManagerOfSelectedTeam()}
+                            />
+                            {!isManagerOfSelectedTeam() && (
+                              <div className={styles.permissionNote}>
+                                <FiEye className={styles.noteIcon} />
+                                <span>Apenas gestores podem atribuir tarefas para outros membros da equipe</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Seção Colaboradores */}
                 <div className={styles.formSection}>
                   <div className={styles.sectionHeader}>
-                    <FiUsers className={styles.sectionIcon} />
-                    <h2 className={styles.sectionTitle}>Relacionamentos</h2>
+                    <FiEye className={styles.sectionIcon} />
+                    <h2 className={styles.sectionTitle}>Colaboradores/Observadores</h2>
                   </div>
                   <div className={styles.sectionContent}>
-                    <div className={styles.formGrid}>
-                      <Input
-                        label="Relacionado a"
-                        value={formData.relacionado_a}
-                        onChange={(e) => updateField('relacionado_a', e.target.value)}
-                        placeholder="Nº do processo, cliente..."
-                      />
-                      <Select
-                        label="Atribuído por"
-                        icon={<FiUser />}
-                        value={formData.assigned_by_user_id}
-                        onChange={(e) => updateField('assigned_by_user_id', e.target.value)}
-                        options={users.map(user => ({ value: user.id, label: user.username }))}
-                        placeholder="Selecione um usuário"
-                      />
-                      <Select
-                        label="Equipe"
-                        icon={<FiUsers />}
-                        value={formData.team_id}
-                        onChange={(e) => updateField('team_id', e.target.value)}
-                        options={teams.map(team => ({ value: team.id, label: team.name }))}
-                        placeholder="Selecione uma equipe"
-                      />
+                    <CollaboratorSelector
+                      selectedCollaborators={formData.collaborator_ids}
+                      onSelectionChange={(collaborators) => updateField('collaborator_ids', collaborators)}
+                      label="Adicionar colaboradores"
+                      placeholder="Selecione usuários para colaborar ou observar esta tarefa"
+                      excludeUserIds={[
+                        currentUser?.id,
+                        formData.assigned_to_user_id ? parseInt(formData.assigned_to_user_id) : null
+                      ].filter(Boolean)}
+                    />
+                    <div className={styles.collaboratorNote}>
+                      <span>Colaboradores podem visualizar e comentar na tarefa, mas não editá-la.</span>
                     </div>
                   </div>
                 </div>
@@ -601,6 +678,7 @@ function EditTaskFormPage() {
                   variant="danger"
                   onClick={() => setShowDeleteModal(true)}
                   icon={<FiTrash2 />}
+                  disabled={!canEditTask()}
                 >
                   Excluir
                 </Button>
@@ -618,6 +696,7 @@ function EditTaskFormPage() {
                     variant="primary"
                     loading={loading}
                     icon={<FiSave />}
+                    disabled={!canEditTask()}
                   >
                     Salvar Alterações
                   </Button>
@@ -629,15 +708,13 @@ function EditTaskFormPage() {
       </div>
 
       {/* Modal de confirmação de exclusão */}
-      {showDeleteModal && (
-        <DeleteConfirmModal
-          isOpen={showDeleteModal}
-          onClose={() => setShowDeleteModal(false)}
-          onConfirm={handleDelete}
-          title="Excluir Tarefa"
-          message={`Tem certeza que deseja excluir a tarefa "${originalTask?.title}"? Esta ação não pode ser desfeita.`}
-        />
-      )}
+      <DeleteConfirmModal
+        isOpen={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        onConfirm={handleDelete}
+        title="Excluir Tarefa"
+        message={`Tem certeza que deseja excluir a tarefa "${originalTask?.title}"? Esta ação não pode ser desfeita.`}
+      />
     </div>
   );
 }

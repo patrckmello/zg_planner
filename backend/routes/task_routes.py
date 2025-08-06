@@ -9,6 +9,7 @@ import json
 from datetime import datetime
 from models.user_model import User
 from models.team_model import Team
+from models.user_team_model import UserTeam
 
 task_bp = Blueprint("tasks", __name__, url_prefix="/api")
 
@@ -37,31 +38,27 @@ def get_tasks():
             assoc.team_id for assoc in user.teams if assoc.is_manager
         ]
 
-        # Se for gestor, pega tarefas pessoais + tarefas da equipe que ele gerencia
-        if manager_team_ids:
-            query = Task.query.filter(
-                (Task.user_id == user_id) | (Task.team_id.in_(manager_team_ids))
-            )
-        else:
-            # User comum: tarefas pessoais + tarefas das equipes em que participa
-            member_team_ids = [assoc.team_id for assoc in user.teams]
-            query = Task.query.filter(
-                (Task.user_id == user_id) | (Task.team_id.in_(member_team_ids))
-            )
-
-        # Lógica de acesso para colaboradores
-        query = query.filter(
+        # Tarefas que o usuário pode ver:
+        # 1. Tarefas pessoais (user_id == user_id)
+        # 2. Tarefas que ele atribuiu (assigned_by_user_id == user_id)
+        # 3. Tarefas das equipes que ele gerencia
+        # 4. Tarefas onde ele é colaborador
+        # 5. Tarefas das equipes em que ele participa
+        
+        member_team_ids = [assoc.team_id for assoc in user.teams]
+        
+        query = Task.query.filter(
             (Task.user_id == user_id) |
+            (Task.assigned_by_user_id == user_id) |
             (Task.team_id.in_(manager_team_ids)) |
-            (Task.collaborators.contains([user_id])) # Verifica se o user_id está na lista de colaboradores
+            (Task.collaborators.contains([user_id])) |
+            (Task.team_id.in_(member_team_ids))
         )
 
     if status:
         if status not in ["pending", "done", "in_progress", "cancelled"]:
             return jsonify({"error": "Status inválido para filtro."}), 400
         query = query.filter(Task.status == status)
-
-    from datetime import datetime
 
     if due_before:
         try:
@@ -154,6 +151,12 @@ def add_task():
         if data.get("due_date"):
             try:
                 due_date = datetime.fromisoformat(data["due_date"])
+                # Remover timezone info se presente para comparação consistente
+                if due_date.tzinfo is not None:
+                    due_date = due_date.replace(tzinfo=None)
+                # Validação: não permitir datas passadas
+                if due_date < datetime.utcnow():
+                    return jsonify({"error": "A data de vencimento não pode ser no passado."}), 400
             except ValueError:
                 return jsonify({"error": "Formato inválido para due_date. Use ISO 8601."}), 400
 
@@ -169,10 +172,10 @@ def add_task():
             if not team:
                 return jsonify({"error": "Time não encontrado."}), 404
 
-            # Verifica se o user é manager da equipe
-            is_manager = any(assoc.is_manager and assoc.team_id == team.id for assoc in user.teams)
+            # Verifica se o user é manager da equipe ou admin
+            is_manager = user.is_admin or any(assoc.is_manager and assoc.team_id == team.id for assoc in user.teams)
             if not is_manager:
-                return jsonify({"error": "Você não tem permissão para criar tarefas neste time."}), 403
+                return jsonify({"error": "Apenas gestores podem criar tarefas para a equipe."}), 403
         else:
             team_id = None  # tarefa pessoal
 
@@ -183,20 +186,47 @@ def add_task():
         if data.get("assigned_to_user_id"):
             try:
                 assigned_to_user_id = int(data["assigned_to_user_id"])
-                # Se a tarefa está sendo atribuída a outro usuário, o user_id da tarefa é o do atribuído
-                # e o assigned_by_user_id é o do usuário logado (gestor)
+                
+                # Validação: apenas gestores podem atribuir tarefas para outros
+                if team_id:
+                    # Para tarefas de equipe, verificar se o usuário é gestor da equipe
+                    is_manager = user.is_admin or any(assoc.is_manager and assoc.team_id == team_id for assoc in user.teams)
+                    if not is_manager:
+                        return jsonify({"error": "Apenas gestores podem atribuir tarefas para outros membros."}), 403
+                    
+                    # Verificar se o usuário atribuído é membro da equipe
+                    assigned_user = User.query.get(assigned_to_user_id)
+                    if not assigned_user:
+                        return jsonify({"error": "Usuário atribuído não encontrado."}), 404
+                    
+                    is_team_member = any(assoc.team_id == team_id for assoc in assigned_user.teams)
+                    if not is_team_member:
+                        return jsonify({"error": "O usuário atribuído deve ser membro da equipe."}), 400
+                else:
+                    # Para tarefas pessoais, apenas o próprio usuário pode atribuir para si mesmo
+                    if assigned_to_user_id != user_id:
+                        return jsonify({"error": "Você só pode atribuir tarefas pessoais para si mesmo."}), 403
+                
                 task_user_id = assigned_to_user_id
-                assigned_by_user_id = user_id
+                assigned_by_user_id = user_id if assigned_to_user_id != user_id else None
+                
             except ValueError:
                 return jsonify({"error": "assigned_to_user_id inválido"}), 400
 
-        # Processar colaboradores
+        # Processar colaboradores/observadores
         collaborators = []
         if data.get("collaborator_ids"):
             try:
                 collaborators = json.loads(data["collaborator_ids"])
                 if not isinstance(collaborators, list):
                     raise ValueError("collaborator_ids deve ser uma lista de IDs.")
+                
+                # Validar que todos os colaboradores existem
+                for collab_id in collaborators:
+                    collab_user = User.query.get(collab_id)
+                    if not collab_user:
+                        return jsonify({"error": f"Colaborador com ID {collab_id} não encontrado."}), 404
+                        
             except (json.JSONDecodeError, ValueError):
                 return jsonify({"error": "Formato inválido para collaborator_ids. Use um array JSON de IDs."}), 400
 
@@ -233,9 +263,9 @@ def add_task():
             description=data.get("description"),
             status=data.get("status", "pending"),
             due_date=due_date,
-            user_id=task_user_id, # Usar o user_id determinado
-            assigned_by_user_id=assigned_by_user_id, # Preencher o assigned_by_user_id
-            collaborators=collaborators, # Preencher os colaboradores
+            user_id=task_user_id,
+            assigned_by_user_id=assigned_by_user_id,
+            collaborators=collaborators,
             team_id=team_id,
             prioridade=data.get("prioridade"),
             categoria=data.get("categoria"),
@@ -263,17 +293,14 @@ def add_task():
 @jwt_required()
 def get_task(task_id):
     user_id = get_jwt_identity()
+    user = User.query.get(user_id)
     task = Task.query.get(task_id)
 
     if task is None:
         return jsonify({"error": "Tarefa não encontrada"}), 404
 
-    # Lógica de acesso para GET /tasks/<int:task_id>
-    user = User.query.get(user_id)
-    if not user.is_admin and \
-       str(task.user_id) != str(user_id) and \
-       (task.team_id is None or not any(assoc.is_manager and assoc.team_id == task.team_id for assoc in user.teams)) and \
-       (user_id not in task.collaborators):
+    # Usar o método can_be_viewed_by do modelo
+    if not task.can_be_viewed_by(user):
         return jsonify({"error": "Acesso negado"}), 403
 
     task_dict = task.to_dict()
@@ -283,7 +310,6 @@ def get_task(task_id):
         anexos_enriched = []
         for anexo in task_dict["anexos"]:
             if isinstance(anexo, str):
-                # Se anexo é apenas um nome de arquivo (formato antigo)
                 anexo_obj = {
                     "id": anexo,
                     "name": anexo,
@@ -292,7 +318,6 @@ def get_task(task_id):
                     "type": "application/octet-stream"
                 }
             else:
-                # Se anexo já é um objeto (formato novo)
                 anexo_obj = anexo.copy()
                 if "url" not in anexo_obj:
                     anexo_obj["url"] = f"http://10.1.39.126:5555/uploads/{anexo_obj.get('name', '')}"
@@ -303,88 +328,110 @@ def get_task(task_id):
 
     return jsonify(task_dict)
 
+
 @task_bp.route("/tasks/<int:task_id>", methods=["PUT"])
 @jwt_required()
 def update_task(task_id):
-    from flask_jwt_extended import get_jwt_identity
-
     user_id = get_jwt_identity()
-    print(f"[DEBUG] Usuário autenticado: {user_id}")
-
+    user = User.query.get(user_id)
     task = Task.query.get(task_id)
 
     if not task:
         return jsonify({"error": "Tarefa não encontrada"}), 404
 
-    print(f"[DEBUG] Tarefa encontrada: user_id={task.user_id}")
-
-    user = User.query.get(user_id)
-    # Permissão para atualizar: admin OU dono da tarefa
-    if not user.is_admin and str(task.user_id) != str(user_id):
-        print("[DEBUG] Acesso negado: user_id não corresponde ao dono da tarefa e não é admin")
+    # Verificar permissões de edição
+    if not task.can_be_viewed_by(user):
         return jsonify({"error": "Acesso negado"}), 403
 
     if request.content_type and request.content_type.startswith("multipart/form-data"):
         data = request.form
         files = request.files.getlist("new_files")
 
-        # Pega anexos existentes que devem ser mantidos
+        # Validação de data de vencimento
+        if data.get("due_date"):
+            try:
+                due_date = datetime.fromisoformat(data["due_date"])
+                # Remover timezone info se presente para comparação consistente
+                if due_date.tzinfo is not None:
+                    due_date = due_date.replace(tzinfo=None)
+                if due_date < datetime.utcnow():
+                    return jsonify({"error": "A data de vencimento não pode ser no passado."}), 400
+                task.due_date = due_date
+            except ValueError:
+                return jsonify({"error": "Formato inválido para due_date. Use ISO 8601."}), 400
+
+        # Atualizar campos básicos
+        if data.get("title"):
+            task.title = data["title"]
+        if data.get("description") is not None:
+            task.description = data["description"]
+        if data.get("status"):
+            task.status = data["status"]
+        if data.get("prioridade"):
+            task.prioridade = data["prioridade"]
+        if data.get("categoria"):
+            task.categoria = data["categoria"]
+        if data.get("status_inicial"):
+            task.status_inicial = data["status_inicial"]
+        if data.get("tempo_estimado"):
+            task.tempo_estimado = data["tempo_estimado"]
+        if data.get("tempo_unidade"):
+            task.tempo_unidade = data["tempo_unidade"]
+        if data.get("relacionado_a") is not None:
+            task.relacionado_a = data["relacionado_a"]
+
+        # Atualizar colaboradores (apenas gestores ou admin)
+        if data.get("collaborator_ids") is not None:
+            if user.is_admin or task.can_be_assigned_by(user):
+                try:
+                    collaborators = json.loads(data["collaborator_ids"])
+                    if isinstance(collaborators, list):
+                        task.collaborators = collaborators
+                except (json.JSONDecodeError, ValueError):
+                    return jsonify({"error": "Formato inválido para collaborator_ids."}), 400
+            else:
+                return jsonify({"error": "Apenas gestores podem modificar colaboradores."}), 403
+
+        # Atualizar atribuição (apenas gestores ou admin)
+        if data.get("assigned_to_user_id") is not None:
+            if user.is_admin or task.can_be_assigned_by(user):
+                try:
+                    assigned_to_user_id = int(data["assigned_to_user_id"])
+                    if assigned_to_user_id != task.user_id:
+                        task.user_id = assigned_to_user_id
+                        task.assigned_by_user_id = user_id
+                except ValueError:
+                    return jsonify({"error": "assigned_to_user_id inválido"}), 400
+            else:
+                return jsonify({"error": "Apenas gestores podem reatribuir tarefas."}), 403
+
+        # Processar anexos
         existing_files_json = data.get("existing_files", "[]")
         try:
             existing_files = json.loads(existing_files_json)
         except Exception:
             existing_files = []
 
-        # Pega anexos que devem ser removidos (NOVA FUNCIONALIDADE)
         files_to_remove_json = data.get("files_to_remove", "[]")
         try:
             files_to_remove = json.loads(files_to_remove_json)
         except Exception:
             files_to_remove = []
 
-        print(f"Arquivos a serem mantidos: {existing_files}")
-        print(f"Arquivos a serem removidos: {files_to_remove}")
-
-        # Remover arquivos fisicamente da pasta uploads
+        # Remover arquivos fisicamente
         for filename in files_to_remove:
             filepath = os.path.join(current_app.config["UPLOAD_FOLDER"], filename)
             if os.path.exists(filepath):
-                try:
-                    os.remove(filepath)
-                    print(f"Arquivo removido fisicamente: {filepath}")
-                except Exception as e:
-                    print(f"Erro ao remover arquivo {filepath}: {e}")
-
-        # Manter anexos existentes (objetos completos)
-        anexos_mantidos = []
-        current_anexos = task.anexos or []
-        
-        for anexo_atual in current_anexos:
-            if isinstance(anexo_atual, str):
-                # Formato antigo: apenas nome do arquivo
-                if anexo_atual in existing_files:
-                    anexo_obj = {
-                        "id": anexo_atual,
-                        "name": anexo_atual,
-                        "url": f"http://10.1.39.126:5555/uploads/{anexo_atual}",
-                        "size": 0,
-                        "type": "application/octet-stream"
-                    }
-                    anexos_mantidos.append(anexo_obj)
-            else:
-                # Formato novo: objeto completo
-                if anexo_atual.get("name") in existing_files:
-                    anexos_mantidos.append(anexo_atual)
+                os.remove(filepath)
 
         # Processar novos arquivos
-        novos_anexos = []
+        new_anexos = []
         for file in files:
-            if file and file.filename:
+            if file.filename:
                 filename = secure_filename(file.filename)
                 filepath = os.path.join(current_app.config["UPLOAD_FOLDER"], filename)
                 file.save(filepath)
                 
-                # Criar objeto anexo com metadados
                 anexo_obj = {
                     "id": filename,
                     "name": filename,
@@ -392,151 +439,135 @@ def update_task(task_id):
                     "type": file.content_type or "application/octet-stream",
                     "url": f"http://10.1.39.126:5555/uploads/{filename}"
                 }
-                novos_anexos.append(anexo_obj)
+                new_anexos.append(anexo_obj)
 
-        # Combinar anexos mantidos + novos anexos
-        task.anexos = anexos_mantidos + novos_anexos
+        # Combinar anexos existentes com novos
+        task.anexos = existing_files + new_anexos
 
-        # Atualiza os demais campos
-        if "title" in data:
-            task.title = data["title"]
-        if "description" in data:
-            task.description = data["description"]
-
-        if "status" in data:
-            if data["status"] not in ["pending", "in_progress", "done", "cancelled"]:
-                return jsonify({"error": "Status inválido"}), 400
-            task.status = data["status"]
-
-        if "due_date" in data:
-            if not data["due_date"]:
-                task.due_date = None
-            else:
-                try:
-                    task.due_date = datetime.fromisoformat(data["due_date"])
-                except ValueError:
-                    return jsonify({"error": "Formato inválido para due_date. Use ISO 8601."}), 400
-
-        task.prioridade = data.get("prioridade", task.prioridade)
-        task.categoria = data.get("categoria", task.categoria)
-        task.status_inicial = data.get("status_inicial", task.status_inicial)
-        task.tempo_estimado = data.get("tempo_estimado", task.tempo_estimado)
-        task.tempo_unidade = data.get("tempo_unidade", task.tempo_unidade)
-        task.relacionado_a = data.get("relacionadoA", task.relacionado_a)
-
-        try:
-            task.lembretes = json.loads(data.get("lembretes", "[]"))
-        except Exception:
-            task.lembretes = task.lembretes or []
-
-        try:
-            task.tags = json.loads(data.get("tags", "[]"))
-        except Exception:
-            task.tags = task.tags or []
-
-        # Atualizar colaboradores
-        if "collaborator_ids" in data:
+        # Atualizar arrays JSON
+        if data.get("lembretes"):
             try:
-                new_collaborators = json.loads(data["collaborator_ids"])
-                if not isinstance(new_collaborators, list):
-                    raise ValueError("collaborator_ids deve ser uma lista de IDs.")
-                task.collaborators = new_collaborators
-            except (json.JSONDecodeError, ValueError):
-                return jsonify({"error": "Formato inválido para collaborator_ids. Use um array JSON de IDs."}), 400
+                task.lembretes = json.loads(data["lembretes"])
+            except Exception:
+                pass
+
+        if data.get("tags"):
+            try:
+                task.tags = json.loads(data["tags"])
+            except Exception:
+                pass
+
+        task.updated_at = datetime.utcnow()
+        db.session.commit()
+
+        return jsonify(task.to_dict())
 
     else:
-        # Caso queira aceitar JSON puro
-        data = request.get_json()
-        if not data:
-            return jsonify({"error": "Dados inválidos"}), 400
+        return jsonify({"error": "Tipo de requisição inválido. Envie como multipart/form-data."}), 400
 
-        task.title = data.get("title", task.title)
-        task.description = data.get("description", task.description)
-
-        status = data.get("status", task.status)
-        if status not in ["pending", "in_progress", "done", "cancelled"]:
-            return jsonify({"error": "Status inválido"}), 400
-        task.status = status
-
-        due_date_str = data.get("due_date")
-        if due_date_str:
-            try:
-                task.due_date = datetime.fromisoformat(due_date_str)
-            except ValueError:
-                return jsonify({"error": "Formato inválido para due_date. Use ISO 8601."}), 400
-        else:
-            task.due_date = None
-
-        task.prioridade = data.get("prioridade", task.prioridade)
-        task.categoria = data.get("categoria", task.categoria)
-        task.status_inicial = data.get("status_inicial", task.status_inicial)
-        task.tempo_estimado = data.get("tempo_estimado", task.tempo_estimado)
-        task.tempo_unidade = data.get("tempo_unidade", task.tempo_unidade)
-        task.relacionado_a = data.get("relacionadoA", task.relacionado_a)
-
-        try:
-            task.lembretes = data.get("lembretes", task.lembretes or [])
-            if isinstance(task.lembretes, str):
-                task.lembretes = json.loads(task.lembretes)
-        except Exception:
-            task.lembretes = task.lembretes or []
-
-        try:
-            task.tags = data.get("tags", task.tags or [])
-            if isinstance(task.tags, str):
-                task.tags = json.loads(task.tags)
-        except Exception:
-            task.tags = task.tags or []
-
-        # Atualizar colaboradores
-        if "collaborator_ids" in data:
-            try:
-                new_collaborators = data["collaborator_ids"]
-                if not isinstance(new_collaborators, list):
-                    raise ValueError("collaborator_ids deve ser uma lista de IDs.")
-                task.collaborators = new_collaborators
-            except (json.JSONDecodeError, ValueError):
-                return jsonify({"error": "Formato inválido para collaborator_ids. Use um array JSON de IDs."}), 400
-
-    db.session.commit()
-    return jsonify(task.to_dict())
 
 @task_bp.route("/tasks/<int:task_id>", methods=["DELETE"])
 @jwt_required()
 def delete_task(task_id):
     user_id = get_jwt_identity()
+    user = User.query.get(user_id)
     task = Task.query.get(task_id)
 
     if not task:
         return jsonify({"error": "Tarefa não encontrada"}), 404
 
-    print(f"[DEBUG] Tarefa encontrada: user_id={task.user_id}")
+    # Lógica de permissões para exclusão:
+    # 1. Admin pode deletar qualquer tarefa
+    # 2. Dono da tarefa (user_id) pode deletar
+    # 3. Quem atribuiu a tarefa (assigned_by_user_id) pode deletar
+    # 4. Colaboradores NÃO podem deletar
+    can_delete = (
+        user.is_admin or 
+        task.user_id == user_id or 
+        (task.assigned_by_user_id and task.assigned_by_user_id == user_id)
+    )
+    
+    if not can_delete:
+        # Verificar se é colaborador para dar mensagem específica
+        is_collaborator = task.collaborator_ids and user_id in task.collaborator_ids
+        if is_collaborator:
+            return jsonify({"error": "Colaboradores não podem excluir tarefas. Apenas o criador, responsável ou gestor podem fazer isso."}), 403
+        else:
+            return jsonify({"error": "Você não tem permissão para excluir esta tarefa."}), 403
 
-    user = User.query.get(user_id)
-    if not user.is_admin and str(task.user_id) != str(user_id):
-        print("[DEBUG] Acesso negado: user_id não corresponde ao dono da tarefa e não é admin")
-        return jsonify({"error": "Acesso negado"}), 403
-
-    # Remover arquivos anexados do sistema de arquivos
+    # Remover anexos físicos
     if task.anexos:
         for anexo in task.anexos:
-            if isinstance(anexo, str):
-                filename = anexo
+            if isinstance(anexo, dict) and "name" in anexo:
+                filename = anexo["name"]
             else:
-                filename = anexo.get("name")
+                filename = str(anexo)
             
-            if filename:
-                filepath = os.path.join(current_app.config["UPLOAD_FOLDER"], filename)
-                if os.path.exists(filepath):
-                    try:
-                        os.remove(filepath)
-                        print(f"Arquivo removido fisicamente: {filepath}")
-                    except Exception as e:
-                        print(f"Erro ao remover arquivo {filepath}: {e}")
+            filepath = os.path.join(current_app.config["UPLOAD_FOLDER"], filename)
+            if os.path.exists(filepath):
+                try:
+                    os.remove(filepath)
+                except OSError:
+                    # Log do erro mas não falha a exclusão da tarefa
+                    print(f"Erro ao remover arquivo: {filepath}")
 
     db.session.delete(task)
     db.session.commit()
 
-    return jsonify({"message": "Tarefa deletada com sucesso"}), 200
+    return jsonify({"message": "Tarefa excluída com sucesso"})
 
+
+@task_bp.route("/uploads/<filename>")
+def uploaded_file(filename):
+    return send_from_directory(current_app.config["UPLOAD_FOLDER"], filename)
+
+
+# Nova rota para obter membros de uma equipe (para o componente de atribuição)
+@task_bp.route("/teams/<int:team_id>/members", methods=["GET"])
+@jwt_required()
+def get_team_members(team_id):
+    user_id = get_jwt_identity()
+    user = User.query.get(user_id)
+    
+    team = Team.query.get(team_id)
+    if not team:
+        return jsonify({"error": "Equipe não encontrada"}), 404
+    
+    # Verificar se o usuário tem acesso à equipe
+    user_team_ids = [assoc.team_id for assoc in user.teams]
+    if not user.is_admin and team_id not in user_team_ids:
+        return jsonify({"error": "Acesso negado"}), 403
+    
+    members = []
+    for member_assoc in team.members:
+        members.append({
+            "id": member_assoc.user.id,
+            "username": member_assoc.user.username,
+            "email": member_assoc.user.email,
+            "is_manager": member_assoc.is_manager
+        })
+    
+    return jsonify(members)
+
+
+# Nova rota para obter usuários disponíveis para colaboração
+@task_bp.route("/users/available-collaborators", methods=["GET"])
+@jwt_required()
+def get_available_collaborators():
+    user_id = get_jwt_identity()
+    user = User.query.get(user_id)
+    
+    # Buscar todos os usuários ativos (exceto o próprio usuário)
+    users = User.query.filter(User.is_active == True, User.id != user_id).all()
+    
+    collaborators = []
+    for u in users:
+        collaborators.append({
+            "id": u.id,
+            "username": u.username,
+            "email": u.email,
+            "teams": [{"id": assoc.team.id, "name": assoc.team.name} for assoc in u.teams]
+        })
+    
+    return jsonify(collaborators)
 
