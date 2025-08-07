@@ -7,7 +7,7 @@ import ViewModeSelector from '../components/ViewModeSelector';
 import KanbanBoard from '../components/KanbanBoard';
 import styles from './TasksPage.module.css';
 import api from '../services/axiosInstance';
-import { FiPlus } from 'react-icons/fi';
+import { FiPlus, FiClipboard } from 'react-icons/fi';
 
 function TasksPage() {
   const navigate = useNavigate();
@@ -176,9 +176,8 @@ function TasksPage() {
             <div className={styles.kanbanContainer}>
               {filteredTasks.length === 0 ? (
                 <div className={styles.emptyState}>
-                  <div className={styles.emptyIcon}>📋</div>
-                  <h3 className={styles.emptyTitle}>Nenhuma tarefa encontrada</h3>
-                  <p className={styles.emptyDescription}>
+                  <div className={styles.emptyIcon}><FiClipboard /></div>
+                  <h3 className={styles.emptyTitle}>Nenhuma tarefa encontrada</h3>                 <p className={styles.emptyDescription}>
                     {activeTab === 'minhas' && 'Você ainda não criou nenhuma tarefa.'}
                     {activeTab === 'equipe' && 'Não há tarefas atribuídas à sua equipe.'}
                     {activeTab === 'colaborativas' && 'Você não está colaborando em nenhuma tarefa.'}

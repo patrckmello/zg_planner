@@ -14,10 +14,14 @@ import {
   FiEdit,
   FiTrash2,
   FiMove,
-  FiDownload
+  FiDownload,
+  FiRotateCw,
+  FiCheck,
+  FiX,
+  FiClipboard
 } from 'react-icons/fi';
 
-const TaskCard = ({ task, isDragging = false, viewMode }) => {
+const TaskCard = ({ task, isDragging = false }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [comment, setComment] = useState('');
 
@@ -49,12 +53,12 @@ const TaskCard = ({ task, isDragging = false, viewMode }) => {
   // Função para obter o ícone do status
   const getStatusIcon = (status) => {
     const icons = {
-      'pending': '⏳',
-      'in_progress': '🔄',
-      'done': '✅',
-      'cancelled': '❌'
+      'pending': <FiClock />,
+      'in_progress': <FiRotateCw />,
+      'done': <FiCheck />,
+      'cancelled': <FiX />
     };
-    return icons[status] || '📋';
+    return icons[status] || <FiClipboard />;
   };
 
   // Função para formatar data
@@ -73,8 +77,7 @@ const TaskCard = ({ task, isDragging = false, viewMode }) => {
     return `${time}${unit === 'horas' ? 'h' : 'm'}`;
   };
 
-  const toggleExpanded = (e) => {
-    e.stopPropagation();
+  const toggleExpanded = () => {
     setIsExpanded(!isExpanded);
   };
 
@@ -116,8 +119,6 @@ const TaskCard = ({ task, isDragging = false, viewMode }) => {
       ref={setNodeRef}
       style={style}
       className={cardClasses}
-      {...attributes}
-      {...listeners}
     >
       {/* Header do card */}
       <div className={styles.cardHeader}>
@@ -126,6 +127,10 @@ const TaskCard = ({ task, isDragging = false, viewMode }) => {
             className={styles.priorityIndicator}
             style={{ backgroundColor: getPriorityColor(task.prioridade) }}
           />
+          {/* Handle de arrasto */}
+          <span className={styles.dragHandle} {...attributes} {...listeners} title="Arrastar">
+            <FiMove />
+          </span>
           <span className={styles.statusIcon}>
             {getStatusIcon(task.status)}
           </span>

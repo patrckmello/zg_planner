@@ -1,12 +1,23 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { DndContext, DragOverlay, closestCorners } from '@dnd-kit/core';
-import { arrayMove } from '@dnd-kit/sortable';
 import KanbanColumn from './KanbanColumn';
 import TaskCard from './TaskCard';
 import styles from './KanbanBoard.module.css';
 import api from '../services/axiosInstance';
+import {
+  FiClock,
+  FiRotateCw,
+  FiCheck,
+  FiX,
+  FiAlertTriangle,
+  FiAlertCircle,
+  FiMinus,
+  FiChevronDown,
+  FiCalendar,
+  FiClipboard
+} from 'react-icons/fi';
 
-const KanbanBoard = ({ tasks, onTaskUpdate, viewMode = 'status', activeTab = 'minhas' }) => {
+const KanbanBoard = ({ tasks, onTaskUpdate, viewMode = 'status' }) => {
   const [activeId, setActiveId] = useState(null);
   const [draggedTask, setDraggedTask] = useState(null);
 
@@ -27,7 +38,7 @@ const KanbanBoard = ({ tasks, onTaskUpdate, viewMode = 'status', activeTab = 'mi
           'media': tasks.filter(task => task.prioridade === 'media'),
           'baixa': tasks.filter(task => task.prioridade === 'baixa')
         };
-      case 'due_date':
+      case 'due_date': {
         const today = new Date();
         const tomorrow = new Date(today);
         tomorrow.setDate(tomorrow.getDate() + 1);
@@ -40,7 +51,7 @@ const KanbanBoard = ({ tasks, onTaskUpdate, viewMode = 'status', activeTab = 'mi
           'this_week': tasks.filter(task => task.due_date && new Date(task.due_date) > today && new Date(task.due_date) <= nextWeek),
           'no_date': tasks.filter(task => !task.due_date)
         };
-      default:
+      }default:
         return { 'all': tasks };
     }
   };
@@ -50,27 +61,27 @@ const KanbanBoard = ({ tasks, onTaskUpdate, viewMode = 'status', activeTab = 'mi
     switch (mode) {
       case 'status':
         return {
-          'pending': { title: 'Pendentes', icon: '⏳', color: '#95a5a6' },
-          'in_progress': { title: 'Em Andamento', icon: '🔄', color: '#3498db' },
-          'done': { title: 'Concluídas', icon: '✅', color: '#27ae60' },
-          'cancelled': { title: 'Canceladas', icon: '❌', color: '#e74c3c' }
+          'pending': { title: 'Pendentes', icon: <FiClock />, color: '#95a5a6' },
+          'in_progress': { title: 'Em Andamento', icon: <FiRotateCw />, color: '#3498db' },
+          'done': { title: 'Concluídas', icon: <FiCheck />, color: '#27ae60' },
+          'cancelled': { title: 'Canceladas', icon: <FiX />, color: '#e74c3c' }
         };
       case 'priority':
         return {
-          'urgente': { title: 'Urgente', icon: '🔴', color: '#e74c3c' },
-          'alta': { title: 'Alta', icon: '🟠', color: '#f39c12' },
-          'media': { title: 'Média', icon: '🟡', color: '#f1c40f' },
-          'baixa': { title: 'Baixa', icon: '🟢', color: '#27ae60' }
+          'urgente': { title: 'Urgente', icon: <FiAlertTriangle />, color: '#e74c3c' },
+          'alta': { title: 'Alta', icon: <FiAlertCircle />, color: '#f39c12' },
+          'media': { title: 'Média', icon: <FiMinus />, color: '#f1c40f' },
+          'baixa': { title: 'Baixa', icon: <FiChevronDown />, color: '#27ae60' }
         };
       case 'due_date':
         return {
-          'overdue': { title: 'Atrasadas', icon: '🚨', color: '#e74c3c' },
-          'today': { title: 'Hoje', icon: '📅', color: '#f39c12' },
-          'this_week': { title: 'Esta Semana', icon: '📆', color: '#3498db' },
-          'no_date': { title: 'Sem Data', icon: '📋', color: '#95a5a6' }
+          'overdue': { title: 'Atrasadas', icon: <FiAlertTriangle />, color: '#e74c3c' },
+          'today': { title: 'Hoje', icon: <FiCalendar />, color: '#f39c12' },
+          'this_week': { title: 'Esta Semana', icon: <FiCalendar />, color: '#3498db' },
+          'no_date': { title: 'Sem Data', icon: <FiClipboard />, color: '#95a5a6' }
         };
       default:
-        return { 'all': { title: 'Todas', icon: '📋', color: '#95a5a6' } };
+        return { 'all': { title: 'Todas', icon: <FiClipboard />, color: '#95a5a6' } };
     }
   };
 
@@ -88,7 +99,7 @@ const KanbanBoard = ({ tasks, onTaskUpdate, viewMode = 'status', activeTab = 'mi
 
   const handleDragEnd = async (event) => {
     const { active, over } = event;
-    
+
     if (!over) {
       setActiveId(null);
       setDraggedTask(null);
@@ -96,15 +107,27 @@ const KanbanBoard = ({ tasks, onTaskUpdate, viewMode = 'status', activeTab = 'mi
     }
 
     const taskId = parseInt(active.id);
-    const newColumnId = over.id;
-    
+
+    // Determinar a coluna de destino corretamente:
+    // - Se soltou sobre outro card, usamos o containerId da lista desse card
+    // - Se soltou na área vazia da coluna, usamos o id do droppable (a própria coluna)
+    const getDestinationColumnId = (over) => {
+      const sortableData = over?.data?.current?.sortable;
+      if (sortableData && sortableData.containerId) {
+        return sortableData.containerId;
+      }
+      return over?.id;
+    };
+
+    const newColumnId = getDestinationColumnId(over);
+
     // Encontrar a tarefa
-    const task = tasks.find(t => t.id === taskId);
+    const task = tasks.find((t) => t.id === taskId);
     if (!task) return;
 
     // Determinar o novo valor baseado no modo de visualização e coluna
-    let updateData = {};
-    
+    const updateData = {};
+
     if (viewMode === 'status') {
       updateData.status = newColumnId;
     } else if (viewMode === 'priority') {
@@ -113,7 +136,11 @@ const KanbanBoard = ({ tasks, onTaskUpdate, viewMode = 'status', activeTab = 'mi
 
     // Atualizar no backend
     try {
-      await api.put(`/tasks/${taskId}`, updateData);
+      await api.put(`/tasks/${taskId}`, updateData, {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
       onTaskUpdate(taskId, updateData);
     } catch (error) {
       console.error('Erro ao atualizar tarefa:', error);
@@ -135,7 +162,7 @@ const KanbanBoard = ({ tasks, onTaskUpdate, viewMode = 'status', activeTab = 'mi
             key={columnId}
             id={columnId}
             title={columnConfig[columnId]?.title || columnId}
-            icon={columnConfig[columnId]?.icon || '📋'}
+            icon={columnConfig[columnId]?.icon || <FiClipboard />}
             color={columnConfig[columnId]?.color || '#95a5a6'}
             tasks={columnTasks}
             viewMode={viewMode}

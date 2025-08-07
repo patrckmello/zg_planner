@@ -341,89 +341,75 @@ def update_task(task_id):
     if not task.can_be_viewed_by(user):
         return jsonify({"error": "Acesso negado"}), 403
 
-    if request.content_type and request.content_type.startswith("multipart/form-data"):
+    if request.is_json:
+        data = request.get_json()
+        files = []
+    elif request.content_type and request.content_type.startswith("multipart/form-data"):
         data = request.form
         files = request.files.getlist("new_files")
+    else:
+        return jsonify({"error": "Tipo de requisição inválido. Content-Type deve ser application/json ou multipart/form-data."}), 400
 
-        # Validação de data de vencimento
-        if data.get("due_date"):
+    # Validação de data de vencimento
+    if data.get("due_date"):
+        try:
+            due_date = datetime.fromisoformat(data["due_date"])
+            # Remover timezone info se presente para comparação consistente
+            if due_date.tzinfo is not None:
+                due_date = due_date.replace(tzinfo=None)
+            if due_date < datetime.utcnow():
+                return jsonify({"error": "A data de vencimento não pode ser no passado."}), 400
+            task.due_date = due_date
+        except ValueError:
+            return jsonify({"error": "Formato inválido para due_date. Use ISO 8601."}), 400
+
+    # Atualizar campos básicos
+    if data.get("title"):
+        task.title = data["title"]
+    if data.get("description") is not None:
+        task.description = data["description"]
+    if data.get("status"):
+        task.status = data["status"]
+    if data.get("prioridade"):
+        task.prioridade = data["prioridade"]
+    if data.get("categoria"):
+        task.categoria = data["categoria"]
+    if data.get("status_inicial"):
+        task.status_inicial = data["status_inicial"]
+    if data.get("tempo_estimado"):
+        task.tempo_estimado = data["tempo_estimado"]
+    if data.get("tempo_unidade"):
+        task.tempo_unidade = data["tempo_unidade"]
+    if data.get("relacionado_a") is not None:
+        task.relacionado_a = data["relacionado_a"]
+
+    # Atualizar colaboradores (apenas gestores ou admin)
+    if data.get("collaborator_ids") is not None:
+        if user.is_admin or task.can_be_assigned_by(user):
             try:
-                due_date = datetime.fromisoformat(data["due_date"])
-                # Remover timezone info se presente para comparação consistente
-                if due_date.tzinfo is not None:
-                    due_date = due_date.replace(tzinfo=None)
-                if due_date < datetime.utcnow():
-                    return jsonify({"error": "A data de vencimento não pode ser no passado."}), 400
-                task.due_date = due_date
+                collaborators = json.loads(data["collaborator_ids"])
+                if isinstance(collaborators, list):
+                    task.collaborators = collaborators
+            except (json.JSONDecodeError, ValueError):
+                return jsonify({"error": "Formato inválido para collaborator_ids."}), 400
+        else:
+            return jsonify({"error": "Apenas gestores podem modificar colaboradores."}), 403
+
+    # Atualizar atribuição (apenas gestores ou admin)
+    if data.get("assigned_to_user_id") is not None:
+        if user.is_admin or task.can_be_assigned_by(user):
+            try:
+                assigned_to_user_id = int(data["assigned_to_user_id"])
+                if assigned_to_user_id != task.user_id:
+                    task.user_id = assigned_to_user_id
+                    task.assigned_by_user_id = user_id
             except ValueError:
-                return jsonify({"error": "Formato inválido para due_date. Use ISO 8601."}), 400
+                return jsonify({"error": "assigned_to_user_id inválido"}), 400
+        else:
+            return jsonify({"error": "Apenas gestores podem atribuir tarefas."}), 403
 
-        # Atualizar campos básicos
-        if data.get("title"):
-            task.title = data["title"]
-        if data.get("description") is not None:
-            task.description = data["description"]
-        if data.get("status"):
-            task.status = data["status"]
-        if data.get("prioridade"):
-            task.prioridade = data["prioridade"]
-        if data.get("categoria"):
-            task.categoria = data["categoria"]
-        if data.get("status_inicial"):
-            task.status_inicial = data["status_inicial"]
-        if data.get("tempo_estimado"):
-            task.tempo_estimado = data["tempo_estimado"]
-        if data.get("tempo_unidade"):
-            task.tempo_unidade = data["tempo_unidade"]
-        if data.get("relacionado_a") is not None:
-            task.relacionado_a = data["relacionado_a"]
-
-        # Atualizar colaboradores (apenas gestores ou admin)
-        if data.get("collaborator_ids") is not None:
-            if user.is_admin or task.can_be_assigned_by(user):
-                try:
-                    collaborators = json.loads(data["collaborator_ids"])
-                    if isinstance(collaborators, list):
-                        task.collaborators = collaborators
-                except (json.JSONDecodeError, ValueError):
-                    return jsonify({"error": "Formato inválido para collaborator_ids."}), 400
-            else:
-                return jsonify({"error": "Apenas gestores podem modificar colaboradores."}), 403
-
-        # Atualizar atribuição (apenas gestores ou admin)
-        if data.get("assigned_to_user_id") is not None:
-            if user.is_admin or task.can_be_assigned_by(user):
-                try:
-                    assigned_to_user_id = int(data["assigned_to_user_id"])
-                    if assigned_to_user_id != task.user_id:
-                        task.user_id = assigned_to_user_id
-                        task.assigned_by_user_id = user_id
-                except ValueError:
-                    return jsonify({"error": "assigned_to_user_id inválido"}), 400
-            else:
-                return jsonify({"error": "Apenas gestores podem reatribuir tarefas."}), 403
-
-        # Processar anexos
-        existing_files_json = data.get("existing_files", "[]")
-        try:
-            existing_files = json.loads(existing_files_json)
-        except Exception:
-            existing_files = []
-
-        files_to_remove_json = data.get("files_to_remove", "[]")
-        try:
-            files_to_remove = json.loads(files_to_remove_json)
-        except Exception:
-            files_to_remove = []
-
-        # Remover arquivos fisicamente
-        for filename in files_to_remove:
-            filepath = os.path.join(current_app.config["UPLOAD_FOLDER"], filename)
-            if os.path.exists(filepath):
-                os.remove(filepath)
-
-        # Processar novos arquivos
-        new_anexos = []
+    # Processar anexos (apenas para multipart/form-data)
+    if files:
         for file in files:
             if file.filename:
                 filename = secure_filename(file.filename)
@@ -437,31 +423,40 @@ def update_task(task_id):
                     "type": file.content_type or "application/octet-stream",
                     "url": f"http://10.1.39.126:5555/uploads/{filename}"
                 }
-                new_anexos.append(anexo_obj)
+                # Adicionar ao campo anexos existente ou criar novo
+                if task.anexos is None:
+                    task.anexos = []
+                task.anexos.append(anexo_obj)
 
-        # Combinar anexos existentes com novos
-        task.anexos = existing_files + new_anexos
+    # Remover anexos existentes se IDs forem fornecidos
+    if data.get("remove_attachment_ids") is not None:
+        remove_ids = data["remove_attachment_ids"]
+        if isinstance(remove_ids, list):
+            task.anexos = [anexo for anexo in task.anexos if anexo.get("id") not in remove_ids]
+            # Opcional: remover arquivos físicos
+            for anexo_id in remove_ids:
+                filepath = os.path.join(current_app.config["UPLOAD_FOLDER"], anexo_id)
+                if os.path.exists(filepath):
+                    os.remove(filepath)
 
-        # Atualizar arrays JSON
-        if data.get("lembretes"):
-            try:
-                task.lembretes = json.loads(data["lembretes"])
-            except Exception:
-                pass
+    try:
+        lembretes = json.loads(data.get("lembretes", "[]"))
+        if isinstance(lembretes, list):
+            task.lembretes = lembretes
+    except Exception:
+        pass
 
-        if data.get("tags"):
-            try:
-                task.tags = json.loads(data["tags"])
-            except Exception:
-                pass
+    try:
+        tags = json.loads(data.get("tags", "[]"))
+        if isinstance(tags, list):
+            task.tags = tags
+    except Exception:
+        pass
 
-        task.updated_at = datetime.utcnow()
-        db.session.commit()
+    task.updated_at = datetime.utcnow()
+    db.session.commit()
 
-        return jsonify(task.to_dict())
-
-    else:
-        return jsonify({"error": "Tipo de requisição inválido. Envie como multipart/form-data."}), 400
+    return jsonify(task.to_dict())
 
 
 @task_bp.route("/tasks/<int:task_id>", methods=["DELETE"])
