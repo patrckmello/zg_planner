@@ -1,6 +1,7 @@
 from extensions import db
 from datetime import datetime
 from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import JSON
 
 class Task(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -15,9 +16,9 @@ class Task(db.Model):
     tempo_estimado = db.Column(db.Integer)     # número (ex: 2)
     tempo_unidade = db.Column(db.String(10))   # 'horas' ou 'minutos'
     relacionado_a = db.Column(db.String(200))  # texto livre
-    lembretes = db.Column(JSONB, default=list)
-    tags = db.Column(JSONB, default=list)
-    anexos = db.Column(JSONB, default=list)
+    lembretes = db.Column(JSON, default=list)
+    tags = db.Column(JSON, default=list)
+    anexos = db.Column(JSON, default=list)
 
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -35,7 +36,7 @@ class Task(db.Model):
     assigned_by_user = db.relationship('User', foreign_keys=[assigned_by_user_id])
 
     # Lista de colaboradores/observadores (IDs de usuários)
-    collaborators = db.Column(JSONB, default=list) # Array de IDs de Usuários
+    collaborators = db.Column(JSON, default=list) # Array de IDs de Usuários
 
     # Equipe relacionada à tarefa
     team_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=True)

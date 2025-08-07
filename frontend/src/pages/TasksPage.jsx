@@ -16,42 +16,53 @@ function TasksPage() {
   const [activeTab, setActiveTab] = useState('minhas');
   const [viewMode, setViewMode] = useState('status');
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 768);
+  const [currentUser, setCurrentUser] = useState(null);
 
   // Filtrar tarefas baseado na aba ativa
-  const getFilteredTasks = (allTasks, tab) => {
-    // Esta lógica precisa ser ajustada baseada na estrutura real dos dados
+  const getFilteredTasks = (allTasks, tab, user) => {
+    if (!user) return allTasks;
+    
     switch (tab) {
       case 'minhas':
-        // Tarefas criadas pelo usuário atual
-        return allTasks.filter(task => task.created_by_current_user);
+        // Tarefas onde o usuário é responsável OU que ele atribuiu para outros
+        return allTasks.filter(task => 
+          task.user_id === user.id || task.assigned_by_user_id === user.id
+        );
       case 'equipe':
-        // Tarefas atribuídas ao usuário ou da sua equipe
-        return allTasks.filter(task => task.assigned_to_current_user || task.team_task);
+        // Tarefas que têm team_id (tarefas de equipe)
+        return allTasks.filter(task => task.team_id !== null);
       case 'colaborativas':
-        // Tarefas onde o usuário é colaborador
-        return allTasks.filter(task => task.is_collaborator);
+        // Tarefas onde o usuário está na lista de colaboradores
+        return allTasks.filter(task => 
+          task.collaborators && task.collaborators.includes(user.id)
+        );
       default:
         return allTasks;
     }
   };
 
-  const filteredTasks = getFilteredTasks(tasks, activeTab);
+  const filteredTasks = getFilteredTasks(tasks, activeTab, currentUser);
 
   useEffect(() => {
-    const fetchTasks = async () => {
+    const fetchData = async () => {
       try {
-        const response = await api.get('/tasks');
-        console.log('Tarefas recebidas:', response.data);
-        setTasks(response.data);
+        // Buscar dados do usuário atual
+        const userResponse = await api.get('/users/me');
+        setCurrentUser(userResponse.data);
+        
+        // Buscar tarefas
+        const tasksResponse = await api.get('/tasks');
+        console.log('Tarefas recebidas:', tasksResponse.data);
+        setTasks(tasksResponse.data);
       } catch (error) {
-        console.error('Erro ao buscar tarefas:', error);
-        alert('Erro ao buscar tarefas. Faça login novamente.');
+        console.error('Erro ao buscar dados:', error);
+        alert('Erro ao buscar dados. Faça login novamente.');
       } finally {
         setLoading(false);
       }
     };
 
-    fetchTasks();
+    fetchData();
 
     const handleResize = () => {
       if (window.innerWidth <= 768) {
