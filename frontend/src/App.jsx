@@ -2,6 +2,8 @@ import React from 'react'
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import Login from './components/Login'
 import Dashboard from './components/Dashboard'
+import TasksPage from './pages/TasksPage'
+import DemoPage from './pages/DemoPage'
 import PrivateRoute from './components/PrivateRoute'
 import SessionRedirect from './components/SessionRedirect'
 import AdminUsers from './pages/AdminUsers'
@@ -18,10 +20,12 @@ function App() {
       <Routes>
         <Route path="/" element={<SessionRedirect />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/demo" element={<DemoPage />} />
         
         {/* Protegendo rotas de usuário autenticado */}
         <Route element={<PrivateRoute />}>
           <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/tasks" element={<TasksPage />} />
           <Route path="/tasks/new" element={<TaskFormPage />} />
           <Route path="/tasks/:id/edit" element={<EditTaskFormPage />} />
         </Route>

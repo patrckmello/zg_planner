@@ -1,5 +1,5 @@
-import { Link, useLocation } from 'react-router-dom';
 import React, { useEffect, useState } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import api from '../services/axiosInstance';
 import styles from './Sidebar.module.css';
 import {
@@ -74,8 +74,8 @@ function Sidebar({ isOpen, onLogout }) {
           <li className={styles.sectionLabel}>Minhas Atividades</li>
           <li>
             <Link 
-              to="/minhas-tarefas"
-              className={isActiveLink('/minhas-tarefas') ? styles.activeLink : ''}
+              to="/tasks"
+              className={isActiveLink('/tasks') ? styles.activeLink : ''}
             >
               <ClipboardList size={20} className={styles.icon} />
               <span>Minhas Tarefas</span>
