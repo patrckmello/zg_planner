@@ -5,7 +5,7 @@ import TaskCard from './TaskCard';
 import styles from './KanbanColumn.module.css';
 import { FiChevronDown, FiChevronUp, FiMail } from 'react-icons/fi';
 
-const KanbanColumn = ({ id, title, icon, color, tasks, viewMode }) => {
+const KanbanColumn = ({ id, title, icon, color, tasks, viewMode, onTaskUpdate }) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const { setNodeRef, isOver } = useDroppable({ id });
 
@@ -47,8 +47,9 @@ const KanbanColumn = ({ id, title, icon, color, tasks, viewMode }) => {
               <p className={styles.emptyText}>Nenhuma tarefa</p>
             </div>
           ) : (
-            <SortableContext 
-              items={tasks.map(task => task.id)} 
+            <SortableContext
+              id={id}
+              items={tasks.map(task => task.id.toString())}
               strategy={verticalListSortingStrategy}
             >
               <div className={styles.tasksContainer}>
@@ -57,6 +58,7 @@ const KanbanColumn = ({ id, title, icon, color, tasks, viewMode }) => {
                     key={task.id}
                     task={task}
                     viewMode={viewMode}
+                    onTaskUpdate={onTaskUpdate}
                   />
                 ))}
               </div>

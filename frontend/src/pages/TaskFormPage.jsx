@@ -215,7 +215,7 @@ function TaskFormPage() {
       });
 
       console.log('Tarefa criada com sucesso:', response.data);
-      navigate('/dashboard');
+      navigate('/tasks');
 
     } catch (err) {
       console.error('Erro ao criar tarefa:', err);

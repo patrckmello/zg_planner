@@ -1,29 +1,25 @@
 import React, { useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import TaskModal from './TaskModal';
 import styles from './TaskCard.module.css';
 import { 
-  FiChevronDown, 
-  FiChevronUp, 
   FiUser, 
   FiCalendar, 
   FiClock,
   FiTag,
   FiPaperclip,
   FiMessageCircle,
-  FiEdit,
-  FiTrash2,
   FiMove,
-  FiDownload,
   FiRotateCw,
   FiCheck,
   FiX,
-  FiClipboard
+  FiClipboard,
+  FiEye
 } from 'react-icons/fi';
 
-const TaskCard = ({ task, isDragging = false }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
-  const [comment, setComment] = useState('');
+const TaskCard = ({ task, isDragging = false, onTaskUpdate }) => {
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const {
     attributes,
@@ -32,7 +28,7 @@ const TaskCard = ({ task, isDragging = false }) => {
     transform,
     transition,
     isDragging: isSortableDragging,
-  } = useSortable({ id: task.id });
+  } = useSortable({ id: task.id.toString() });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -77,203 +73,132 @@ const TaskCard = ({ task, isDragging = false }) => {
     return `${time}${unit === 'horas' ? 'h' : 'm'}`;
   };
 
-  const toggleExpanded = () => {
-    setIsExpanded(!isExpanded);
+  const handleCardClick = () => {
+    setIsModalOpen(true);
   };
 
-  const handleCommentSubmit = (e) => {
-    e.preventDefault();
-    if (comment.trim()) {
-
-      console.log('Novo comentário:', comment);
-      setComment('');
-    }
-  };
-
-  const handleEdit = (e) => {
-    e.stopPropagation();
-    // Implementar navegação para edição
-    console.log('Editar tarefa:', task.id);
-  };
-
-  const handleDelete = (e) => {
-    e.stopPropagation();
-    // Implementar confirmação e exclusão
-    console.log('Excluir tarefa:', task.id);
-  };
-
-  const handleMove = (e) => {
-    e.stopPropagation();
-    // Implementar modal de movimentação
-    console.log('Mover tarefa:', task.id);
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
   };
 
   const cardClasses = `
     ${styles.taskCard} 
-    ${isExpanded ? styles.expanded : ''} 
     ${isDragging || isSortableDragging ? styles.dragging : ''}
   `.trim();
 
   return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className={cardClasses}
-    >
-      {/* Header do card */}
-      <div className={styles.cardHeader}>
-        <div className={styles.headerLeft}>
-          <div 
-            className={styles.priorityIndicator}
-            style={{ backgroundColor: getPriorityColor(task.prioridade) }}
-          />
-          {/* Handle de arrasto */}
-          <span className={styles.dragHandle} {...attributes} {...listeners} title="Arrastar">
-            <FiMove />
-          </span>
-          <span className={styles.statusIcon}>
-            {getStatusIcon(task.status)}
-          </span>
-          <span className={styles.priorityBadge}>
-            {task.prioridade?.toUpperCase()}
-          </span>
-        </div>
-        
-        <button 
-          className={styles.expandButton}
-          onClick={toggleExpanded}
-          aria-label={isExpanded ? 'Colapsar card' : 'Expandir card'}
-        >
-          {isExpanded ? <FiChevronUp /> : <FiChevronDown />}
-        </button>
-      </div>
-
-      {/* Título */}
-      <h4 className={styles.taskTitle}>{task.title}</h4>
-
-      {/* Informações básicas */}
-      <div className={styles.taskMeta}>
-        {task.assigned_to_user && (
-          <div className={styles.metaItem}>
-            <FiUser className={styles.metaIcon} />
-            <span>{task.assigned_to_user.name || 'Usuário'}</span>
-          </div>
-        )}
-        
-        {task.due_date && (
-          <div className={styles.metaItem}>
-            <FiCalendar className={styles.metaIcon} />
-            <span>{formatDate(task.due_date)}</span>
-          </div>
-        )}
-        
-        {task.tempo_estimado && (
-          <div className={styles.metaItem}>
-            <FiClock className={styles.metaIcon} />
-            <span>{formatEstimatedTime(task.tempo_estimado, task.tempo_unidade)}</span>
-          </div>
-        )}
-      </div>
-
-      {/* Conteúdo expandido */}
-      {isExpanded && (
-        <div className={styles.expandedContent}>
-          {/* Descrição */}
-          {task.description && (
-            <div className={styles.description}>
-              <p>{task.description}</p>
-            </div>
-          )}
-
-          {/* Tags */}
-          {task.tags && task.tags.length > 0 && (
-            <div className={styles.tagsSection}>
-              <div className={styles.sectionHeader}>
-                <FiTag className={styles.sectionIcon} />
-                <span>Tags</span>
-              </div>
-              <div className={styles.tags}>
-                {task.tags.map((tag, index) => (
-                  <span key={index} className={styles.tag}>
-                    {tag}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Anexos */}
-          {task.anexos && task.anexos.length > 0 && (
-            <div className={styles.attachmentsSection}>
-              <div className={styles.sectionHeader}>
-                <FiPaperclip className={styles.sectionIcon} />
-                <span>Anexos</span>
-              </div>
-              <div className={styles.attachments}>
-                {task.anexos.map((anexo, index) => (
-                  <div key={index} className={styles.attachment}>
-                    <span className={styles.attachmentName}>
-                      {anexo.filename || `anexo_${index + 1}`}
-                    </span>
-                    <button className={styles.downloadButton}>
-                      <FiDownload />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Comentários */}
-          <div className={styles.commentsSection}>
-            <div className={styles.sectionHeader}>
-              <FiMessageCircle className={styles.sectionIcon} />
-              <span>Comentários</span>
-            </div>
-            
-            <form onSubmit={handleCommentSubmit} className={styles.commentForm}>
-              <textarea
-                value={comment}
-                onChange={(e) => setComment(e.target.value)}
-                placeholder="Adicionar comentário..."
-                className={styles.commentInput}
-                rows={2}
-              />
-              {comment.trim() && (
-                <button type="submit" className={styles.commentSubmit}>
-                  Enviar
-                </button>
-              )}
-            </form>
-          </div>
-
-          {/* Ações */}
-          <div className={styles.actions}>
-            <button 
-              className={`${styles.actionButton} ${styles.editButton}`}
-              onClick={handleEdit}
-            >
-              <FiEdit />
-              Editar
-            </button>
-            <button 
-              className={`${styles.actionButton} ${styles.deleteButton}`}
-              onClick={handleDelete}
-            >
-              <FiTrash2 />
-              Excluir
-            </button>
-            <button 
-              className={`${styles.actionButton} ${styles.moveButton}`}
-              onClick={handleMove}
+    <>
+      <div
+        ref={setNodeRef}
+        style={style}
+        className={cardClasses}
+        onClick={handleCardClick}
+      >
+        {/* Header do card */}
+        <div className={styles.cardHeader}>
+          <div className={styles.headerLeft}>
+            <div 
+              className={styles.priorityIndicator}
+              style={{ backgroundColor: getPriorityColor(task.prioridade) }}
+            />
+            {/* Handle de arrasto */}
+            <span 
+              className={styles.dragHandle} 
+              {...attributes} 
+              {...listeners} 
+              title="Arrastar"
+              onClick={(e) => e.stopPropagation()}
             >
               <FiMove />
-              Mover
-            </button>
+            </span>
+            <span className={styles.statusIcon}>
+              {getStatusIcon(task.status)}
+            </span>
+            <span className={styles.priorityBadge}>
+              {task.prioridade?.toUpperCase()}
+            </span>
           </div>
         </div>
-      )}
-    </div>
+
+        {/* Título */}
+        <h4 className={styles.taskTitle}>{task.title}</h4>
+
+        {/* Descrição resumida */}
+        {task.description && (
+          <p className={styles.taskDescription}>
+            {task.description.length > 100 
+              ? `${task.description.substring(0, 100)}...` 
+              : task.description
+            }
+          </p>
+        )}
+
+        {/* Informações básicas */}
+        <div className={styles.taskMeta}>
+          {/* Autor da tarefa */}
+          {(task.assigned_by_user || task.user) && (
+            <div className={styles.metaItem} title="Autor da tarefa">
+              <FiUser className={styles.metaIcon} />
+              <span>{task.assigned_by_user?.name || task.user?.name || 'Usuário'}</span>
+            </div>
+          )}
+          
+          {/* Responsável (se diferente do autor) */}
+          {task.assigned_to_user && task.assigned_to_user.id !== (task.assigned_by_user?.id || task.user?.id) && (
+            <div className={styles.metaItem} title="Responsável">
+              <FiEye className={styles.metaIcon} />
+              <span>{task.assigned_to_user.name}</span>
+            </div>
+          )}
+          
+          {task.due_date && (
+            <div className={styles.metaItem} title="Data de vencimento">
+              <FiCalendar className={styles.metaIcon} />
+              <span>{formatDate(task.due_date)}</span>
+            </div>
+          )}
+          
+          {task.tempo_estimado && (
+            <div className={styles.metaItem} title="Tempo estimado">
+              <FiClock className={styles.metaIcon} />
+              <span>{formatEstimatedTime(task.tempo_estimado, task.tempo_unidade)}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Indicadores adicionais */}
+        <div className={styles.taskIndicators}>
+          {task.tags && task.tags.length > 0 && (
+            <div className={styles.indicator} title={`${task.tags.length} tag(s)`}>
+              <FiTag />
+              <span>{task.tags.length}</span>
+            </div>
+          )}
+          
+          {task.anexos && task.anexos.length > 0 && (
+            <div className={styles.indicator} title={`${task.anexos.length} anexo(s)`}>
+              <FiPaperclip />
+              <span>{task.anexos.length}</span>
+            </div>
+          )}
+          
+          {task.collaborators && task.collaborators.length > 0 && (
+            <div className={styles.indicator} title={`${task.collaborators.length} colaborador(es)`}>
+              <FiEye />
+              <span>{task.collaborators.length}</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Modal */}
+      <TaskModal
+        task={task}
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+        onTaskUpdate={onTaskUpdate}
+      />
+    </>
   );
 };
 

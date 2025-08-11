@@ -4,6 +4,8 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy import JSON
 
 class Task(db.Model):
+    __tablename__ = 'tasks'  # Definindo explicitamente o nome da tabela
+    
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(150), nullable=False)
     description = db.Column(db.Text, nullable=True)
@@ -61,9 +63,25 @@ class Task(db.Model):
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "user_id": self.user_id,
-            "user_username": self.user.username if self.user else None,
+            "user": {
+                "id": self.user.id,
+                "name": self.user.username,  # Usando username como name
+                "username": self.user.username,
+                "email": self.user.email
+            } if self.user else None,
             "assigned_by_user_id": self.assigned_by_user_id,
-            "assigned_by_username": self.assigned_by_user.username if self.assigned_by_user else None,
+            "assigned_by_user": {
+                "id": self.assigned_by_user.id,
+                "name": self.assigned_by_user.username,  # Usando username como name
+                "username": self.assigned_by_user.username,
+                "email": self.assigned_by_user.email
+            } if self.assigned_by_user else None,
+            "assigned_to_user": {
+                "id": self.user.id,
+                "name": self.user.username,  # Usando username como name
+                "username": self.user.username,
+                "email": self.user.email
+            } if self.user else None,
             "collaborators": self.collaborators,
             "team_id": self.team_id,
             "team_name": self.team.name if self.team else None

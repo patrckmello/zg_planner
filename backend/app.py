@@ -8,17 +8,20 @@ import os
 from flask_jwt_extended import jwt_required, JWTManager
 from datetime import timedelta
 
+# Importar modelos na ordem correta (dependências primeiro)
 from models.user_model import User
+from models.role_model import Role
 from models.team_model import Team
 from models.user_team_model import UserTeam
 from models.task_model import Task
-from models.role_model import Role
+from models.comment_model import Comment  # Comment depende de Task, então vem por último
 
 from routes.auth_routes import auth_bp
 from routes.user_routes import user_bp
 from routes.team_routes import team_bp
 from routes.task_routes import task_bp
 from routes.role_routes import role_bp
+from routes.comment_routes import comment_bp
 
 load_dotenv()
 
@@ -51,6 +54,7 @@ app.register_blueprint(user_bp)
 app.register_blueprint(team_bp)
 app.register_blueprint(task_bp)
 app.register_blueprint(role_bp)
+app.register_blueprint(comment_bp)
 
 primeira_vez = True
 
