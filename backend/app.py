@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, session, redirect, url_for
+from flask import Flask, jsonify, session, redirect, url_for, send_from_directory
 from extensions import db
 from flask_cors import CORS
 from flask_migrate import Migrate
@@ -48,6 +48,15 @@ migrate = Migrate(app, db)
 CORS(app, supports_credentials=True, resources={r"/api/*": {"origins": "*"}})
 jwt = JWTManager(app)
 
+# CORREÇÃO: Rota de download de anexos movida para o app principal
+@app.route("/uploads/<filename>")
+def uploaded_file(filename):
+    """Rota para servir arquivos de upload"""
+    try:
+        return send_from_directory(app.config["UPLOAD_FOLDER"], filename)
+    except FileNotFoundError:
+        return jsonify({"error": "Arquivo não encontrado"}), 404
+
 # Registra blueprints
 app.register_blueprint(auth_bp)
 app.register_blueprint(user_bp)
@@ -76,3 +85,4 @@ if __name__ == '__main__':
         
         run_seeds()
     app.run(debug=True, host='0.0.0.0', port=5555)
+

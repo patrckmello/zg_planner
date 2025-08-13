@@ -190,7 +190,7 @@ function EditTaskFormPage() {
       } catch (error) {
         console.error('Erro ao carregar dados:', error);
         toast.error("Erro ao carregar tarefa. Redirecionando...");
-        navigate('/dashboard');
+        navigate('/tasks');
       } finally {
         setInitialLoading(false);
       }
@@ -331,7 +331,7 @@ function EditTaskFormPage() {
       });
 
       console.log('Tarefa atualizada com sucesso:', response.data);
-      navigate('/dashboard');
+      navigate('/tasks');
 
     } catch (err) {
       console.error('Erro ao atualizar tarefa:', err);
@@ -350,7 +350,7 @@ function EditTaskFormPage() {
     try {
       await api.delete(`/tasks/${id}`);
       toast.success('Tarefa excluída com sucesso!');
-      navigate('/dashboard'); 
+      navigate('/tasks'); 
     } catch (error) {
       console.error('Erro ao excluir tarefa:', error);
       toast.error('Ocorreu um erro ao excluir a tarefa. Tente novamente.');

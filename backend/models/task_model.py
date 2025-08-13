@@ -121,7 +121,10 @@ class Task(db.Model):
         if user.id in (self.collaborators or []):
             return True
         
-
+        if self.team_id:
+            team_member_ids = [assoc.team_id for assoc in user.teams]
+            if self.team_id in team_member_ids:
+                return True
         
         return False
 
