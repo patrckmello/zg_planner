@@ -314,19 +314,26 @@
 .commentInput {
   width: 100%;
   padding: 12px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
   font-family: inherit;
   font-size: 0.875rem;
   resize: vertical;
   min-height: 80px;
-  transition: border-color 0.2s ease;
+  transition: all 0.2s ease;
+  background-color: #ffffff;
+  color: #374151;
 }
 
 .commentInput:focus {
   outline: none;
   border-color: #6366f1;
   box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+  background-color: #ffffff;
+}
+
+.commentInput::placeholder {
+  color: #9ca3af;
 }
 
 .commentSubmit {

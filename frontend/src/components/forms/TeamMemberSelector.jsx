@@ -103,7 +103,7 @@ function TeamMemberSelector({
     <div className={styles.selectorContainer}>
       <label className={styles.label}>{label}</label>
       
-      <div className={`${styles.selector} ${disabled ? styles.disabled : ''}`}>
+      <div className={`${styles.selector} ${isOpen ? styles.open : ''} ${disabled ? styles.disabled : ''}`}>
         <div 
           className={`${styles.selectorHeader} ${isOpen ? styles.open : ''}`}
           onClick={() => !disabled && setIsOpen(!isOpen)}

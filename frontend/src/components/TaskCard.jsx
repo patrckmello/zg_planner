@@ -135,19 +135,19 @@ const TaskCard = ({ task, isDragging = false, onTaskUpdate }) => {
 
         {/* Informações básicas */}
         <div className={styles.taskMeta}>
-          {/* Autor da tarefa */}
-          {(task.assigned_by_user || task.user) && (
-            <div className={styles.metaItem} title="Autor da tarefa">
+          {/* Responsável da tarefa */}
+          {task.user && (
+            <div className={styles.metaItem} title="Responsável pela tarefa">
               <FiUser className={styles.metaIcon} />
-              <span>{task.assigned_by_user?.name || task.user?.name || 'Usuário'}</span>
+              <span>{task.user.name || 'Usuário'}</span>
             </div>
           )}
           
-          {/* Responsável (se diferente do autor) */}
-          {task.assigned_to_user && task.assigned_to_user.id !== (task.assigned_by_user?.id || task.user?.id) && (
-            <div className={styles.metaItem} title="Responsável">
+          {/* Criador/Atribuidor (se diferente do responsável) */}
+          {task.assigned_by_user && task.assigned_by_user.id !== task.user?.id && (
+            <div className={styles.metaItem} title="Atribuído por">
               <FiEye className={styles.metaIcon} />
-              <span>{task.assigned_to_user.name}</span>
+              <span>{task.assigned_by_user.name}</span>
             </div>
           )}
           
@@ -162,6 +162,13 @@ const TaskCard = ({ task, isDragging = false, onTaskUpdate }) => {
             <div className={styles.metaItem} title="Tempo estimado">
               <FiClock className={styles.metaIcon} />
               <span>{formatEstimatedTime(task.tempo_estimado, task.tempo_unidade)}</span>
+            </div>
+          )}
+          
+          {task.created_at && (
+            <div className={styles.metaItem} title="Data de criação">
+              <FiMessageCircle className={styles.metaIcon} />
+              <span>Criada em {formatDate(task.created_at)}</span>
             </div>
           )}
         </div>

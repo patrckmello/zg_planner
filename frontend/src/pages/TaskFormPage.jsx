@@ -51,7 +51,7 @@ function TaskFormPage() {
     lembretes: [],
     tags: [],
     anexos: [],
-    assigned_to_user_id: '',
+    assigned_to_user_ids: [],
     collaborator_ids: [],
     team_id: ''
   });
@@ -147,7 +147,7 @@ function TaskFormPage() {
 
   const validateForm = () => {
     const newErrors = {};
-    
+
     if (!formData.title.trim()) {
       newErrors.title = 'Título é obrigatório';
     }
@@ -157,6 +157,21 @@ function TaskFormPage() {
     }
 
     setErrors(newErrors);
+    
+    // Se há erros, fazer scroll para o primeiro campo com erro
+    if (Object.keys(newErrors).length > 0) {
+      const firstErrorField = Object.keys(newErrors)[0];
+      const errorElement = document.querySelector(`[name="${firstErrorField}"]`);
+      if (errorElement) {
+        errorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        errorElement.focus();
+      }
+      
+      // Mostrar toast de erro
+      const errorMessages = Object.values(newErrors).join(', ');
+      alert(`Por favor, corrija os seguintes erros: ${errorMessages}`);
+    }
+    
     return Object.keys(newErrors).length === 0;
   };
 
@@ -194,8 +209,8 @@ function TaskFormPage() {
       formDataToSend.append('collaborator_ids', JSON.stringify(formData.collaborator_ids));
 
       // IDs opcionais
-      if (formData.assigned_to_user_id) {
-        formDataToSend.append('assigned_to_user_id', formData.assigned_to_user_id);
+      if (formData.assigned_to_user_ids && formData.assigned_to_user_ids.length > 0) {
+        formDataToSend.append('assigned_to_user_ids', JSON.stringify(formData.assigned_to_user_ids));
       }
       if (formData.team_id) {
         formDataToSend.append('team_id', formData.team_id);
@@ -406,13 +421,13 @@ function TaskFormPage() {
                           <div className={styles.fullWidth}>
                             <TeamMemberSelector
                               teamId={parseInt(formData.team_id)}
-                              selectedMembers={formData.assigned_to_user_id ? [parseInt(formData.assigned_to_user_id)] : []}
+                              selectedMembers={formData.assigned_to_user_ids || []}
                               onSelectionChange={(members) => {
-                                updateField('assigned_to_user_id', members.length > 0 ? members[0] : '');
+                                updateField('assigned_to_user_ids', members);
                               }}
                               label="Atribuir para"
-                              placeholder="Selecione um membro da equipe"
-                              allowMultiple={false}
+                              placeholder="Selecione membros da equipe ou todos"
+                              allowMultiple={true}
                               disabled={!isManagerOfSelectedTeam()}
                             />
                             {!isManagerOfSelectedTeam() && (

@@ -8,8 +8,8 @@ const FileUploadArea = ({
   error,
   required = false,
   maxFiles = 10,
-  maxFileSize = 10 * 1024 * 1024, // 10MB
-  acceptedTypes = [],
+  maxFileSize = 50 * 1024 * 1024, // 50MB
+  acceptedTypes = [], // Array vazio = aceita todos os tipos
   className = ''
 }) => {
   const [isDragging, setIsDragging] = useState(false);
@@ -38,6 +38,7 @@ const FileUploadArea = ({
       return `Arquivo muito grande. Máximo: ${formatFileSize(maxFileSize)}`;
     }
     
+    // Aceitar todos os tipos de arquivo se acceptedTypes estiver vazio
     if (acceptedTypes.length > 0 && !acceptedTypes.includes(file.type)) {
       return `Tipo de arquivo não permitido: ${file.type}`;
     }
@@ -136,6 +137,8 @@ const FileUploadArea = ({
               </div>
               <div className={styles.uploadInfo}>
                 Máximo: {maxFiles} arquivos, {formatFileSize(maxFileSize)} cada
+                {acceptedTypes.length === 0 && <br />}
+                {acceptedTypes.length === 0 && <span>Todos os tipos de arquivo aceitos</span>}
               </div>
             </div>
           </div>
@@ -179,7 +182,7 @@ const FileUploadArea = ({
           multiple
           className={styles.hiddenInput}
           onChange={handleFileInputChange}
-          accept={acceptedTypes.join(',')}
+          accept={acceptedTypes.length > 0 ? acceptedTypes.join(',') : undefined}
         />
       </div>
 

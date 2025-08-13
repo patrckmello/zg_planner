@@ -48,6 +48,7 @@ const Input = forwardRef(({
           onFocus={onFocus}
           disabled={disabled}
           rows={type === 'textarea' ? rows || 4 : undefined}
+          name={props.name || label?.toLowerCase().replace(/\s+/g, '_')}
           {...props}
         />
       </div>

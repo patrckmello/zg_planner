@@ -232,92 +232,98 @@ def add_task():
                     if len(assigned_to_user_ids) > 1 or (len(assigned_to_user_ids) == 1 and assigned_to_user_ids[0] != user_id):
                         return jsonify({"error": "Você só pode atribuir tarefas pessoais para si mesmo."}), 403
                 
-                # Se múltiplos usuários, criar uma tarefa para cada um
+                # Se múltiplos usuários, adicionar como colaboradores em vez de criar múltiplas tarefas
                 if len(assigned_to_user_ids) > 1:
-                    created_tasks = []
-                    for assigned_to_user_id in assigned_to_user_ids:
-                        task_user_id = assigned_to_user_id
-                        assigned_by_user_id = user_id if assigned_to_user_id != user_id else None
-                        
-                        # Processar colaboradores/observadores
-                        collaborators = []
-                        if data.get("collaborator_ids"):
-                            try:
-                                collaborator_ids_data = data.get("collaborator_ids")
-                                if collaborator_ids_data == "all":
-                                    # Adicionar todos os membros da equipe como colaboradores
-                                    if team_id:
-                                        team_members = UserTeam.query.filter_by(team_id=team_id).all()
-                                        collaborators = [member.user_id for member in team_members if member.user_id != task_user_id]
-                                    else:
-                                        return jsonify({"error": "Não é possível adicionar 'todos' como colaboradores sem especificar uma equipe."}), 400
-                                else:
-                                    collaborators = json.loads(collaborator_ids_data)
-                                    if not isinstance(collaborators, list):
-                                        raise ValueError("collaborator_ids deve ser uma lista de IDs ou 'all'.")
-                                
-                                # Validar que todos os colaboradores existem
-                                for collab_id in collaborators:
-                                    collab_user = User.query.get(collab_id)
-                                    if not collab_user:
-                                        return jsonify({"error": f"Colaborador com ID {collab_id} não encontrado."}), 404
-                                        
-                            except (json.JSONDecodeError, ValueError):
-                                return jsonify({"error": "Formato inválido para collaborator_ids. Use um array JSON de IDs ou 'all'."}), 400
-
-                        # Processar anexos com metadados completos
-                        anexos_data = []
-                        for file in files:
-                            if file.filename:
-                                filename = secure_filename(file.filename)
-                                filepath = os.path.join(current_app.config["UPLOAD_FOLDER"], filename)
-                                file.save(filepath)
-                                
-                                anexo_obj = {
-                                    "id": filename,
-                                    "name": filename,
-                                    "size": os.path.getsize(filepath),
-                                    "type": file.content_type or "application/octet-stream",
-                                    "url": f"{request.scheme}://{request.host}/uploads/{filename}"  # CORREÇÃO: URL dinâmica
-                                }
-                                anexos_data.append(anexo_obj)
-
-                        try:
-                            lembretes = json.loads(data.get("lembretes", "[]"))
-                        except Exception:
-                            lembretes = []
-
-                        try:
-                            tags = json.loads(data.get("tags", "[]"))
-                        except Exception:
-                            tags = []
-
-                        # Criação da task
-                        new_task = Task(
-                            title=data["title"],
-                            description=data.get("description"),
-                            status=data.get("status", "pending"),
-                            due_date=due_date,
-                            user_id=task_user_id,
-                            assigned_by_user_id=assigned_by_user_id,
-                            collaborators=collaborators,
-                            team_id=team_id,
-                            prioridade=data.get("prioridade"),
-                            categoria=data.get("categoria"),
-                            status_inicial=data.get("status_inicial"),
-                            tempo_estimado=data.get("tempo_estimado"),
-                            tempo_unidade=data.get("tempo_unidade"),
-                            relacionado_a=data.get("relacionado_a"),
-                            lembretes=lembretes,
-                            tags=tags,
-                            anexos=anexos_data
-                        )
-
-                        db.session.add(new_task)
-                        created_tasks.append(new_task)
+                    # Usar o primeiro usuário como responsável principal
+                    task_user_id = assigned_to_user_ids[0]
+                    assigned_by_user_id = user_id if assigned_to_user_ids[0] != user_id else None
                     
+                    # Adicionar os outros usuários como colaboradores
+                    additional_collaborators = assigned_to_user_ids[1:]
+                    
+                    # Processar colaboradores/observadores existentes
+                    collaborators = []
+                    if data.get("collaborator_ids"):
+                        try:
+                            collaborator_ids_data = data.get("collaborator_ids")
+                            if collaborator_ids_data == "all":
+                                # Adicionar todos os membros da equipe como colaboradores
+                                if team_id:
+                                    team_members = UserTeam.query.filter_by(team_id=team_id).all()
+                                    collaborators = [member.user_id for member in team_members if member.user_id != task_user_id]
+                                else:
+                                    return jsonify({"error": "Não é possível adicionar 'todos' como colaboradores sem especificar uma equipe."}), 400
+                            else:
+                                collaborators = json.loads(collaborator_ids_data)
+                                if not isinstance(collaborators, list):
+                                    raise ValueError("collaborator_ids deve ser uma lista de IDs ou 'all'.")
+                            
+                            # Validar que todos os colaboradores existem
+                            for collab_id in collaborators:
+                                collab_user = User.query.get(collab_id)
+                                if not collab_user:
+                                    return jsonify({"error": f"Colaborador com ID {collab_id} não encontrado."}), 404
+                                    
+                        except (json.JSONDecodeError, ValueError):
+                            return jsonify({"error": "Formato inválido para collaborator_ids. Use um array JSON de IDs ou 'all'."}), 400
+                    
+                    # Combinar colaboradores existentes com usuários atribuídos adicionais
+                    all_collaborators = list(set(collaborators + additional_collaborators))
+                    # Remover o usuário principal da lista de colaboradores se estiver lá
+                    if task_user_id in all_collaborators:
+                        all_collaborators.remove(task_user_id)
+                    
+                    # Processar anexos com metadados completos
+                    anexos_data = []
+                    for file in files:
+                        if file.filename:
+                            filename = secure_filename(file.filename)
+                            filepath = os.path.join(current_app.config["UPLOAD_FOLDER"], filename)
+                            file.save(filepath)
+                            
+                            anexo_obj = {
+                                "id": filename,
+                                "name": filename,
+                                "size": os.path.getsize(filepath),
+                                "type": file.content_type or "application/octet-stream",
+                                "url": f"{request.scheme}://{request.host}/uploads/{filename}"
+                            }
+                            anexos_data.append(anexo_obj)
+
+                    try:
+                        lembretes = json.loads(data.get("lembretes", "[]"))
+                    except Exception:
+                        lembretes = []
+
+                    try:
+                        tags = json.loads(data.get("tags", "[]"))
+                    except Exception:
+                        tags = []
+
+                    # Criação da task única com múltiplos colaboradores
+                    new_task = Task(
+                        title=data["title"],
+                        description=data.get("description"),
+                        status=data.get("status", "pending"),
+                        due_date=due_date,
+                        user_id=task_user_id,
+                        assigned_by_user_id=assigned_by_user_id,
+                        collaborators=all_collaborators,
+                        team_id=team_id,
+                        prioridade=data.get("prioridade"),
+                        categoria=data.get("categoria"),
+                        status_inicial=data.get("status_inicial"),
+                        tempo_estimado=data.get("tempo_estimado"),
+                        tempo_unidade=data.get("tempo_unidade"),
+                        relacionado_a=data.get("relacionado_a"),
+                        lembretes=lembretes,
+                        tags=tags,
+                        anexos=anexos_data
+                    )
+
+                    db.session.add(new_task)
                     db.session.commit()
-                    return jsonify([task.to_dict() for task in created_tasks]), 201
+                    return jsonify(new_task.to_dict()), 201
                 else:
                     task_user_id = assigned_to_user_ids[0]
                     assigned_by_user_id = user_id if assigned_to_user_ids[0] != user_id else None
@@ -518,7 +524,20 @@ def update_task(task_id):
             return jsonify({"error": "Apenas gestores podem modificar colaboradores."}), 403
 
     # Atualizar atribuição (apenas gestores ou admin)
-    if data.get("assigned_to_user_id") is not None:
+    if data.get("assigned_to_user_ids") is not None:
+        if user.is_admin or task.can_be_assigned_by(user):
+            try:
+                assigned_to_user_ids = json.loads(data["assigned_to_user_ids"])
+                if isinstance(assigned_to_user_ids, list) and len(assigned_to_user_ids) > 0:
+                    # Por enquanto, usar apenas o primeiro usuário da lista
+                    # TODO: Implementar suporte completo para múltiplos usuários atribuídos
+                    task.user_id = assigned_to_user_ids[0]
+                    task.assigned_by_user_id = user_id
+            except (json.JSONDecodeError, ValueError):
+                return jsonify({"error": "assigned_to_user_ids inválido"}), 400
+        else:
+            return jsonify({"error": "Apenas gestores podem atribuir tarefas."}), 403
+    elif data.get("assigned_to_user_id") is not None:
         if user.is_admin or task.can_be_assigned_by(user):
             try:
                 assigned_to_user_id = int(data["assigned_to_user_id"])
@@ -531,35 +550,49 @@ def update_task(task_id):
             return jsonify({"error": "Apenas gestores podem atribuir tarefas."}), 403
 
     # Processar anexos (apenas para multipart/form-data)
-    if files:
-        for file in files:
-            if file.filename:
-                filename = secure_filename(file.filename)
-                filepath = os.path.join(current_app.config["UPLOAD_FOLDER"], filename)
-                file.save(filepath)
-                
-                anexo_obj = {
-                    "id": filename,
-                    "name": filename,
-                    "size": os.path.getsize(filepath),
-                    "type": file.content_type or "application/octet-stream",
-                    "url": f"http://10.1.39.126:5555/uploads/{filename}"
-                }
-                # Adicionar ao campo anexos existente ou criar novo
-                if task.anexos is None:
-                    task.anexos = []
-                task.anexos.append(anexo_obj)
-
-    # Remover anexos existentes se IDs forem fornecidos
-    if data.get("remove_attachment_ids") is not None:
-        remove_ids = data["remove_attachment_ids"]
-        if isinstance(remove_ids, list):
-            task.anexos = [anexo for anexo in task.anexos if anexo.get("id") not in remove_ids]
-            # Opcional: remover arquivos físicos
-            for anexo_id in remove_ids:
-                filepath = os.path.join(current_app.config["UPLOAD_FOLDER"], anexo_id)
-                if os.path.exists(filepath):
-                    os.remove(filepath)
+    if request.content_type and request.content_type.startswith("multipart/form-data"):
+        # Obter arquivos existentes que devem ser mantidos
+        existing_files_data = data.get("existing_files")
+        if existing_files_data:
+            try:
+                existing_files = json.loads(existing_files_data)
+                task.anexos = existing_files
+            except (json.JSONDecodeError, ValueError):
+                pass
+        
+        # Obter arquivos que devem ser removidos
+        files_to_remove_data = data.get("files_to_remove")
+        if files_to_remove_data:
+            try:
+                files_to_remove = json.loads(files_to_remove_data)
+                # Remover arquivos físicos
+                for filename in files_to_remove:
+                    filepath = os.path.join(current_app.config["UPLOAD_FOLDER"], filename)
+                    if os.path.exists(filepath):
+                        os.remove(filepath)
+                        print(f"Arquivo removido: {filepath}")
+            except (json.JSONDecodeError, ValueError):
+                pass
+        
+        # Adicionar novos arquivos
+        if files:
+            if task.anexos is None:
+                task.anexos = []
+            
+            for file in files:
+                if file.filename:
+                    filename = secure_filename(file.filename)
+                    filepath = os.path.join(current_app.config["UPLOAD_FOLDER"], filename)
+                    file.save(filepath)
+                    
+                    anexo_obj = {
+                        "id": filename,
+                        "name": filename,
+                        "size": os.path.getsize(filepath),
+                        "type": file.content_type or "application/octet-stream",
+                        "url": f"{request.scheme}://{request.host}/uploads/{filename}"
+                    }
+                    task.anexos.append(anexo_obj)
 
     try:
         lembretes = json.loads(data.get("lembretes", "[]"))

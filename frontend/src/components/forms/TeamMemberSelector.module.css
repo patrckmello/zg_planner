@@ -3,6 +3,7 @@
   flex-direction: column;
   gap: 8px;
   position: relative;
+  z-index: 1;
 }
 
 .label {
@@ -15,11 +16,16 @@
 .selector {
   position: relative;
   width: 100%;
+  z-index: 1;
 }
 
 .selector.disabled {
   opacity: 0.6;
   pointer-events: none;
+}
+
+.selector.open {
+  z-index: 10000;
 }
 
 .selectorHeader {
@@ -103,8 +109,8 @@
   border: 2px solid #3b82f6;
   border-top: none;
   border-radius: 0 0 12px 12px;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
-  z-index: 1000;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+  z-index: 10001;
   max-height: 300px;
   overflow: hidden;
   display: flex;

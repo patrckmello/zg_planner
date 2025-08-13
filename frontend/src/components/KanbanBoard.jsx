@@ -57,6 +57,15 @@ const KanbanBoard = ({ tasks, onTaskUpdate, viewMode = 'status' }) => {
           no_date: tasks.filter(task => !task.due_date)
         };
       }
+      case 'alphabetical': {
+        // Ordenar tarefas alfabeticamente por título
+        const sortedTasks = [...tasks].sort((a, b) => 
+          a.title.toLowerCase().localeCompare(b.title.toLowerCase(), 'pt-BR')
+        );
+        return {
+          all: sortedTasks
+        };
+      }
       default:
         return { all: tasks };
     }
@@ -84,6 +93,10 @@ const KanbanBoard = ({ tasks, onTaskUpdate, viewMode = 'status' }) => {
           today: { title: 'Hoje', icon: <FiCalendar />, color: '#f39c12' },
           this_week: { title: 'Esta Semana', icon: <FiCalendar />, color: '#3498db' },
           no_date: { title: 'Sem Data', icon: <FiClipboard />, color: '#95a5a6' }
+        };
+      case 'alphabetical':
+        return {
+          all: { title: 'Todas as Tarefas (A-Z)', icon: <FiClipboard />, color: '#6366f1' }
         };
       default:
         return { all: { title: 'Todas', icon: <FiClipboard />, color: '#95a5a6' } };

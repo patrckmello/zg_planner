@@ -75,6 +75,23 @@ function CollaboratorSelector({
     onSelectionChange(newSelection);
   };
 
+  const handleSelectAll = () => {
+    if (disabled) return;
+    
+    const allUserIds = filteredUsers.map(user => user.id);
+    const allSelected = allUserIds.every(id => selectedCollaborators.includes(id));
+    
+    if (allSelected) {
+      // Desmarcar todos os usuários filtrados
+      const newSelection = selectedCollaborators.filter(id => !allUserIds.includes(id));
+      onSelectionChange(newSelection);
+    } else {
+      // Selecionar todos os usuários filtrados (mantendo os já selecionados que não estão no filtro)
+      const newSelection = [...new Set([...selectedCollaborators, ...allUserIds])];
+      onSelectionChange(newSelection);
+    }
+  };
+
   const getSelectedCollaboratorsText = () => {
     if (selectedCollaborators.length === 0) {
       return placeholder;
@@ -96,7 +113,7 @@ function CollaboratorSelector({
     <div className={styles.selectorContainer}>
       <label className={styles.label}>{label}</label>
       
-      <div className={`${styles.selector} ${disabled ? styles.disabled : ''}`}>
+      <div className={`${styles.selector} ${isOpen ? styles.open : ''} ${disabled ? styles.disabled : ''}`}>
         {/* Colaboradores selecionados */}
         {selectedCollaborators.length > 0 && (
           <div className={styles.selectedCollaborators}>
@@ -176,46 +193,64 @@ function CollaboratorSelector({
                 </span>
               </div>
             ) : (
-              <div className={styles.usersList}>
-                {filteredUsers.map(user => (
-                  <div
-                    key={user.id}
-                    className={`${styles.userItem} ${
-                      selectedCollaborators.includes(user.id) ? styles.selected : ''
-                    }`}
-                    onClick={() => handleCollaboratorToggle(user.id)}
-                  >
-                    <div className={styles.userInfo}>
-                      <div className={styles.userAvatar}>
-                        <FiUser />
+              <>
+                {/* Botão Selecionar Todos */}
+                {filteredUsers.length > 1 && (
+                  <div className={styles.selectAllContainer}>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="small"
+                      onClick={handleSelectAll}
+                      className={styles.selectAllButton}
+                    >
+                      <FiUsers className={styles.buttonIcon} />
+                      {selectedCollaborators.length === filteredUsers.length ? 'Desmarcar todos' : 'Selecionar todos'}
+                    </Button>
+                  </div>
+                )}
+                
+                <div className={styles.usersList}>
+                  {filteredUsers.map(user => (
+                    <div
+                      key={user.id}
+                      className={`${styles.userItem} ${
+                        selectedCollaborators.includes(user.id) ? styles.selected : ''
+                      }`}
+                      onClick={() => handleCollaboratorToggle(user.id)}
+                    >
+                      <div className={styles.userInfo}>
+                        <div className={styles.userAvatar}>
+                          <FiUser />
+                        </div>
+                        <div className={styles.userDetails}>
+                          <div className={styles.userName}>{user.username}</div>
+                          <div className={styles.userEmail}>{user.email}</div>
+                          {user.teams && user.teams.length > 0 && (
+                            <div className={styles.userTeams}>
+                              {user.teams.slice(0, 2).map(team => (
+                                <span key={team.id} className={styles.teamBadge}>
+                                  {team.name}
+                                </span>
+                              ))}
+                              {user.teams.length > 2 && (
+                                <span className={styles.teamBadge}>
+                                  +{user.teams.length - 2}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
-                      <div className={styles.userDetails}>
-                        <div className={styles.userName}>{user.username}</div>
-                        <div className={styles.userEmail}>{user.email}</div>
-                        {user.teams && user.teams.length > 0 && (
-                          <div className={styles.userTeams}>
-                            {user.teams.slice(0, 2).map(team => (
-                              <span key={team.id} className={styles.teamBadge}>
-                                {team.name}
-                              </span>
-                            ))}
-                            {user.teams.length > 2 && (
-                              <span className={styles.teamBadge}>
-                                +{user.teams.length - 2}
-                              </span>
-                            )}
-                          </div>
+                      <div className={styles.userActions}>
+                        {selectedCollaborators.includes(user.id) && (
+                          <FiCheck className={styles.checkIcon} />
                         )}
                       </div>
                     </div>
-                    <div className={styles.userActions}>
-                      {selectedCollaborators.includes(user.id) && (
-                        <FiCheck className={styles.checkIcon} />
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              </>
             )}
           </div>
         )}

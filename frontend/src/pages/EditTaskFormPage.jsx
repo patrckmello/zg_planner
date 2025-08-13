@@ -60,7 +60,7 @@ function EditTaskFormPage() {
     lembretes: [],
     tags: [],
     anexos: [],
-    assigned_to_user_id: '',
+    assigned_to_user_ids: [],
     collaborator_ids: [],
     team_id: ''
   });
@@ -182,8 +182,8 @@ function EditTaskFormPage() {
           lembretes: task.lembretes || [],
           tags: task.tags || [],
           anexos: adaptAnexos,
-          assigned_to_user_id: task.user_id || '',
-          collaborator_ids: task.collaborator_ids || [],
+          assigned_to_user_ids: task.user_id ? [task.user_id] : [],
+          collaborator_ids: task.collaborators || [],
           team_id: task.team_id || ''
         });
 
@@ -297,8 +297,8 @@ function EditTaskFormPage() {
       formDataToSend.append('collaborator_ids', JSON.stringify(formData.collaborator_ids));
 
       // IDs opcionais
-      if (formData.assigned_to_user_id) {
-        formDataToSend.append('assigned_to_user_id', formData.assigned_to_user_id);
+      if (formData.assigned_to_user_ids && formData.assigned_to_user_ids.length > 0) {
+        formDataToSend.append('assigned_to_user_ids', JSON.stringify(formData.assigned_to_user_ids));
       }
       if (formData.team_id) {
         formDataToSend.append('team_id', formData.team_id);
@@ -563,13 +563,13 @@ function EditTaskFormPage() {
                           <div className={styles.fullWidth}>
                             <TeamMemberSelector
                               teamId={parseInt(formData.team_id)}
-                              selectedMembers={formData.assigned_to_user_id ? [parseInt(formData.assigned_to_user_id)] : []}
+                              selectedMembers={formData.assigned_to_user_ids || []}
                               onSelectionChange={(members) => {
-                                updateField('assigned_to_user_id', members.length > 0 ? members[0] : '');
+                                updateField('assigned_to_user_ids', members);
                               }}
                               label="Atribuir para"
-                              placeholder="Selecione um membro da equipe"
-                              allowMultiple={false}
+                              placeholder="Selecione membros da equipe ou todos"
+                              allowMultiple={true}
                               disabled={!isManagerOfSelectedTeam()}
                             />
                             {!isManagerOfSelectedTeam() && (

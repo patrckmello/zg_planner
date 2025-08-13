@@ -24,13 +24,19 @@ function TasksPage() {
     
     switch (tab) {
       case 'minhas':
-        // Tarefas onde o usuário é responsável OU que ele atribuiu para outros
+        // Tarefas onde o usuário é responsável E que ele mesmo criou (não foram atribuídas por outros)
         return allTasks.filter(task => 
-          task.user_id === user.id || task.assigned_by_user_id === user.id
+          task.user_id === user.id && 
+          (task.assigned_by_user_id === null || task.assigned_by_user_id === user.id)
         );
       case 'equipe':
-        // Tarefas que têm team_id (tarefas de equipe)
-        return allTasks.filter(task => task.team_id !== null);
+        // Tarefas que têm team_id (tarefas de equipe) OU tarefas que o usuário atribuiu para outros
+        // EXCLUIR tarefas onde o usuário é apenas colaborador
+        return allTasks.filter(task => 
+          (task.team_id !== null || 
+          (task.assigned_by_user_id === user.id && task.user_id !== user.id)) &&
+          !(task.collaborators && task.collaborators.includes(user.id) && task.user_id !== user.id && task.assigned_by_user_id !== user.id)
+        );
       case 'colaborativas':
         // Tarefas onde o usuário está na lista de colaboradores
         return allTasks.filter(task => 
