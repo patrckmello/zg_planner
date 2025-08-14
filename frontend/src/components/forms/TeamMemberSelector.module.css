@@ -3,7 +3,6 @@
   flex-direction: column;
   gap: 8px;
   position: relative;
-  z-index: 1;
 }
 
 .label {
@@ -16,17 +15,11 @@
 .selector {
   position: relative;
   width: 100%;
-  z-index: 1;
 }
 
 .selector.disabled {
   opacity: 0.6;
   pointer-events: none;
-}
-
-.selector.open {
-  z-index: 999999;
-  position: relative;
 }
 
 .selectorHeader {
@@ -102,18 +95,20 @@
 }
 
 .dropdown {
-  position: fixed;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
   background: white;
   border: 2px solid #3b82f6;
   border-top: none;
   border-radius: 0 0 12px 12px;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
-  z-index: 999999;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
   max-height: 300px;
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  min-width: 300px;
 }
 
 .loadingState,
@@ -139,8 +134,12 @@
 }
 
 @keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 .errorIcon,
@@ -292,19 +291,18 @@
   .dropdown {
     max-height: 250px;
   }
-  
+
   .memberItem {
     padding: 10px 12px;
   }
-  
+
   .memberAvatar {
     width: 32px;
     height: 32px;
     font-size: 14px;
   }
-  
+
   .selectAllContainer {
     padding: 10px 12px;
   }
 }
-

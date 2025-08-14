@@ -33,7 +33,7 @@
   border-radius: 12px;
   padding: 24px 32px;
   margin-bottom: 24px;
-  box-shadow: 0 4px 15px rgba(0,0,0,0.07);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.07);
   border-left: 4px solid #3498db;
 }
 
@@ -75,8 +75,8 @@
 .taskForm {
   background: white;
   border-radius: 12px;
-  box-shadow: 0 4px 15px rgba(0,0,0,0.07);
-  overflow: visible;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.07);
+  overflow: hidden;
 }
 
 .formContent {
@@ -87,8 +87,6 @@
 .formSection {
   border-bottom: 1px solid #f0f0f0;
   transition: all 0.3s ease;
-  position: relative;
-  z-index: 1;
 }
 
 .formSection:last-child {
@@ -97,11 +95,6 @@
 
 .formSection:hover {
   background-color: #fafbfc;
-}
-
-/* Garantir que seções com dropdowns abertos tenham z-index maior */
-.formSection:has(.selector.open) {
-  z-index: 999999;
 }
 
 .sectionHeader {
@@ -189,13 +182,27 @@
   animation: slideIn 0.4s ease-out;
 }
 
-.formSection:nth-child(1) { animation-delay: 0.1s; }
-.formSection:nth-child(2) { animation-delay: 0.2s; }
-.formSection:nth-child(3) { animation-delay: 0.3s; }
-.formSection:nth-child(4) { animation-delay: 0.4s; }
-.formSection:nth-child(5) { animation-delay: 0.5s; }
-.formSection:nth-child(6) { animation-delay: 0.6s; }
-.formSection:nth-child(7) { animation-delay: 0.7s; }
+.formSection:nth-child(1) {
+  animation-delay: 0.1s;
+}
+.formSection:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.formSection:nth-child(3) {
+  animation-delay: 0.3s;
+}
+.formSection:nth-child(4) {
+  animation-delay: 0.4s;
+}
+.formSection:nth-child(5) {
+  animation-delay: 0.5s;
+}
+.formSection:nth-child(6) {
+  animation-delay: 0.6s;
+}
+.formSection:nth-child(7) {
+  animation-delay: 0.7s;
+}
 
 /* Estados de loading */
 .formSection.loading {
@@ -208,11 +215,11 @@
   .formGrid {
     grid-template-columns: 1fr;
   }
-  
+
   .contentArea {
     padding: 24px;
   }
-  
+
   .formWrapper {
     max-width: 100%;
   }
@@ -222,33 +229,33 @@
   .contentArea {
     padding: 16px;
   }
-  
+
   .pageHeader {
     padding: 20px 24px;
     margin-bottom: 16px;
   }
-  
+
   .pageTitle {
     font-size: 24px;
   }
-  
+
   .sectionHeader {
     padding: 20px 24px 12px;
   }
-  
+
   .sectionContent {
     padding: 20px 24px;
   }
-  
+
   .formActions {
     padding: 20px 24px;
     flex-direction: column;
   }
-  
+
   .checkboxGrid {
     grid-template-columns: 1fr;
   }
-  
+
   .breadcrumb {
     font-size: 12px;
   }
@@ -258,23 +265,23 @@
   .pageHeader {
     padding: 16px 20px;
   }
-  
+
   .pageTitle {
     font-size: 20px;
   }
-  
+
   .sectionHeader {
     padding: 16px 20px 8px;
   }
-  
+
   .sectionTitle {
     font-size: 16px;
   }
-  
+
   .sectionContent {
     padding: 16px 20px;
   }
-  
+
   .formActions {
     padding: 16px 20px;
   }
@@ -282,7 +289,7 @@
 
 /* Melhorias visuais */
 .formSection::before {
-  content: '';
+  content: "";
   position: absolute;
   left: 0;
   top: 0;
@@ -302,7 +309,7 @@
 }
 
 .sectionHeader::after {
-  content: '';
+  content: "";
   position: absolute;
   top: 0;
   left: -100%;
@@ -360,8 +367,6 @@
   background: #a8a8a8;
 }
 
-
-
 /* Estilos adicionais para os novos componentes */
 
 .permissionNote {
@@ -400,13 +405,12 @@
     padding: 10px 12px;
     font-size: 12px;
   }
-  
+
   .collaboratorNote {
     padding: 6px 10px;
     font-size: 11px;
   }
 }
-
 
 /* Correção para os checkboxes de lembretes */
 .checkboxItem label {
@@ -431,4 +435,3 @@
   color: #374151 !important;
   font-weight: 500;
 }
-

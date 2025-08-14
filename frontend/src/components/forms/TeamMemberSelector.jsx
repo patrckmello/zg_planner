@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { FiUsers, FiUser, FiCheck, FiX } from "react-icons/fi";
 import Button from "../ui/Button";
 import styles from "./TeamMemberSelector.module.css";
@@ -17,13 +17,6 @@ function TeamMemberSelector({
   const [loading, setLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [error, setError] = useState(null);
-  const [dropdownPosition, setDropdownPosition] = useState({
-    top: 0,
-    left: 0,
-    width: 0,
-  });
-
-  const selectorRef = useRef(null);
 
   useEffect(() => {
     if (teamId) {
@@ -44,26 +37,6 @@ function TeamMemberSelector({
       setError("Erro ao carregar membros da equipe");
     } finally {
       setLoading(false);
-    }
-  };
-
-  const updateDropdownPosition = () => {
-    if (selectorRef.current) {
-      const rect = selectorRef.current.getBoundingClientRect();
-      setDropdownPosition({
-        top: rect.bottom + window.scrollY,
-        left: rect.left + window.scrollX,
-        width: rect.width,
-      });
-    }
-  };
-
-  const handleToggleOpen = () => {
-    if (!disabled) {
-      if (!isOpen) {
-        updateDropdownPosition();
-      }
-      setIsOpen(!isOpen);
     }
   };
 
@@ -132,15 +105,10 @@ function TeamMemberSelector({
     <div className={styles.selectorContainer}>
       <label className={styles.label}>{label}</label>
 
-      <div
-        className={`${styles.selector} ${isOpen ? styles.open : ""} ${
-          disabled ? styles.disabled : ""
-        }`}
-        ref={selectorRef}
-      >
+      <div className={`${styles.selector} ${disabled ? styles.disabled : ""}`}>
         <div
           className={`${styles.selectorHeader} ${isOpen ? styles.open : ""}`}
-          onClick={handleToggleOpen}
+          onClick={() => !disabled && setIsOpen(!isOpen)}
         >
           <div className={styles.selectedText}>
             <FiUsers className={styles.headerIcon} />
@@ -161,14 +129,7 @@ function TeamMemberSelector({
         </div>
 
         {isOpen && (
-          <div
-            className={styles.dropdown}
-            style={{
-              top: dropdownPosition.top,
-              left: dropdownPosition.left,
-              width: Math.max(dropdownPosition.width, 300),
-            }}
-          >
+          <div className={styles.dropdown}>
             {loading ? (
               <div className={styles.loadingState}>
                 <div className={styles.spinner}></div>

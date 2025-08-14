@@ -1,25 +1,24 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { toast } from 'react-toastify';
-import Header from '../components/Header';
-import Sidebar from '../components/Sidebar';
-import Button from '../components/ui/Button';
-import Input from '../components/ui/Input';
-import Select from '../components/ui/Select';
-import TagInput from '../components/forms/TagInput';
-import FileUploadArea from '../components/forms/FileUploadArea';
-import TeamMemberSelector from '../components/forms/TeamMemberSelector';
-import CollaboratorSelector from '../components/forms/CollaboratorSelector';
-import CustomDateTimePicker from '../components/forms/CustomDateTimePicker';
-import Checkbox from '../components/Checkbox/Checkbox';
-import styles from './TaskFormPage.module.css';
-import api from '../services/axiosInstance';
-import { 
-  FiSave, 
-  FiX, 
-  FiClock, 
-  FiUser, 
-  FiUsers, 
+import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import Header from "../components/Header";
+import Sidebar from "../components/Sidebar";
+import Button from "../components/ui/Button";
+import Input from "../components/ui/Input";
+import Select from "../components/ui/Select";
+import TagInput from "../components/forms/TagInput";
+import FileUploadArea from "../components/forms/FileUploadArea";
+import TeamMemberSelector from "../components/forms/TeamMemberSelector";
+import CollaboratorSelector from "../components/forms/CollaboratorSelector";
+import CustomDateTimePicker from "../components/forms/CustomDateTimePicker";
+import Checkbox from "../components/Checkbox/Checkbox";
+import styles from "./TaskFormPage.module.css";
+import api from "../services/axiosInstance";
+import {
+  FiSave,
+  FiX,
+  FiClock,
+  FiUser,
+  FiUsers,
   FiTag,
   FiPaperclip,
   FiBell,
@@ -27,8 +26,8 @@ import {
   FiFlag,
   FiFolder,
   FiFileText,
-  FiEye
-} from 'react-icons/fi';
+  FiEye,
+} from "react-icons/fi";
 
 function TaskFormPage() {
   const navigate = useNavigate();
@@ -40,75 +39,83 @@ function TaskFormPage() {
 
   // Estados do formulário
   const [formData, setFormData] = useState({
-    title: '',
-    description: '',
-    status: 'pending',
-    due_date: '',
-    prioridade: 'media',
-    categoria: 'processo',
-    tempo_estimado: '',
-    tempo_unidade: 'horas',
-    relacionado_a: '',
+    title: "",
+    description: "",
+    status: "pending",
+    due_date: "",
+    prioridade: "media",
+    categoria: "processo",
+    tempo_estimado: "",
+    tempo_unidade: "horas",
+    relacionado_a: "",
     lembretes: [],
     tags: [],
     anexos: [],
-    assigned_to_user_ids: [],
+    assigned_to_user_id: "",
     collaborator_ids: [],
-    team_id: ''
+    team_id: "",
   });
 
   // Opções para os selects
   const prioridadeOptions = [
-    { value: 'baixa', label: '🟢 Baixa' },
-    { value: 'media', label: '🟡 Média' },
-    { value: 'alta', label: '🟠 Alta' },
-    { value: 'urgente', label: '🔴 Urgente' }
+    { value: "baixa", label: "🟢 Baixa" },
+    { value: "media", label: "🟡 Média" },
+    { value: "alta", label: "🟠 Alta" },
+    { value: "urgente", label: "🔴 Urgente" },
   ];
 
   const statusOptions = [
-    { value: 'pending', label: '⏳ Pendente' },
-    { value: 'in_progress', label: '🔄 Em andamento' },
-    { value: 'done', label: '✅ Concluído' },
-    { value: 'cancelled', label: '❌ Cancelado' }
+    { value: "pending", label: "⏳ Pendente" },
+    { value: "in_progress", label: "🔄 Em andamento" },
+    { value: "done", label: "✅ Concluído" },
+    { value: "cancelled", label: "❌ Cancelado" },
   ];
 
   const categoriaOptions = [
-    { value: 'processo', label: '⚙️ Processo' },
-    { value: 'projeto', label: '🚀 Projeto' },
-    { value: 'manutencao', label: '🔧 Manutenção' },
-    { value: 'reuniao', label: '👥 Reunião' }
+    { value: "processo", label: "⚙️ Processo" },
+    { value: "projeto", label: "🚀 Projeto" },
+    { value: "manutencao", label: "🔧 Manutenção" },
+    { value: "reuniao", label: "👥 Reunião" },
   ];
 
   const tempoUnidadeOptions = [
-    { value: 'horas', label: 'Horas' },
-    { value: 'minutos', label: 'Minutos' }
+    { value: "horas", label: "Horas" },
+    { value: "minutos", label: "Minutos" },
   ];
 
   const lembretesOptions = [
-    { value: '5min', label: '5 minutos antes' },
-    { value: '15min', label: '15 minutos antes' },
-    { value: '30min', label: '30 minutos antes' },
-    { value: '1h', label: '1 hora antes' },
-    { value: '1d', label: '1 dia antes' },
-    { value: '1w', label: '1 semana antes' }
+    { value: "5min", label: "5 minutos antes" },
+    { value: "15min", label: "15 minutos antes" },
+    { value: "30min", label: "30 minutos antes" },
+    { value: "1h", label: "1 hora antes" },
+    { value: "1d", label: "1 dia antes" },
+    { value: "1w", label: "1 semana antes" },
   ];
 
   const tagSuggestions = [
-    'urgente', 'importante', 'revisão', 'aprovação', 'cliente',
-    'interno', 'externo', 'documentação', 'análise', 'desenvolvimento'
+    "urgente",
+    "importante",
+    "revisão",
+    "aprovação",
+    "cliente",
+    "interno",
+    "externo",
+    "documentação",
+    "análise",
+    "desenvolvimento",
   ];
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         const [teamsResponse, userResponse] = await Promise.all([
-          api.get('/teams'),
-          api.get('/users/me')
+          api.get("/teams"),
+          api.get("/users/me"),
         ]);
         setTeams(teamsResponse.data);
         setCurrentUser(userResponse.data);
       } catch (error) {
-        console.error('Erro ao carregar dados:', error);
+        console.error("Erro ao carregar dados:", error);
       }
     };
 
@@ -120,18 +127,18 @@ function TaskFormPage() {
       }
     };
 
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
   }, []);
 
   const handleLogout = async () => {
     try {
-      await api.post('/logout');
+      await api.post("/logout");
     } catch (err) {
-      console.error('Erro ao fazer logout:', err);
+      console.error("Erro ao fazer logout:", err);
     } finally {
-      localStorage.removeItem('auth');
-      navigate('/login');
+      localStorage.removeItem("auth");
+      navigate("/login");
     }
   };
 
@@ -140,9 +147,9 @@ function TaskFormPage() {
   };
 
   const updateField = (field, value) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    setFormData((prev) => ({ ...prev, [field]: value }));
     if (errors[field]) {
-      setErrors(prev => ({ ...prev, [field]: null }));
+      setErrors((prev) => ({ ...prev, [field]: null }));
     }
   };
 
@@ -150,48 +157,14 @@ function TaskFormPage() {
     const newErrors = {};
 
     if (!formData.title.trim()) {
-      newErrors.title = 'Título é obrigatório';
+      newErrors.title = "Título é obrigatório";
     }
 
     if (formData.tempo_estimado && formData.tempo_estimado < 1) {
-      newErrors.tempo_estimado = 'Tempo deve ser maior que 0';
+      newErrors.tempo_estimado = "Tempo deve ser maior que 0";
     }
 
     setErrors(newErrors);
-    
-    // Se há erros, fazer scroll para o primeiro campo com erro e mostrar toast
-    if (Object.keys(newErrors).length > 0) {
-      const firstErrorField = Object.keys(newErrors)[0];
-      
-      // Buscar o campo de título especificamente
-      let errorElement = null;
-      if (firstErrorField === 'title') {
-        errorElement = document.querySelector('input[name="title"]') || 
-                      document.querySelector('input[placeholder*="título"]') ||
-                      document.querySelector('input[placeholder*="Título"]');
-      } else {
-        errorElement = document.querySelector(`[name="${firstErrorField}"]`) || 
-                      document.querySelector(`input[placeholder*="${firstErrorField}"]`) ||
-                      document.querySelector(`textarea[placeholder*="${firstErrorField}"]`);
-      }
-      
-      if (errorElement) {
-        errorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        setTimeout(() => {
-          errorElement.focus();
-          errorElement.style.borderColor = '#ef4444';
-          errorElement.style.boxShadow = '0 0 0 3px rgba(239, 68, 68, 0.1)';
-        }, 500);
-      }
-      
-      // Mostrar toast de erro
-      const errorMessages = Object.values(newErrors);
-      toast.error(`Por favor, corrija os seguintes erros: ${errorMessages.join(', ')}`, {
-        position: "top-center",
-        autoClose: 5000,
-      });
-    }
-    
     return Object.keys(newErrors).length === 0;
   };
 
@@ -205,69 +178,64 @@ function TaskFormPage() {
       const formDataToSend = new FormData();
 
       // Campos básicos
-      formDataToSend.append('title', formData.title);
-      formDataToSend.append('description', formData.description);
-      formDataToSend.append('status', formData.status);
-      formDataToSend.append('prioridade', formData.prioridade);
-      formDataToSend.append('categoria', formData.categoria);
-      formDataToSend.append('relacionado_a', formData.relacionado_a);
+      formDataToSend.append("title", formData.title);
+      formDataToSend.append("description", formData.description);
+      formDataToSend.append("status", formData.status);
+      formDataToSend.append("prioridade", formData.prioridade);
+      formDataToSend.append("categoria", formData.categoria);
+      formDataToSend.append("relacionado_a", formData.relacionado_a);
 
       // Data de vencimento
       if (formData.due_date) {
-        formDataToSend.append('due_date', formData.due_date);
+        formDataToSend.append("due_date", formData.due_date);
       }
 
       // Tempo estimado
       if (formData.tempo_estimado) {
-        formDataToSend.append('tempo_estimado', formData.tempo_estimado);
-        formDataToSend.append('tempo_unidade', formData.tempo_unidade);
+        formDataToSend.append("tempo_estimado", formData.tempo_estimado);
+        formDataToSend.append("tempo_unidade", formData.tempo_unidade);
       }
 
       // Arrays JSON
-      formDataToSend.append('lembretes', JSON.stringify(formData.lembretes));
-      formDataToSend.append('tags', JSON.stringify(formData.tags));
-      formDataToSend.append('collaborator_ids', JSON.stringify(formData.collaborator_ids));
+      formDataToSend.append("lembretes", JSON.stringify(formData.lembretes));
+      formDataToSend.append("tags", JSON.stringify(formData.tags));
+      formDataToSend.append(
+        "collaborator_ids",
+        JSON.stringify(formData.collaborator_ids)
+      );
 
       // IDs opcionais
-      if (formData.assigned_to_user_ids && formData.assigned_to_user_ids.length > 0) {
-        formDataToSend.append('assigned_to_user_ids', JSON.stringify(formData.assigned_to_user_ids));
+      if (formData.assigned_to_user_id) {
+        formDataToSend.append(
+          "assigned_to_user_id",
+          formData.assigned_to_user_id
+        );
       }
       if (formData.team_id) {
-        formDataToSend.append('team_id', formData.team_id);
+        formDataToSend.append("team_id", formData.team_id);
       }
 
       // Anexos
       formData.anexos.forEach((anexoObj) => {
         if (anexoObj.file) {
-          formDataToSend.append('anexos', anexoObj.file);
+          formDataToSend.append("anexos", anexoObj.file);
         }
       });
 
-      const response = await api.post('/tasks', formDataToSend, {
+      const response = await api.post("/tasks", formDataToSend, {
         headers: {
-          'Content-Type': 'multipart/form-data',
+          "Content-Type": "multipart/form-data",
         },
       });
 
-      console.log('Tarefa criada com sucesso:', response.data);
-      toast.success('Tarefa criada com sucesso!', {
-        position: "top-right",
-        autoClose: 3000,
-      });
-      navigate('/tasks');
-
+      console.log("Tarefa criada com sucesso:", response.data);
+      navigate("/tasks");
     } catch (err) {
-      console.error('Erro ao criar tarefa:', err);
+      console.error("Erro ao criar tarefa:", err);
       if (err.response?.data?.error) {
-        toast.error(err.response.data.error, {
-          position: "top-right",
-          autoClose: 5000,
-        });
+        alert(err.response.data.error);
       } else {
-        toast.error('Erro ao criar tarefa. Tente novamente.', {
-          position: "top-right",
-          autoClose: 5000,
-        });
+        alert("Erro ao criar tarefa. Tente novamente.");
       }
     } finally {
       setLoading(false);
@@ -287,10 +255,13 @@ function TaskFormPage() {
   // Verificar se o usuário atual é gestor da equipe selecionada
   const isManagerOfSelectedTeam = () => {
     if (!formData.team_id || !currentUser) return false;
-    const selectedTeam = teams.find(t => t.id === parseInt(formData.team_id));
+    const selectedTeam = teams.find((t) => t.id === parseInt(formData.team_id));
     if (!selectedTeam) return false;
-    return currentUser.is_admin || selectedTeam.members?.some(
-      member => member.user_id === currentUser.id && member.is_manager
+    return (
+      currentUser.is_admin ||
+      selectedTeam.members?.some(
+        (member) => member.user_id === currentUser.id && member.is_manager
+      )
     );
   };
 
@@ -300,7 +271,7 @@ function TaskFormPage() {
 
       <div className={styles.pageBody}>
         <Sidebar onLogout={handleLogout} isOpen={sidebarOpen} />
-        
+
         <main className={styles.contentArea}>
           <div className={styles.formWrapper}>
             {/* Header da página */}
@@ -333,7 +304,7 @@ function TaskFormPage() {
                           label="Título"
                           required
                           value={formData.title}
-                          onChange={(e) => updateField('title', e.target.value)}
+                          onChange={(e) => updateField("title", e.target.value)}
                           placeholder="Digite o título da tarefa"
                           error={errors.title}
                         />
@@ -343,7 +314,9 @@ function TaskFormPage() {
                           type="textarea"
                           label="Descrição"
                           value={formData.description}
-                          onChange={(e) => updateField('description', e.target.value)}
+                          onChange={(e) =>
+                            updateField("description", e.target.value)
+                          }
                           placeholder="Descreva os detalhes da tarefa"
                           rows={4}
                         />
@@ -364,33 +337,39 @@ function TaskFormPage() {
                         label="Prioridade"
                         icon={<FiFlag />}
                         value={formData.prioridade}
-                        onChange={(e) => updateField('prioridade', e.target.value)}
+                        onChange={(e) =>
+                          updateField("prioridade", e.target.value)
+                        }
                         options={prioridadeOptions}
                       />
                       <Select
                         label="Status"
                         value={formData.status}
-                        onChange={(e) => updateField('status', e.target.value)}
+                        onChange={(e) => updateField("status", e.target.value)}
                         options={statusOptions}
                       />
                       <Select
                         label="Categoria"
                         icon={<FiFolder />}
                         value={formData.categoria}
-                        onChange={(e) => updateField('categoria', e.target.value)}
+                        onChange={(e) =>
+                          updateField("categoria", e.target.value)
+                        }
                         options={categoriaOptions}
                       />
                       <Input
                         label="Relacionado a"
                         value={formData.relacionado_a}
-                        onChange={(e) => updateField('relacionado_a', e.target.value)}
+                        onChange={(e) =>
+                          updateField("relacionado_a", e.target.value)
+                        }
                         placeholder="Nº do processo, cliente..."
                       />
                       <div className={styles.fullWidth}>
                         <CustomDateTimePicker
                           label="Data de Vencimento"
                           value={formData.due_date}
-                          onChange={(value) => updateField('due_date', value)}
+                          onChange={(value) => updateField("due_date", value)}
                           placeholder="Selecione data e hora"
                           required={false}
                           error={errors.due_date}
@@ -412,7 +391,9 @@ function TaskFormPage() {
                         type="number"
                         label="Quantidade"
                         value={formData.tempo_estimado}
-                        onChange={(e) => updateField('tempo_estimado', e.target.value)}
+                        onChange={(e) =>
+                          updateField("tempo_estimado", e.target.value)
+                        }
                         placeholder="Ex: 2"
                         min="1"
                         error={errors.tempo_estimado}
@@ -420,7 +401,9 @@ function TaskFormPage() {
                       <Select
                         label="Unidade"
                         value={formData.tempo_unidade}
-                        onChange={(e) => updateField('tempo_unidade', e.target.value)}
+                        onChange={(e) =>
+                          updateField("tempo_unidade", e.target.value)
+                        }
                         options={tempoUnidadeOptions}
                       />
                     </div>
@@ -441,29 +424,44 @@ function TaskFormPage() {
                             label="Equipe"
                             icon={<FiUsers />}
                             value={formData.team_id}
-                            onChange={(e) => updateField('team_id', e.target.value)}
-                            options={teams.map(team => ({ value: team.id, label: team.name }))}
+                            onChange={(e) =>
+                              updateField("team_id", e.target.value)
+                            }
+                            options={teams.map((team) => ({
+                              value: team.id,
+                              label: team.name,
+                            }))}
                             placeholder="Selecione uma equipe"
                           />
                         </div>
-                        
+
                         {formData.team_id && (
                           <div className={styles.fullWidth}>
                             <TeamMemberSelector
                               teamId={parseInt(formData.team_id)}
-                              selectedMembers={formData.assigned_to_user_ids || []}
+                              selectedMembers={
+                                formData.assigned_to_user_id
+                                  ? [parseInt(formData.assigned_to_user_id)]
+                                  : []
+                              }
                               onSelectionChange={(members) => {
-                                updateField('assigned_to_user_ids', members);
+                                updateField(
+                                  "assigned_to_user_id",
+                                  members.length > 0 ? members[0] : ""
+                                );
                               }}
                               label="Atribuir para"
-                              placeholder="Selecione membros da equipe ou todos"
-                              allowMultiple={true}
+                              placeholder="Selecione um membro da equipe"
+                              allowMultiple={false}
                               disabled={!isManagerOfSelectedTeam()}
                             />
                             {!isManagerOfSelectedTeam() && (
                               <div className={styles.permissionNote}>
                                 <FiEye className={styles.noteIcon} />
-                                <span>Apenas gestores podem atribuir tarefas para outros membros da equipe</span>
+                                <span>
+                                  Apenas gestores podem atribuir tarefas para
+                                  outros membros da equipe
+                                </span>
                               </div>
                             )}
                           </div>
@@ -477,21 +475,30 @@ function TaskFormPage() {
                 <div className={styles.formSection}>
                   <div className={styles.sectionHeader}>
                     <FiEye className={styles.sectionIcon} />
-                    <h2 className={styles.sectionTitle}>Colaboradores/Observadores</h2>
+                    <h2 className={styles.sectionTitle}>
+                      Colaboradores/Observadores
+                    </h2>
                   </div>
                   <div className={styles.sectionContent}>
                     <CollaboratorSelector
                       selectedCollaborators={formData.collaborator_ids}
-                      onSelectionChange={(collaborators) => updateField('collaborator_ids', collaborators)}
+                      onSelectionChange={(collaborators) =>
+                        updateField("collaborator_ids", collaborators)
+                      }
                       label="Adicionar colaboradores"
                       placeholder="Selecione usuários para colaborar ou observar esta tarefa"
                       excludeUserIds={[
                         currentUser?.id,
-                        ...(formData.assigned_to_user_ids || [])
+                        formData.assigned_to_user_id
+                          ? parseInt(formData.assigned_to_user_id)
+                          : null,
                       ].filter(Boolean)}
                     />
                     <div className={styles.collaboratorNote}>
-                      <span>Colaboradores podem visualizar e comentar na tarefa, mas não editá-la.</span>
+                      <span>
+                        Colaboradores podem visualizar e comentar na tarefa, mas
+                        não editá-la.
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -504,16 +511,24 @@ function TaskFormPage() {
                   </div>
                   <div className={styles.sectionContent}>
                     <div className={styles.checkboxGrid}>
-                      {lembretesOptions.map(option => (
+                      {lembretesOptions.map((option) => (
                         <div key={option.value} className={styles.checkboxItem}>
                           <Checkbox
                             id={`lembrete-${option.value}`}
                             checked={formData.lembretes.includes(option.value)}
                             onCheckedChange={(checked) => {
                               if (checked) {
-                                updateField('lembretes', [...formData.lembretes, option.value]);
+                                updateField("lembretes", [
+                                  ...formData.lembretes,
+                                  option.value,
+                                ]);
                               } else {
-                                updateField('lembretes', formData.lembretes.filter(l => l !== option.value));
+                                updateField(
+                                  "lembretes",
+                                  formData.lembretes.filter(
+                                    (l) => l !== option.value
+                                  )
+                                );
                               }
                             }}
                             label={option.label}
@@ -533,7 +548,7 @@ function TaskFormPage() {
                   <div className={styles.sectionContent}>
                     <TagInput
                       value={formData.tags}
-                      onChange={(tags) => updateField('tags', tags)}
+                      onChange={(tags) => updateField("tags", tags)}
                       suggestions={tagSuggestions}
                       placeholder="Adicionar tag..."
                       maxTags={10}
@@ -550,16 +565,16 @@ function TaskFormPage() {
                   <div className={styles.sectionContent}>
                     <FileUploadArea
                       value={formData.anexos}
-                      onChange={(files) => updateField('anexos', files)}
+                      onChange={(files) => updateField("anexos", files)}
                       maxFiles={10}
                       maxFileSize={10 * 1024 * 1024} // 10MB
                       acceptedTypes={[
-                        'image/*',
-                        'application/pdf',
-                        'application/msword',
-                        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                        'application/vnd.ms-excel',
-                        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                        "image/*",
+                        "application/pdf",
+                        "application/msword",
+                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        "application/vnd.ms-excel",
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                       ]}
                     />
                   </div>
@@ -594,4 +609,3 @@ function TaskFormPage() {
 }
 
 export default TaskFormPage;
-

@@ -3,10 +3,6 @@
   width: 100%;
 }
 
-.container.open {
-  z-index: 999999;
-}
-
 .label {
   display: block;
   font-size: 14px;
@@ -97,16 +93,19 @@
 }
 
 .dropdown {
-  position: fixed;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
   background: white;
   border: 2px solid #10b981;
   border-radius: 16px;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-  z-index: 999999;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1),
+    0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  z-index: 1000;
   margin-top: 4px;
   overflow: hidden;
   animation: slideDown 0.2s ease;
-  min-width: 300px;
 }
 
 @keyframes slideDown {
@@ -422,34 +421,33 @@
     left: -10px;
     right: -10px;
   }
-  
+
   .calendar,
   .timePicker {
     padding: 16px;
   }
-  
+
   .dayButton {
     width: 36px;
     height: 36px;
     font-size: 13px;
   }
-  
+
   .timeInput {
     width: 50px;
     height: 50px;
     font-size: 20px;
   }
-  
+
   .timeSeparator {
     font-size: 28px;
   }
-  
+
   .monthYear {
     font-size: 16px;
   }
-  
+
   .timeTitle {
     font-size: 16px;
   }
 }
-
