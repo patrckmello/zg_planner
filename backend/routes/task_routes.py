@@ -49,6 +49,7 @@ def get_tasks():
         # 3. Tarefas das equipes que ele gerencia
         # 4. Tarefas onde ele é colaborador (usando operador JSONB)
         # 5. Tarefas das equipes em que ele participa
+        # 6. Tarefas onde ele está na lista de assigned_users
         
         conditions = [
             Task.user_id == user_id,
@@ -63,6 +64,7 @@ def get_tasks():
             conditions.append(Task.team_id.in_(member_team_ids))
         
         conditions.append(text("tasks.collaborators::jsonb @> CAST(:user_id_json AS jsonb)").params(user_id_json=f'[{user_id}]'))
+        conditions.append(text("tasks.assigned_users::jsonb @> CAST(:user_id_json AS jsonb)").params(user_id_json=f'[{user_id}]'))
         
         query = Task.query.filter(or_(*conditions))
 
@@ -694,12 +696,14 @@ def get_team_members(team_id):
     
     members = []
     for member_assoc in team.members:
-        members.append({
-            "id": member_assoc.user.id,
-            "username": member_assoc.user.username,
-            "email": member_assoc.user.email,
-            "is_manager": member_assoc.is_manager
-        })
+        # Excluir o usuário atual (gestor) da lista de membros para atribuição
+        if member_assoc.user.id != user_id:
+            members.append({
+                "id": member_assoc.user.id,
+                "username": member_assoc.user.username,
+                "email": member_assoc.user.email,
+                "is_manager": member_assoc.is_manager
+            })
     
     return jsonify(members)
 

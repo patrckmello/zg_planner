@@ -1,22 +1,29 @@
-import React, { useState, useEffect } from 'react';
-import { FiUsers, FiUser, FiCheck, FiX } from 'react-icons/fi';
-import Button from '../ui/Button';
-import styles from './TeamMemberSelector.module.css';
-import api from '../../services/axiosInstance';
+import React, { useState, useEffect, useRef } from "react";
+import { FiUsers, FiUser, FiCheck, FiX } from "react-icons/fi";
+import Button from "../ui/Button";
+import styles from "./TeamMemberSelector.module.css";
+import api from "../../services/axiosInstance";
 
-function TeamMemberSelector({ 
-  teamId, 
-  selectedMembers = [], 
-  onSelectionChange, 
+function TeamMemberSelector({
+  teamId,
+  selectedMembers = [],
+  onSelectionChange,
   label = "Atribuir para",
   placeholder = "Selecione os membros...",
   allowMultiple = true,
-  disabled = false 
+  disabled = false,
 }) {
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [error, setError] = useState(null);
+  const [dropdownPosition, setDropdownPosition] = useState({
+    top: 0,
+    left: 0,
+    width: 0,
+  });
+
+  const selectorRef = useRef(null);
 
   useEffect(() => {
     if (teamId) {
@@ -33,10 +40,30 @@ function TeamMemberSelector({
       const response = await api.get(`/teams/${teamId}/members`);
       setMembers(response.data);
     } catch (err) {
-      console.error('Erro ao carregar membros da equipe:', err);
-      setError('Erro ao carregar membros da equipe');
+      console.error("Erro ao carregar membros da equipe:", err);
+      setError("Erro ao carregar membros da equipe");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const updateDropdownPosition = () => {
+    if (selectorRef.current) {
+      const rect = selectorRef.current.getBoundingClientRect();
+      setDropdownPosition({
+        top: rect.bottom + window.scrollY,
+        left: rect.left + window.scrollX,
+        width: rect.width,
+      });
+    }
+  };
+
+  const handleToggleOpen = () => {
+    if (!disabled) {
+      if (!isOpen) {
+        updateDropdownPosition();
+      }
+      setIsOpen(!isOpen);
     }
   };
 
@@ -46,23 +73,25 @@ function TeamMemberSelector({
     let newSelection;
     if (allowMultiple) {
       if (selectedMembers.includes(memberId)) {
-        newSelection = selectedMembers.filter(id => id !== memberId);
+        newSelection = selectedMembers.filter((id) => id !== memberId);
       } else {
         newSelection = [...selectedMembers, memberId];
       }
     } else {
       newSelection = selectedMembers.includes(memberId) ? [] : [memberId];
     }
-    
+
     onSelectionChange(newSelection);
   };
 
   const handleSelectAll = () => {
     if (disabled) return;
-    
-    const allMemberIds = members.map(member => member.id);
-    const allSelected = allMemberIds.every(id => selectedMembers.includes(id));
-    
+
+    const allMemberIds = members.map((member) => member.id);
+    const allSelected = allMemberIds.every((id) =>
+      selectedMembers.includes(id)
+    );
+
     if (allSelected) {
       onSelectionChange([]);
     } else {
@@ -74,16 +103,16 @@ function TeamMemberSelector({
     if (selectedMembers.length === 0) {
       return placeholder;
     }
-    
+
     if (selectedMembers.length === members.length && members.length > 0) {
       return `Todos os membros (${members.length})`;
     }
-    
+
     if (selectedMembers.length === 1) {
-      const member = members.find(m => m.id === selectedMembers[0]);
-      return member ? member.username : '1 membro selecionado';
+      const member = members.find((m) => m.id === selectedMembers[0]);
+      return member ? member.username : "1 membro selecionado";
     }
-    
+
     return `${selectedMembers.length} membros selecionados`;
   };
 
@@ -102,11 +131,16 @@ function TeamMemberSelector({
   return (
     <div className={styles.selectorContainer}>
       <label className={styles.label}>{label}</label>
-      
-      <div className={`${styles.selector} ${isOpen ? styles.open : ''} ${disabled ? styles.disabled : ''}`}>
-        <div 
-          className={`${styles.selectorHeader} ${isOpen ? styles.open : ''}`}
-          onClick={() => !disabled && setIsOpen(!isOpen)}
+
+      <div
+        className={`${styles.selector} ${isOpen ? styles.open : ""} ${
+          disabled ? styles.disabled : ""
+        }`}
+        ref={selectorRef}
+      >
+        <div
+          className={`${styles.selectorHeader} ${isOpen ? styles.open : ""}`}
+          onClick={handleToggleOpen}
         >
           <div className={styles.selectedText}>
             <FiUsers className={styles.headerIcon} />
@@ -114,16 +148,27 @@ function TeamMemberSelector({
           </div>
           <div className={styles.headerActions}>
             {selectedMembers.length > 0 && (
-              <span className={styles.selectedCount}>{selectedMembers.length}</span>
+              <span className={styles.selectedCount}>
+                {selectedMembers.length}
+              </span>
             )}
-            <div className={`${styles.chevron} ${isOpen ? styles.rotated : ''}`}>
+            <div
+              className={`${styles.chevron} ${isOpen ? styles.rotated : ""}`}
+            >
               ▼
             </div>
           </div>
         </div>
 
         {isOpen && (
-          <div className={styles.dropdown}>
+          <div
+            className={styles.dropdown}
+            style={{
+              top: dropdownPosition.top,
+              left: dropdownPosition.left,
+              width: Math.max(dropdownPosition.width, 300),
+            }}
+          >
             {loading ? (
               <div className={styles.loadingState}>
                 <div className={styles.spinner}></div>
@@ -133,9 +178,9 @@ function TeamMemberSelector({
               <div className={styles.errorState}>
                 <FiX className={styles.errorIcon} />
                 <span>{error}</span>
-                <Button 
-                  size="small" 
-                  variant="secondary" 
+                <Button
+                  size="small"
+                  variant="secondary"
                   onClick={fetchTeamMembers}
                 >
                   Tentar novamente
@@ -158,17 +203,21 @@ function TeamMemberSelector({
                       className={styles.selectAllButton}
                     >
                       <FiUsers className={styles.buttonIcon} />
-                      {selectedMembers.length === members.length ? 'Desmarcar todos' : 'Selecionar todos'}
+                      {selectedMembers.length === members.length
+                        ? "Desmarcar todos"
+                        : "Selecionar todos"}
                     </Button>
                   </div>
                 )}
-                
+
                 <div className={styles.membersList}>
-                  {members.map(member => (
+                  {members.map((member) => (
                     <div
                       key={member.id}
                       className={`${styles.memberItem} ${
-                        selectedMembers.includes(member.id) ? styles.selected : ''
+                        selectedMembers.includes(member.id)
+                          ? styles.selected
+                          : ""
                       }`}
                       onClick={() => handleMemberToggle(member.id)}
                     >
@@ -180,10 +229,14 @@ function TeamMemberSelector({
                           <div className={styles.memberName}>
                             {member.username}
                             {member.is_manager && (
-                              <span className={styles.managerBadge}>Gestor</span>
+                              <span className={styles.managerBadge}>
+                                Gestor
+                              </span>
                             )}
                           </div>
-                          <div className={styles.memberEmail}>{member.email}</div>
+                          <div className={styles.memberEmail}>
+                            {member.email}
+                          </div>
                         </div>
                       </div>
                       <div className={styles.memberActions}>
@@ -204,4 +257,3 @@ function TeamMemberSelector({
 }
 
 export default TeamMemberSelector;
-

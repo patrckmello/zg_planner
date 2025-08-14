@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ToastContainer, toast } from "react-toastify";
-import "react-toastify/dist/ReactToastify.css";
 import Header from "../components/Header";
 import Sidebar from "../components/Sidebar";
 import Button from "../components/ui/Button";
@@ -13,6 +11,8 @@ import TeamMemberSelector from "../components/forms/TeamMemberSelector";
 import CollaboratorSelector from "../components/forms/CollaboratorSelector";
 import CustomDateTimePicker from "../components/forms/CustomDateTimePicker";
 import Checkbox from "../components/Checkbox/Checkbox";
+import { ToastContainer, toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 import DeleteConfirmModal from "../components/DeleteConfirmModal";
 import styles from "./EditTaskFormPage.module.css";
 import api from "../services/axiosInstance";
@@ -60,7 +60,7 @@ function EditTaskFormPage() {
     lembretes: [],
     tags: [],
     anexos: [],
-    assigned_to_user_ids: [],
+    assigned_to_user_id: "",
     collaborator_ids: [],
     team_id: "",
   });
@@ -190,14 +190,14 @@ function EditTaskFormPage() {
           lembretes: task.lembretes || [],
           tags: task.tags || [],
           anexos: adaptAnexos,
-          assigned_to_user_ids: task.user_id ? [task.user_id] : [],
-          collaborator_ids: task.collaborators || [],
+          assigned_to_user_id: task.user_id || "",
+          collaborator_ids: task.collaborator_ids || [],
           team_id: task.team_id || "",
         });
       } catch (error) {
         console.error("Erro ao carregar dados:", error);
         toast.error("Erro ao carregar tarefa. Redirecionando...");
-        navigate("/tasks");
+        navigate("/dashboard");
       } finally {
         setInitialLoading(false);
       }
@@ -309,13 +309,10 @@ function EditTaskFormPage() {
       );
 
       // IDs opcionais
-      if (
-        formData.assigned_to_user_ids &&
-        formData.assigned_to_user_ids.length > 0
-      ) {
+      if (formData.assigned_to_user_id) {
         formDataToSend.append(
-          "assigned_to_user_ids",
-          JSON.stringify(formData.assigned_to_user_ids)
+          "assigned_to_user_id",
+          formData.assigned_to_user_id
         );
       }
       if (formData.team_id) {
@@ -351,7 +348,7 @@ function EditTaskFormPage() {
       });
 
       console.log("Tarefa atualizada com sucesso:", response.data);
-      navigate("/tasks");
+      navigate("/dashboard");
     } catch (err) {
       console.error("Erro ao atualizar tarefa:", err);
       if (err.response?.data?.error) {
@@ -369,7 +366,7 @@ function EditTaskFormPage() {
     try {
       await api.delete(`/tasks/${id}`);
       toast.success("Tarefa excluída com sucesso!");
-      navigate("/tasks");
+      navigate("/dashboard");
     } catch (error) {
       console.error("Erro ao excluir tarefa:", error);
       toast.error("Ocorreu um erro ao excluir a tarefa. Tente novamente.");
@@ -605,14 +602,19 @@ function EditTaskFormPage() {
                             <TeamMemberSelector
                               teamId={parseInt(formData.team_id)}
                               selectedMembers={
-                                formData.assigned_to_user_ids || []
+                                formData.assigned_to_user_id
+                                  ? [parseInt(formData.assigned_to_user_id)]
+                                  : []
                               }
                               onSelectionChange={(members) => {
-                                updateField("assigned_to_user_ids", members);
+                                updateField(
+                                  "assigned_to_user_id",
+                                  members.length > 0 ? members[0] : ""
+                                );
                               }}
                               label="Atribuir para"
-                              placeholder="Selecione membros da equipe ou todos"
-                              allowMultiple={true}
+                              placeholder="Selecione um membro da equipe"
+                              allowMultiple={false}
                               disabled={!isManagerOfSelectedTeam()}
                             />
                             {!isManagerOfSelectedTeam() && (

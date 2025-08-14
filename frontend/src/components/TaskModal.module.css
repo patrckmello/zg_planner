@@ -148,6 +148,17 @@
   gap: 16px;
 }
 
+.assignedUsers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.assignedUser {
+  color: #4b5563;
+  font-weight: 500;
+}
+
 .infoItem {
   display: flex;
   align-items: center;

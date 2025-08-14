@@ -76,7 +76,7 @@
   background: white;
   border-radius: 12px;
   box-shadow: 0 4px 15px rgba(0,0,0,0.07);
-  overflow: hidden;
+  overflow: visible;
 }
 
 .formContent {
@@ -101,7 +101,7 @@
 
 /* Garantir que seções com dropdowns abertos tenham z-index maior */
 .formSection:has(.selector.open) {
-  z-index: 100000;
+  z-index: 999999;
 }
 
 .sectionHeader {

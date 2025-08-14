@@ -1,21 +1,11 @@
 /* Importa estilos base da TaskFormPage */
-@import './TaskFormPage.module.css';
+@import "./TaskFormPage.module.css";
 
 /* Sobrescreve e adiciona estilos específicos para EditTaskFormPage */
 .editTaskFormPage {
   height: 100vh;
   width: 100vw;
   overflow: hidden;
-}
-
-/* Garantir que dropdowns na edição tenham z-index correto */
-.editTaskFormPage .formSection {
-  position: relative;
-  z-index: 1;
-}
-
-.editTaskFormPage .formSection:has(.selector.open) {
-  z-index: 100000;
 }
 
 /* Loading state */
@@ -84,7 +74,8 @@
 }
 
 @keyframes badgePulse {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 0.9;
     transform: scale(1);
   }
@@ -130,7 +121,7 @@
 }
 
 .pageHeader::before {
-  content: '';
+  content: "";
   position: absolute;
   top: 0;
   right: 0;
@@ -182,7 +173,7 @@
 }
 
 .fieldModified::after {
-  content: '●';
+  content: "●";
   position: absolute;
   top: -8px;
   right: -8px;
@@ -192,7 +183,8 @@
 }
 
 @keyframes modifiedPulse {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 0.6;
   }
   50% {
@@ -214,22 +206,22 @@
     align-items: flex-start;
     gap: 12px;
   }
-  
+
   .statusBadge {
     align-self: flex-start;
   }
-  
+
   .formActions {
     flex-direction: column;
     align-items: stretch;
     gap: 12px;
   }
-  
+
   .rightActions {
     justify-content: stretch;
     flex-direction: column;
   }
-  
+
   .taskName {
     max-width: none;
   }
@@ -239,11 +231,11 @@
   .pageTitle {
     font-size: 20px;
   }
-  
+
   .titleIcon {
     font-size: 20px;
   }
-  
+
   .statusBadge {
     font-size: 10px;
     padding: 4px 8px;
@@ -258,7 +250,7 @@
 }
 
 .formSection.loading::after {
-  content: '';
+  content: "";
   position: absolute;
   top: 0;
   left: 0;
@@ -317,4 +309,3 @@
     transform: translateX(0);
   }
 }
-

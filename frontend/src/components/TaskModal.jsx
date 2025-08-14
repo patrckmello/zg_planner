@@ -258,13 +258,29 @@ const TaskModal = ({ task, isOpen, onClose, onTaskUpdate }) => {
             </div>
             <div className={styles.sectionContent}>
               <div className={styles.infoGrid}>
-                <div className={styles.infoItem}>
-                  <FiUser className={styles.infoIcon} />
-                  <span className={styles.infoLabel}>Responsável:</span>
-                  <span className={styles.infoValue}>
-                    {task.assigned_to_user?.name || task.user?.name || 'Não atribuído'}
-                  </span>
-                </div>
+                {/* Responsáveis da tarefa */}
+                {task.assigned_users_info && task.assigned_users_info.length > 0 ? (
+                  <div className={styles.infoItem}>
+                    <FiUser className={styles.infoIcon} />
+                    <span className={styles.infoLabel}>Responsáveis:</span>
+                    <div className={styles.assignedUsers}>
+                      {task.assigned_users_info.map((user, index) => (
+                        <span key={user.id} className={styles.assignedUser}>
+                          {user.name}
+                          {index < task.assigned_users_info.length - 1 && ', '}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className={styles.infoItem}>
+                    <FiUser className={styles.infoIcon} />
+                    <span className={styles.infoLabel}>Responsável:</span>
+                    <span className={styles.infoValue}>
+                      {task.assigned_to_user?.name || task.user?.name || 'Não atribuído'}
+                    </span>
+                  </div>
+                )}
                 
                 {task.assigned_by_user && (
                   <div className={styles.infoItem}>

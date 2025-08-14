@@ -25,7 +25,8 @@
 }
 
 .selector.open {
-  z-index: 99999;
+  z-index: 999999;
+  position: relative;
 }
 
 .selectorHeader {
@@ -101,20 +102,18 @@
 }
 
 .dropdown {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
+  position: fixed;
   background: white;
   border: 2px solid #3b82f6;
   border-top: none;
   border-radius: 0 0 12px 12px;
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
-  z-index: 99999;
+  z-index: 999999;
   max-height: 300px;
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  min-width: 300px;
 }
 
 .loadingState,

@@ -135,8 +135,18 @@ const TaskCard = ({ task, isDragging = false, onTaskUpdate }) => {
 
         {/* Informações básicas */}
         <div className={styles.taskMeta}>
-          {/* Responsável da tarefa */}
-          {task.user && (
+          {/* Responsáveis da tarefa */}
+          {task.assigned_users_info && task.assigned_users_info.length > 0 ? (
+            <div className={styles.metaItem} title="Responsáveis pela tarefa">
+              <FiUser className={styles.metaIcon} />
+              <span>
+                {task.assigned_users_info.length === 1 
+                  ? task.assigned_users_info[0].name
+                  : `${task.assigned_users_info.length} responsáveis`
+                }
+              </span>
+            </div>
+          ) : task.user && (
             <div className={styles.metaItem} title="Responsável pela tarefa">
               <FiUser className={styles.metaIcon} />
               <span>{task.user.name || 'Usuário'}</span>

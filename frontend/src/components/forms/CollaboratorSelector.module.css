@@ -3,7 +3,6 @@
   flex-direction: column;
   gap: 8px;
   position: relative;
-  z-index: 1;
 }
 
 .label {
@@ -16,16 +15,11 @@
 .selector {
   position: relative;
   width: 100%;
-  z-index: 1;
 }
 
 .selector.disabled {
   opacity: 0.6;
   pointer-events: none;
-}
-
-.selector.open {
-  z-index: 99999;
 }
 
 .selectedCollaborators {
@@ -176,8 +170,8 @@
   border: 2px solid #8b5cf6;
   border-top: none;
   border-radius: 0 0 12px 12px;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
-  z-index: 99999;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
   max-height: 350px;
   overflow: hidden;
   display: flex;
@@ -192,25 +186,6 @@
 
 .searchInput {
   margin: 0;
-}
-
-.selectAllContainer {
-  padding: 12px 16px;
-  border-bottom: 1px solid #f3f4f6;
-  background: #f9fafb;
-}
-
-.selectAllButton {
-  width: 100%;
-  justify-content: flex-start;
-  gap: 8px;
-  font-weight: 500;
-  color: #8b5cf6;
-}
-
-.buttonIcon {
-  width: 16px;
-  height: 16px;
 }
 
 .loadingState,
@@ -236,8 +211,12 @@
 }
 
 @keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 .errorIcon,
@@ -358,32 +337,31 @@
   .dropdown {
     max-height: 300px;
   }
-  
+
   .userItem {
     padding: 10px 12px;
   }
-  
+
   .userAvatar {
     width: 32px;
     height: 32px;
     font-size: 14px;
   }
-  
+
   .searchContainer {
     padding: 10px 12px;
   }
-  
+
   .selectedCollaborators {
     padding: 6px;
   }
-  
+
   .collaboratorChip {
     padding: 3px 6px;
     font-size: 11px;
   }
-  
+
   .chipName {
     max-width: 80px;
   }
 }
-

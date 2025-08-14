@@ -33,6 +33,7 @@ function CustomDateTimePicker({
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
   const [timeInputMode, setTimeInputMode] = useState(false);
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 });
   
   const containerRef = useRef(null);
   const timeInputRef = useRef(null);
@@ -63,6 +64,26 @@ function CustomDateTimePicker({
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  const updateDropdownPosition = () => {
+    if (containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      setDropdownPosition({
+        top: rect.bottom + window.scrollY,
+        left: rect.left + window.scrollX,
+        width: rect.width
+      });
+    }
+  };
+
+  const handleToggleOpen = () => {
+    if (!disabled) {
+      if (!isOpen) {
+        updateDropdownPosition();
+      }
+      setIsOpen(!isOpen);
+    }
+  };
 
   const formatDisplayValue = () => {
     if (!selectedDate) return placeholder;
@@ -232,7 +253,7 @@ function CustomDateTimePicker({
   const days = getDaysInMonth(currentMonth, currentYear);
 
   return (
-    <div className={styles.container} ref={containerRef}>
+    <div className={`${styles.container} ${isOpen ? styles.open : ''}`} ref={containerRef}>
       <label className={styles.label}>
         {label}
         {required && <span className={styles.required}>*</span>}
@@ -240,7 +261,7 @@ function CustomDateTimePicker({
       
       <div 
         className={`${styles.input} ${disabled ? styles.disabled : ''} ${error ? styles.error : ''}`}
-        onClick={() => !disabled && setIsOpen(!isOpen)}
+        onClick={handleToggleOpen}
       >
         <FiCalendar className={styles.inputIcon} />
         <span className={`${styles.inputText} ${!selectedDate ? styles.placeholder : ''}`}>
@@ -263,7 +284,14 @@ function CustomDateTimePicker({
       {error && <div className={styles.errorMessage}>{error}</div>}
 
       {isOpen && (
-        <div className={styles.dropdown}>
+        <div 
+          className={styles.dropdown}
+          style={{
+            top: dropdownPosition.top,
+            left: dropdownPosition.left,
+            width: Math.max(dropdownPosition.width, 300)
+          }}
+        >
           {!timeInputMode ? (
             // Calendário
             <div className={styles.calendar}>

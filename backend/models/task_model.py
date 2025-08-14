@@ -48,6 +48,21 @@ class Task(db.Model):
     team = db.relationship('Team', backref='tasks')
 
     def to_dict(self):
+        from models.user_model import User
+        
+        # Buscar informações dos usuários atribuídos
+        assigned_users_info = []
+        if self.assigned_users:
+            for user_id in self.assigned_users:
+                user = User.query.get(user_id)
+                if user:
+                    assigned_users_info.append({
+                        "id": user.id,
+                        "name": user.username,
+                        "username": user.username,
+                        "email": user.email
+                    })
+        
         return {
             "id": self.id,
             "title": self.title,
@@ -87,6 +102,7 @@ class Task(db.Model):
             } if self.user else None,
             "collaborators": self.collaborators,
             "assigned_users": self.assigned_users,
+            "assigned_users_info": assigned_users_info,
             "team_id": self.team_id,
             "team_name": self.team.name if self.team else None
         }
@@ -119,6 +135,10 @@ class Task(db.Model):
         
         # Quem atribuiu a tarefa
         if self.assigned_by_user_id == user.id:
+            return True
+        
+        # Usuários atribuídos à tarefa
+        if user.id in (self.assigned_users or []):
             return True
         
         # Colaboradores/observadores

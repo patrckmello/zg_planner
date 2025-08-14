@@ -487,7 +487,7 @@ function TaskFormPage() {
                       placeholder="Selecione usuários para colaborar ou observar esta tarefa"
                       excludeUserIds={[
                         currentUser?.id,
-                        formData.assigned_to_user_id ? parseInt(formData.assigned_to_user_id) : null
+                        ...(formData.assigned_to_user_ids || [])
                       ].filter(Boolean)}
                     />
                     <div className={styles.collaboratorNote}>

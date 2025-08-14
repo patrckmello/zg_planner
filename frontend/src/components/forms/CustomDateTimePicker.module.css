@@ -3,6 +3,10 @@
   width: 100%;
 }
 
+.container.open {
+  z-index: 999999;
+}
+
 .label {
   display: block;
   font-size: 14px;
@@ -93,18 +97,16 @@
 }
 
 .dropdown {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
+  position: fixed;
   background: white;
   border: 2px solid #10b981;
   border-radius: 16px;
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-  z-index: 99999;
+  z-index: 999999;
   margin-top: 4px;
   overflow: hidden;
   animation: slideDown 0.2s ease;
+  min-width: 300px;
 }
 
 @keyframes slideDown {
