@@ -232,15 +232,8 @@ def add_task():
                     if len(assigned_to_user_ids) > 1 or (len(assigned_to_user_ids) == 1 and assigned_to_user_ids[0] != user_id):
                         return jsonify({"error": "Você só pode atribuir tarefas pessoais para si mesmo."}), 403
                 
-                # Se múltiplos usuários, adicionar como colaboradores em vez de criar múltiplas tarefas
+                # Se múltiplos usuários, criar UMA tarefa com múltiplos responsáveis
                 if len(assigned_to_user_ids) > 1:
-                    # Usar o primeiro usuário como responsável principal
-                    task_user_id = assigned_to_user_ids[0]
-                    assigned_by_user_id = user_id if assigned_to_user_ids[0] != user_id else None
-                    
-                    # Adicionar os outros usuários como colaboradores
-                    additional_collaborators = assigned_to_user_ids[1:]
-                    
                     # Processar colaboradores/observadores existentes
                     collaborators = []
                     if data.get("collaborator_ids"):
@@ -250,7 +243,7 @@ def add_task():
                                 # Adicionar todos os membros da equipe como colaboradores
                                 if team_id:
                                     team_members = UserTeam.query.filter_by(team_id=team_id).all()
-                                    collaborators = [member.user_id for member in team_members if member.user_id != task_user_id]
+                                    collaborators = [member.user_id for member in team_members]
                                 else:
                                     return jsonify({"error": "Não é possível adicionar 'todos' como colaboradores sem especificar uma equipe."}), 400
                             else:
@@ -266,12 +259,6 @@ def add_task():
                                     
                         except (json.JSONDecodeError, ValueError):
                             return jsonify({"error": "Formato inválido para collaborator_ids. Use um array JSON de IDs ou 'all'."}), 400
-                    
-                    # Combinar colaboradores existentes com usuários atribuídos adicionais
-                    all_collaborators = list(set(collaborators + additional_collaborators))
-                    # Remover o usuário principal da lista de colaboradores se estiver lá
-                    if task_user_id in all_collaborators:
-                        all_collaborators.remove(task_user_id)
                     
                     # Processar anexos com metadados completos
                     anexos_data = []
@@ -300,15 +287,20 @@ def add_task():
                     except Exception:
                         tags = []
 
-                    # Criação da task única com múltiplos colaboradores
+                    # Criar UMA tarefa com múltiplos responsáveis
+                    # O primeiro usuário é o responsável principal, os outros são adicionados como assigned_users
+                    primary_user_id = assigned_to_user_ids[0]
+                    additional_assigned_users = assigned_to_user_ids[1:]
+                    
                     new_task = Task(
                         title=data["title"],
                         description=data.get("description"),
                         status=data.get("status", "pending"),
                         due_date=due_date,
-                        user_id=task_user_id,
-                        assigned_by_user_id=assigned_by_user_id,
-                        collaborators=all_collaborators,
+                        user_id=primary_user_id,
+                        assigned_by_user_id=user_id if primary_user_id != user_id else None,
+                        collaborators=collaborators,
+                        assigned_users=assigned_to_user_ids,  # Todos os usuários atribuídos
                         team_id=team_id,
                         prioridade=data.get("prioridade"),
                         categoria=data.get("categoria"),

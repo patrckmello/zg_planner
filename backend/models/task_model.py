@@ -39,6 +39,9 @@ class Task(db.Model):
 
     # Lista de colaboradores/observadores (IDs de usuários)
     collaborators = db.Column(JSON, default=list) # Array de IDs de Usuários
+    
+    # Lista de usuários atribuídos/responsáveis (IDs de usuários)
+    assigned_users = db.Column(JSON, default=list) # Array de IDs de Usuários responsáveis
 
     # Equipe relacionada à tarefa
     team_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=True)
@@ -83,6 +86,7 @@ class Task(db.Model):
                 "email": self.user.email
             } if self.user else None,
             "collaborators": self.collaborators,
+            "assigned_users": self.assigned_users,
             "team_id": self.team_id,
             "team_name": self.team.name if self.team else None
         }

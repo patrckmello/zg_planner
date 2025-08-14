@@ -1,4 +1,5 @@
 import React, { useRef, useState } from 'react';
+import { toast } from 'react-toastify';
 import styles from './FileUploadArea.module.css';
 
 const FileUploadArea = ({ 
@@ -68,7 +69,11 @@ const FileUploadArea = ({
     });
 
     if (errors.length > 0) {
-      alert('Erros encontrados:\n' + errors.join('\n'));
+      toast.error(`Erros encontrados:\n${errors.join('\n')}`, {
+        position: "top-right",
+        autoClose: 5000,
+        style: { whiteSpace: 'pre-line' }
+      });
     }
 
     if (validFiles.length > 0) {
@@ -137,8 +142,8 @@ const FileUploadArea = ({
               </div>
               <div className={styles.uploadInfo}>
                 Máximo: {maxFiles} arquivos, {formatFileSize(maxFileSize)} cada
-                {acceptedTypes.length === 0 && <br />}
-                {acceptedTypes.length === 0 && <span>Todos os tipos de arquivo aceitos</span>}
+                <br />
+                <span>Todos os tipos de arquivo aceitos</span>
               </div>
             </div>
           </div>

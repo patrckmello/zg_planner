@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { DndContext, DragOverlay, rectIntersection } from '@dnd-kit/core';
-import KanbanColumn from './KanbanColumn';
+import { toast } from 'react-toastify';
+import { DndContext, rectIntersection, DragOverlay } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import TaskCard from './TaskCard';
+import KanbanColumn from './KanbanColumn';
 import styles from './KanbanBoard.module.css';
 import api from '../services/axiosInstance';
 import {
@@ -179,7 +181,10 @@ const KanbanBoard = ({ tasks, onTaskUpdate, viewMode = 'status' }) => {
       onTaskUpdate(taskId, updateData); // ainda avisa o pai
     } catch (error) {
       console.error('Erro ao atualizar tarefa:', error);
-      alert('Erro ao atualizar tarefa. Tente novamente.');
+      toast.error('Erro ao atualizar tarefa. Tente novamente.', {
+        position: "top-right",
+        autoClose: 5000,
+      });
 
       // rollback se falhar
       setLocalTasks(prev =>

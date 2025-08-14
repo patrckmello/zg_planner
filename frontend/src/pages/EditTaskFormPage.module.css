@@ -8,6 +8,16 @@
   overflow: hidden;
 }
 
+/* Garantir que dropdowns na edição tenham z-index correto */
+.editTaskFormPage .formSection {
+  position: relative;
+  z-index: 1;
+}
+
+.editTaskFormPage .formSection:has(.selector.open) {
+  z-index: 100000;
+}
+
 /* Loading state */
 .loadingContainer {
   position: fixed;

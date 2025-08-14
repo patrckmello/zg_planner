@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'react-toastify';
 import styles from './TaskModal.module.css';
 import api from '../services/axiosInstance';
+import DeleteConfirmModal from './DeleteConfirmModal';
 import { 
   FiX, 
   FiEdit, 
@@ -27,6 +29,7 @@ const TaskModal = ({ task, isOpen, onClose, onTaskUpdate }) => {
   const [comments, setComments] = useState([]);
   const [loading, setLoading] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   useEffect(() => {
     if (isOpen && task) {
@@ -70,7 +73,10 @@ const TaskModal = ({ task, isOpen, onClose, onTaskUpdate }) => {
       console.log('Comentário adicionado:', response.data);
     } catch (error) {
       console.error('Erro ao adicionar comentário:', error);
-      alert('Erro ao adicionar comentário. Tente novamente.');
+      toast.error('Erro ao adicionar comentário. Tente novamente.', {
+        position: "top-right",
+        autoClose: 5000,
+      });
     } finally {
       setLoading(false);
     }
@@ -81,17 +87,27 @@ const TaskModal = ({ task, isOpen, onClose, onTaskUpdate }) => {
     onClose();
   };
 
-  const handleDelete = async () => {
-    if (!confirm('Tem certeza que deseja excluir esta tarefa?')) return;
+  const handleDeleteClick = () => {
+    setShowDeleteModal(true);
+  };
 
+  const handleDelete = async () => {
     try {
       await api.delete(`/tasks/${task.id}`);
       onTaskUpdate(task.id, { deleted: true });
+      setShowDeleteModal(false);
       onClose();
-      alert('Tarefa excluída com sucesso!');
+      toast.success('Tarefa excluída com sucesso!', {
+        position: "top-right",
+        autoClose: 3000,
+      });
     } catch (error) {
       console.error('Erro ao excluir tarefa:', error);
-      alert('Erro ao excluir tarefa. Tente novamente.');
+      toast.error('Erro ao excluir tarefa. Tente novamente.', {
+        position: "top-right",
+        autoClose: 5000,
+      });
+      setShowDeleteModal(false);
     }
   };
 
@@ -386,13 +402,22 @@ const TaskModal = ({ task, isOpen, onClose, onTaskUpdate }) => {
           </button>
           <button 
             className={`${styles.actionButton} ${styles.deleteButton}`}
-            onClick={handleDelete}
+            onClick={handleDeleteClick}
           >
             <FiTrash2 />
             Excluir
           </button>
         </div>
       </div>
+      
+      {/* Modal de confirmação de exclusão */}
+      <DeleteConfirmModal
+        isOpen={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        onConfirm={handleDelete}
+        title="Excluir Tarefa"
+        message={`Tem certeza que deseja excluir a tarefa "${task?.title}"?`}
+      />
     </div>
   );
 };

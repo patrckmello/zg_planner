@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { toast } from 'react-toastify';
 import Header from './Header';
 import Sidebar from './Sidebar';
 import styles from './Dashboard.module.css';
@@ -54,7 +55,10 @@ function Dashboard() {
       setTasks(response.data);
     } catch (error) {
       console.error('Erro ao buscar tarefas:', error);
-      alert('Erro ao buscar tarefas. Faça login novamente.');
+      toast.error('Erro ao buscar tarefas. Faça login novamente.', {
+        position: "top-right",
+        autoClose: 5000,
+      });
     } finally {
       setLoading(false);
     }

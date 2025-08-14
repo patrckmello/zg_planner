@@ -25,7 +25,7 @@
 }
 
 .selector.open {
-  z-index: 10000;
+  z-index: 99999;
 }
 
 .selectorHeader {
@@ -110,7 +110,7 @@
   border-top: none;
   border-radius: 0 0 12px 12px;
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
-  z-index: 10001;
+  z-index: 99999;
   max-height: 300px;
   overflow: hidden;
   display: flex;

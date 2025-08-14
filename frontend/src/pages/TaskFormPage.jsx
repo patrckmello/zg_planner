@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'react-toastify';
 import Header from '../components/Header';
 import Sidebar from '../components/Sidebar';
 import Button from '../components/ui/Button';
@@ -158,18 +159,37 @@ function TaskFormPage() {
 
     setErrors(newErrors);
     
-    // Se há erros, fazer scroll para o primeiro campo com erro
+    // Se há erros, fazer scroll para o primeiro campo com erro e mostrar toast
     if (Object.keys(newErrors).length > 0) {
       const firstErrorField = Object.keys(newErrors)[0];
-      const errorElement = document.querySelector(`[name="${firstErrorField}"]`);
+      
+      // Buscar o campo de título especificamente
+      let errorElement = null;
+      if (firstErrorField === 'title') {
+        errorElement = document.querySelector('input[name="title"]') || 
+                      document.querySelector('input[placeholder*="título"]') ||
+                      document.querySelector('input[placeholder*="Título"]');
+      } else {
+        errorElement = document.querySelector(`[name="${firstErrorField}"]`) || 
+                      document.querySelector(`input[placeholder*="${firstErrorField}"]`) ||
+                      document.querySelector(`textarea[placeholder*="${firstErrorField}"]`);
+      }
+      
       if (errorElement) {
         errorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        errorElement.focus();
+        setTimeout(() => {
+          errorElement.focus();
+          errorElement.style.borderColor = '#ef4444';
+          errorElement.style.boxShadow = '0 0 0 3px rgba(239, 68, 68, 0.1)';
+        }, 500);
       }
       
       // Mostrar toast de erro
-      const errorMessages = Object.values(newErrors).join(', ');
-      alert(`Por favor, corrija os seguintes erros: ${errorMessages}`);
+      const errorMessages = Object.values(newErrors);
+      toast.error(`Por favor, corrija os seguintes erros: ${errorMessages.join(', ')}`, {
+        position: "top-center",
+        autoClose: 5000,
+      });
     }
     
     return Object.keys(newErrors).length === 0;
@@ -230,14 +250,24 @@ function TaskFormPage() {
       });
 
       console.log('Tarefa criada com sucesso:', response.data);
+      toast.success('Tarefa criada com sucesso!', {
+        position: "top-right",
+        autoClose: 3000,
+      });
       navigate('/tasks');
 
     } catch (err) {
       console.error('Erro ao criar tarefa:', err);
       if (err.response?.data?.error) {
-        alert(err.response.data.error);
+        toast.error(err.response.data.error, {
+          position: "top-right",
+          autoClose: 5000,
+        });
       } else {
-        alert('Erro ao criar tarefa. Tente novamente.');
+        toast.error('Erro ao criar tarefa. Tente novamente.', {
+          position: "top-right",
+          autoClose: 5000,
+        });
       }
     } finally {
       setLoading(false);

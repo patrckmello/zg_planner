@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'react-toastify';
 import Header from '../components/Header';
 import Sidebar from '../components/Sidebar';
 import TaskTabs from '../components/TaskTabs';
@@ -62,7 +63,10 @@ function TasksPage() {
         setTasks(tasksResponse.data);
       } catch (error) {
         console.error('Erro ao buscar dados:', error);
-        alert('Erro ao buscar dados. Faça login novamente.');
+        toast.error('Erro ao buscar dados. Faça login novamente.', {
+          position: "top-right",
+          autoClose: 5000,
+        });
       } finally {
         setLoading(false);
       }
@@ -114,11 +118,17 @@ function TasksPage() {
   };
 
   const handleTaskUpdate = (taskId, updateData) => {
-    setTasks(prevTasks =>
-      prevTasks.map(task =>
-        task.id === taskId ? { ...task, ...updateData } : task
-      )
-    );
+    // Se a tarefa foi excluída, removê-la da lista
+    if (updateData.deleted) {
+      setTasks(prevTasks => prevTasks.filter(task => task.id !== taskId));
+    } else {
+      // Caso contrário, atualizar a tarefa
+      setTasks(prevTasks =>
+        prevTasks.map(task =>
+          task.id === taskId ? { ...task, ...updateData } : task
+        )
+      );
+    }
   };
 
   const handleTabChange = (newTab) => {
