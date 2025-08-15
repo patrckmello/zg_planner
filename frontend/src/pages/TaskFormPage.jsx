@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import Header from "../components/Header";
 import Sidebar from "../components/Sidebar";
@@ -36,6 +36,11 @@ function TaskFormPage() {
   const [teams, setTeams] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
   const [errors, setErrors] = useState({});
+
+  // Refs para campos obrigatórios
+  const titleRef = useRef(null);
+  const dueDateRef = useRef(null);
+  const tempoEstimadoRef = useRef(null);
 
   // Estados do formulário
   const [formData, setFormData] = useState({
@@ -153,6 +158,44 @@ function TaskFormPage() {
     }
   };
 
+  // Função para rolar até o primeiro campo com erro
+  const scrollToFirstError = (newErrors) => {
+    const errorFields = Object.keys(newErrors);
+    if (errorFields.length === 0) return;
+
+    const fieldRefMap = {
+      title: titleRef,
+      due_date: dueDateRef,
+      tempo_estimado: tempoEstimadoRef,
+    };
+
+    // Encontrar o primeiro campo com erro que tem ref
+    for (const field of errorFields) {
+      const ref = fieldRefMap[field];
+      if (ref && ref.current) {
+        ref.current.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+          inline: "nearest",
+        });
+
+        // Focar no campo após um pequeno delay
+        setTimeout(() => {
+          if (
+            ref.current.querySelector("input") ||
+            ref.current.querySelector("textarea")
+          ) {
+            const input =
+              ref.current.querySelector("input") ||
+              ref.current.querySelector("textarea");
+            input.focus();
+          }
+        }, 300);
+        break;
+      }
+    }
+  };
+
   const validateForm = () => {
     const newErrors = {};
 
@@ -165,6 +208,12 @@ function TaskFormPage() {
     }
 
     setErrors(newErrors);
+
+    // Rolar até o primeiro campo com erro
+    if (Object.keys(newErrors).length > 0) {
+      scrollToFirstError(newErrors);
+    }
+
     return Object.keys(newErrors).length === 0;
   };
 
@@ -299,7 +348,7 @@ function TaskFormPage() {
                   </div>
                   <div className={styles.sectionContent}>
                     <div className={styles.formGrid}>
-                      <div className={styles.fullWidth}>
+                      <div className={styles.fullWidth} ref={titleRef}>
                         <Input
                           label="Título"
                           required
@@ -365,7 +414,7 @@ function TaskFormPage() {
                         }
                         placeholder="Nº do processo, cliente..."
                       />
-                      <div className={styles.fullWidth}>
+                      <div className={styles.fullWidth} ref={dueDateRef}>
                         <CustomDateTimePicker
                           label="Data de Vencimento"
                           value={formData.due_date}
@@ -387,17 +436,19 @@ function TaskFormPage() {
                   </div>
                   <div className={styles.sectionContent}>
                     <div className={styles.formGrid}>
-                      <Input
-                        type="number"
-                        label="Quantidade"
-                        value={formData.tempo_estimado}
-                        onChange={(e) =>
-                          updateField("tempo_estimado", e.target.value)
-                        }
-                        placeholder="Ex: 2"
-                        min="1"
-                        error={errors.tempo_estimado}
-                      />
+                      <div ref={tempoEstimadoRef}>
+                        <Input
+                          type="number"
+                          label="Quantidade"
+                          value={formData.tempo_estimado}
+                          onChange={(e) =>
+                            updateField("tempo_estimado", e.target.value)
+                          }
+                          placeholder="Ex: 2"
+                          min="1"
+                          error={errors.tempo_estimado}
+                        />
+                      </div>
                       <Select
                         label="Unidade"
                         value={formData.tempo_unidade}
@@ -439,20 +490,13 @@ function TaskFormPage() {
                           <div className={styles.fullWidth}>
                             <TeamMemberSelector
                               teamId={parseInt(formData.team_id)}
-                              selectedMembers={
-                                formData.assigned_to_user_id
-                                  ? [parseInt(formData.assigned_to_user_id)]
-                                  : []
-                              }
+                              selectedMembers={formData.collaborator_ids}
                               onSelectionChange={(members) => {
-                                updateField(
-                                  "assigned_to_user_id",
-                                  members.length > 0 ? members[0] : ""
-                                );
+                                updateField("collaborator_ids", members);
                               }}
                               label="Atribuir para"
-                              placeholder="Selecione um membro da equipe"
-                              allowMultiple={false}
+                              placeholder="Selecione membros da equipe"
+                              allowMultiple={true}
                               disabled={!isManagerOfSelectedTeam()}
                             />
                             {!isManagerOfSelectedTeam() && (
@@ -474,31 +518,42 @@ function TaskFormPage() {
                 {/* Seção Colaboradores */}
                 <div className={styles.formSection}>
                   <div className={styles.sectionHeader}>
-                    <FiEye className={styles.sectionIcon} />
-                    <h2 className={styles.sectionTitle}>
-                      Colaboradores/Observadores
-                    </h2>
+                    <FiUser className={styles.sectionIcon} />
+                    <h2 className={styles.sectionTitle}>Colaboradores</h2>
                   </div>
                   <div className={styles.sectionContent}>
-                    <CollaboratorSelector
-                      selectedCollaborators={formData.collaborator_ids}
-                      onSelectionChange={(collaborators) =>
-                        updateField("collaborator_ids", collaborators)
-                      }
-                      label="Adicionar colaboradores"
-                      placeholder="Selecione usuários para colaborar ou observar esta tarefa"
-                      excludeUserIds={[
-                        currentUser?.id,
-                        formData.assigned_to_user_id
-                          ? parseInt(formData.assigned_to_user_id)
-                          : null,
-                      ].filter(Boolean)}
-                    />
-                    <div className={styles.collaboratorNote}>
-                      <span>
-                        Colaboradores podem visualizar e comentar na tarefa, mas
-                        não editá-la.
-                      </span>
+                    <div className={styles.formGrid}>
+                      <div className={styles.fullWidth}>
+                        <CollaboratorSelector
+                          selectedCollaborators={formData.collaborator_ids}
+                          onSelectionChange={(collaborators) =>
+                            updateField("collaborator_ids", collaborators)
+                          }
+                          label="Adicionar Colaboradores"
+                          placeholder="Busque e selecione colaboradores"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Seção Tags */}
+                <div className={styles.formSection}>
+                  <div className={styles.sectionHeader}>
+                    <FiTag className={styles.sectionIcon} />
+                    <h2 className={styles.sectionTitle}>Tags</h2>
+                  </div>
+                  <div className={styles.sectionContent}>
+                    <div className={styles.formGrid}>
+                      <div className={styles.fullWidth}>
+                        <TagInput
+                          label="Tags"
+                          value={formData.tags}
+                          onChange={(tags) => updateField("tags", tags)}
+                          suggestions={tagSuggestions}
+                          placeholder="Digite uma tag e pressione Enter"
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -512,47 +567,28 @@ function TaskFormPage() {
                   <div className={styles.sectionContent}>
                     <div className={styles.checkboxGrid}>
                       {lembretesOptions.map((option) => (
-                        <div key={option.value} className={styles.checkboxItem}>
-                          <Checkbox
-                            id={`lembrete-${option.value}`}
-                            checked={formData.lembretes.includes(option.value)}
-                            onCheckedChange={(checked) => {
-                              if (checked) {
-                                updateField("lembretes", [
-                                  ...formData.lembretes,
-                                  option.value,
-                                ]);
-                              } else {
-                                updateField(
-                                  "lembretes",
-                                  formData.lembretes.filter(
-                                    (l) => l !== option.value
-                                  )
-                                );
-                              }
-                            }}
-                            label={option.label}
-                          />
-                        </div>
+                        <Checkbox
+                          key={option.value}
+                          label={option.label}
+                          checked={formData.lembretes.includes(option.value)}
+                          onChange={(checked) => {
+                            if (checked) {
+                              updateField("lembretes", [
+                                ...formData.lembretes,
+                                option.value,
+                              ]);
+                            } else {
+                              updateField(
+                                "lembretes",
+                                formData.lembretes.filter(
+                                  (l) => l !== option.value
+                                )
+                              );
+                            }
+                          }}
+                        />
                       ))}
                     </div>
-                  </div>
-                </div>
-
-                {/* Seção Tags */}
-                <div className={styles.formSection}>
-                  <div className={styles.sectionHeader}>
-                    <FiTag className={styles.sectionIcon} />
-                    <h2 className={styles.sectionTitle}>Tags</h2>
-                  </div>
-                  <div className={styles.sectionContent}>
-                    <TagInput
-                      value={formData.tags}
-                      onChange={(tags) => updateField("tags", tags)}
-                      suggestions={tagSuggestions}
-                      placeholder="Adicionar tag..."
-                      maxTags={10}
-                    />
                   </div>
                 </div>
 
@@ -563,30 +599,28 @@ function TaskFormPage() {
                     <h2 className={styles.sectionTitle}>Anexos</h2>
                   </div>
                   <div className={styles.sectionContent}>
-                    <FileUploadArea
-                      value={formData.anexos}
-                      onChange={(files) => updateField("anexos", files)}
-                      maxFiles={10}
-                      maxFileSize={10 * 1024 * 1024} // 10MB
-                      acceptedTypes={[
-                        "image/*",
-                        "application/pdf",
-                        "application/msword",
-                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                        "application/vnd.ms-excel",
-                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                      ]}
-                    />
+                    <div className={styles.formGrid}>
+                      <div className={styles.fullWidth}>
+                        <FileUploadArea
+                          files={formData.anexos}
+                          onChange={(files) => updateField("anexos", files)}
+                          label="Anexar Arquivos"
+                          accept="*/*"
+                          multiple={true}
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
 
-              {/* Actions */}
+              {/* Botões de ação */}
               <div className={styles.formActions}>
                 <Button
                   type="button"
                   variant="secondary"
                   onClick={handleCancel}
+                  disabled={loading}
                   icon={<FiX />}
                 >
                   Cancelar
@@ -597,7 +631,7 @@ function TaskFormPage() {
                   loading={loading}
                   icon={<FiSave />}
                 >
-                  Criar Tarefa
+                  {loading ? "Salvando..." : "Criar Tarefa"}
                 </Button>
               </div>
             </form>

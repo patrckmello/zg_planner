@@ -192,13 +192,6 @@
   }
 }
 
-/* Hover effects melhorados para edição */
-.formSection:hover {
-  background-color: #fafbfc;
-  transform: translateX(2px);
-  box-shadow: -4px 0 12px rgba(0, 0, 0, 0.05);
-}
-
 /* Responsividade específica para edição */
 @media (max-width: 768px) {
   .titleRow {

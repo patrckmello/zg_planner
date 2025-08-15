@@ -20,7 +20,8 @@ import {
   FiFolder,
   FiUsers,
   FiEye,
-  FiFileText
+  FiFileText,
+  FiUserCheck
 } from 'react-icons/fi';
 
 const TaskModal = ({ task, isOpen, onClose, onTaskUpdate }) => {
@@ -167,6 +168,19 @@ const TaskModal = ({ task, isOpen, onClose, onTaskUpdate }) => {
     return labels[category] || category;
   };
 
+  // Função para renderizar usuário individual
+  const renderUserCard = (user, role, icon) => (
+    <div key={user.id || user.name} className={styles.userCard}>
+      <div className={styles.userAvatar}>
+        {icon}
+      </div>
+      <div className={styles.userInfo}>
+        <div className={styles.userName}>{user.name}</div>
+        <div className={styles.userRole}>{role}</div>
+      </div>
+    </div>
+  );
+
   if (!isOpen || !task) return null;
 
   return (
@@ -254,49 +268,84 @@ const TaskModal = ({ task, isOpen, onClose, onTaskUpdate }) => {
           <div className={styles.section}>
             <div className={styles.sectionHeader}>
               <FiUsers className={styles.sectionIcon} />
-              <h3>Pessoas</h3>
+              <h3>Pessoas Envolvidas</h3>
             </div>
             <div className={styles.sectionContent}>
-              <div className={styles.infoGrid}>
+              <div className={styles.usersContainer}>
                 {/* Responsáveis da tarefa */}
                 {task.assigned_users_info && task.assigned_users_info.length > 0 ? (
-                  <div className={styles.infoItem}>
-                    <FiUser className={styles.infoIcon} />
-                    <span className={styles.infoLabel}>Responsáveis:</span>
-                    <div className={styles.assignedUsers}>
-                      {task.assigned_users_info.map((user, index) => (
-                        <span key={user.id} className={styles.assignedUser}>
-                          {user.name}
-                          {index < task.assigned_users_info.length - 1 && ', '}
-                        </span>
-                      ))}
+                  <div className={styles.userGroup}>
+                    <div className={styles.userGroupHeader}>
+                      <FiUserCheck className={styles.groupIcon} />
+                      <span className={styles.groupTitle}>
+                        Responsáveis ({task.assigned_users_info.length})
+                      </span>
+                    </div>
+                    <div className={styles.userCards}>
+                      {task.assigned_users_info.map((user) => 
+                        renderUserCard(user, 'Responsável', <FiUserCheck />)
+                      )}
                     </div>
                   </div>
                 ) : (
-                  <div className={styles.infoItem}>
-                    <FiUser className={styles.infoIcon} />
-                    <span className={styles.infoLabel}>Responsável:</span>
-                    <span className={styles.infoValue}>
-                      {task.assigned_to_user?.name || task.user?.name || 'Não atribuído'}
-                    </span>
-                  </div>
+                  // Fallback para responsável único
+                  task.assigned_to_user?.name || task.user?.name ? (
+                    <div className={styles.userGroup}>
+                      <div className={styles.userGroupHeader}>
+                        <FiUser className={styles.groupIcon} />
+                        <span className={styles.groupTitle}>Responsável</span>
+                      </div>
+                      <div className={styles.userCards}>
+                        {renderUserCard(
+                          { 
+                            id: task.assigned_to_user?.id || task.user?.id,
+                            name: task.assigned_to_user?.name || task.user?.name 
+                          }, 
+                          'Responsável', 
+                          <FiUser />
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className={styles.userGroup}>
+                      <div className={styles.userGroupHeader}>
+                        <FiUser className={styles.groupIcon} />
+                        <span className={styles.groupTitle}>Responsável</span>
+                      </div>
+                      <div className={styles.noAssignedMessage}>
+                        <span>Nenhum responsável atribuído</span>
+                      </div>
+                    </div>
+                  )
                 )}
                 
+                {/* Atribuído por */}
                 {task.assigned_by_user && (
-                  <div className={styles.infoItem}>
-                    <FiUser className={styles.infoIcon} />
-                    <span className={styles.infoLabel}>Atribuído por:</span>
-                    <span className={styles.infoValue}>{task.assigned_by_user.name}</span>
+                  <div className={styles.userGroup}>
+                    <div className={styles.userGroupHeader}>
+                      <FiUsers className={styles.groupIcon} />
+                      <span className={styles.groupTitle}>Atribuído por</span>
+                    </div>
+                    <div className={styles.userCards}>
+                      {renderUserCard(task.assigned_by_user, 'Gestor', <FiUsers />)}
+                    </div>
                   </div>
                 )}
                 
+                {/* Colaboradores */}
                 {task.collaborators && task.collaborators.length > 0 && (
-                  <div className={styles.infoItem}>
-                    <FiEye className={styles.infoIcon} />
-                    <span className={styles.infoLabel}>Colaboradores:</span>
-                    <span className={styles.infoValue}>
-                      {task.collaborators.length} colaborador(es)
-                    </span>
+                  <div className={styles.userGroup}>
+                    <div className={styles.userGroupHeader}>
+                      <FiEye className={styles.groupIcon} />
+                      <span className={styles.groupTitle}>
+                        Colaboradores ({task.collaborators.length})
+                      </span>
+                    </div>
+                    <div className={styles.userCards}>
+                      {task.collaborators.map((collaborator) => 
+                        renderUserCard(collaborator, 'Colaborador', <FiEye />)
+                      )}
+                    </div>
                   </div>
                 )}
               </div>

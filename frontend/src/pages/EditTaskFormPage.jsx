@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import Header from "../components/Header";
 import Sidebar from "../components/Sidebar";
@@ -46,6 +46,12 @@ function EditTaskFormPage() {
   const [removedFiles, setRemovedFiles] = useState([]);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Refs para campos obrigatórios
+  const titleRef = useRef(null);
+  const dueDateRef = useRef(null);
+  const tempoEstimadoRef = useRef(null);
+
   // Estados do formulário
   const [formData, setFormData] = useState({
     title: "",
@@ -239,6 +245,44 @@ function EditTaskFormPage() {
     }
   };
 
+  // Função para rolar até o primeiro campo com erro
+  const scrollToFirstError = (newErrors) => {
+    const errorFields = Object.keys(newErrors);
+    if (errorFields.length === 0) return;
+
+    const fieldRefMap = {
+      title: titleRef,
+      due_date: dueDateRef,
+      tempo_estimado: tempoEstimadoRef,
+    };
+
+    // Encontrar o primeiro campo com erro que tem ref
+    for (const field of errorFields) {
+      const ref = fieldRefMap[field];
+      if (ref && ref.current) {
+        ref.current.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+          inline: "nearest",
+        });
+
+        // Focar no campo após um pequeno delay
+        setTimeout(() => {
+          if (
+            ref.current.querySelector("input") ||
+            ref.current.querySelector("textarea")
+          ) {
+            const input =
+              ref.current.querySelector("input") ||
+              ref.current.querySelector("textarea");
+            input.focus();
+          }
+        }, 300);
+        break;
+      }
+    }
+  };
+
   const validateForm = () => {
     const newErrors = {};
 
@@ -251,6 +295,12 @@ function EditTaskFormPage() {
     }
 
     setErrors(newErrors);
+
+    // Rolar até o primeiro campo com erro
+    if (Object.keys(newErrors).length > 0) {
+      scrollToFirstError(newErrors);
+    }
+
     return Object.keys(newErrors).length === 0;
   };
 
@@ -461,7 +511,7 @@ function EditTaskFormPage() {
                   </div>
                   <div className={styles.sectionContent}>
                     <div className={styles.formGrid}>
-                      <div className={styles.fullWidth}>
+                      <div className={styles.fullWidth} ref={titleRef}>
                         <Input
                           label="Título"
                           required
@@ -527,7 +577,7 @@ function EditTaskFormPage() {
                         }
                         placeholder="Nº do processo, cliente..."
                       />
-                      <div className={styles.fullWidth}>
+                      <div className={styles.fullWidth} ref={dueDateRef}>
                         <CustomDateTimePicker
                           label="Data de Vencimento"
                           value={formData.due_date}
@@ -549,17 +599,19 @@ function EditTaskFormPage() {
                   </div>
                   <div className={styles.sectionContent}>
                     <div className={styles.formGrid}>
-                      <Input
-                        type="number"
-                        label="Quantidade"
-                        value={formData.tempo_estimado}
-                        onChange={(e) =>
-                          updateField("tempo_estimado", e.target.value)
-                        }
-                        placeholder="Ex: 2"
-                        min="1"
-                        error={errors.tempo_estimado}
-                      />
+                      <div ref={tempoEstimadoRef}>
+                        <Input
+                          type="number"
+                          label="Quantidade"
+                          value={formData.tempo_estimado}
+                          onChange={(e) =>
+                            updateField("tempo_estimado", e.target.value)
+                          }
+                          placeholder="Ex: 2"
+                          min="1"
+                          error={errors.tempo_estimado}
+                        />
+                      </div>
                       <Select
                         label="Unidade"
                         value={formData.tempo_unidade}
@@ -601,20 +653,13 @@ function EditTaskFormPage() {
                           <div className={styles.fullWidth}>
                             <TeamMemberSelector
                               teamId={parseInt(formData.team_id)}
-                              selectedMembers={
-                                formData.assigned_to_user_id
-                                  ? [parseInt(formData.assigned_to_user_id)]
-                                  : []
-                              }
+                              selectedMembers={formData.collaborator_ids}
                               onSelectionChange={(members) => {
-                                updateField(
-                                  "assigned_to_user_id",
-                                  members.length > 0 ? members[0] : ""
-                                );
+                                updateField("collaborator_ids", members);
                               }}
                               label="Atribuir para"
-                              placeholder="Selecione um membro da equipe"
-                              allowMultiple={false}
+                              placeholder="Selecione membros da equipe"
+                              allowMultiple={true}
                               disabled={!isManagerOfSelectedTeam()}
                             />
                             {!isManagerOfSelectedTeam() && (
