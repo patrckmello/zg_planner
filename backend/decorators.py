@@ -59,10 +59,10 @@ def manager_required(fn):
         if not user or not user.is_active:
             return jsonify({'error': 'Usuário inválido ou inativo'}), 401
 
-        # Verifica se o user é gerente em pelo menos um time
+        # Verifica se o user é gestor em pelo menos um time
         manager_link = UserTeam.query.filter_by(user_id=user.id, is_manager=True).first()
         if not manager_link:
-            return jsonify({'error': 'Acesso negado. Apenas gerentes de equipe têm permissão.'}), 403
+            return jsonify({'error': 'Acesso negado. Apenas gestores de equipe têm permissão.'}), 403
 
         return fn(*args, **kwargs)
     return wrapper

@@ -28,51 +28,28 @@ def get_tasks():
     due_after = request.args.get("due_after")
     search = request.args.get("search")
     assigned_by_user_id = request.args.get("assigned_by_user_id")
-    team_member_ids = request.args.get("team_member_ids") # Para filtro de equipe
-    collaborator_id = request.args.get("collaborator_id") # Para filtro de colaborador
+    collaborator_id = request.args.get("collaborator_id")  # Para filtro de colaborador
 
+    # Query base
     if user.is_admin:
         query = Task.query
     else:
-        # Verifica se o usuário é gestor de algum time
-        manager_team_ids = [
-            assoc.team_id for assoc in user.teams if assoc.is_manager
-        ]
-
-        # Obter IDs das equipes onde o usuário é membro
-        member_team_ids = [assoc.team_id for assoc in user.teams]
-
-        # CORREÇÃO: Usar operadores JSONB corretos para PostgreSQL
-        # Tarefas que o usuário pode ver:
-        # 1. Tarefas pessoais (user_id == user_id)
-        # 2. Tarefas que ele atribuiu (assigned_by_user_id == user_id)
-        # 3. Tarefas das equipes que ele gerencia
-        # 4. Tarefas onde ele é colaborador (usando operador JSONB)
-        # 5. Tarefas das equipes em que ele participa
-        # 6. Tarefas onde ele está na lista de assigned_users
-        
+        # Filtros para usuários normais
         conditions = [
-            Task.user_id == user_id,
-            Task.assigned_by_user_id == user_id
+            Task.user_id == user_id,  # tarefas próprias
+            Task.assigned_by_user_id == user_id,  # tarefas que ele criou
+            text("tasks.assigned_users::jsonb @> :user_id_json").params(user_id_json=f'[{user_id}]'),
+            text("tasks.collaborators::jsonb @> :user_id_json").params(user_id_json=f'[{user_id}]')
         ]
-        
-        # Adicionar condições de equipes se o usuário pertence a alguma
-        if manager_team_ids:
-            conditions.append(Task.team_id.in_(manager_team_ids))
-        
-        if member_team_ids:
-            conditions.append(Task.team_id.in_(member_team_ids))
-        
-        conditions.append(text("tasks.collaborators::jsonb @> CAST(:user_id_json AS jsonb)").params(user_id_json=f'[{user_id}]'))
-        conditions.append(text("tasks.assigned_users::jsonb @> CAST(:user_id_json AS jsonb)").params(user_id_json=f'[{user_id}]'))
-        
         query = Task.query.filter(or_(*conditions))
 
+    # Filtro de status
     if status:
         if status not in ["pending", "done", "in_progress", "cancelled"]:
             return jsonify({"error": "Status inválido para filtro."}), 400
         query = query.filter(Task.status == status)
 
+    # Filtro de datas
     if due_before:
         try:
             due_before_date = datetime.fromisoformat(due_before)
@@ -87,9 +64,11 @@ def get_tasks():
         except ValueError:
             return jsonify({"error": "Formato inválido para due_after. Use ISO 8601."}), 400
 
+    # Filtro de busca
     if search:
         query = query.filter(Task.title.ilike(f"%{search}%"))
 
+    # Filtro de quem atribuiu
     if assigned_by_user_id:
         try:
             assigned_by_user_id = int(assigned_by_user_id)
@@ -97,20 +76,11 @@ def get_tasks():
         except ValueError:
             return jsonify({"error": "assigned_by_user_id inválido."}), 400
 
-    if team_member_ids:
-        try:
-            team_member_ids = json.loads(team_member_ids)
-            if not isinstance(team_member_ids, list):
-                raise ValueError("team_member_ids deve ser uma lista de IDs.")
-            query = query.filter(Task.user_id.in_(team_member_ids))
-        except (json.JSONDecodeError, ValueError):
-            return jsonify({"error": "Formato inválido para team_member_ids. Use um array JSON de IDs."}), 400
-
+    # Filtro de colaborador específico
     if collaborator_id:
         try:
             collaborator_id = int(collaborator_id)
-            # CORREÇÃO: Usar operador JSONB correto
-            query = query.filter(text("tasks.collaborators @> :collab_id_json").params(collab_id_json=f'[{collaborator_id}]'))
+            query = query.filter(text("tasks.collaborators::jsonb @> :collab_id_json").params(collab_id_json=f'[{collaborator_id}]'))
         except ValueError:
             return jsonify({"error": "collaborator_id inválido."}), 400
 
@@ -121,6 +91,10 @@ def get_tasks():
     for task in tasks:
         task_dict = task.to_dict()
 
+        # Garantir que assigned_users e collaborators sejam sempre números
+        task_dict["assigned_users"] = [int(uid) for uid in task_dict.get("assigned_users", [])]
+        task_dict["collaborators"] = [int(uid) for uid in task_dict.get("collaborators", [])]
+
         if task_dict.get("anexos"):
             anexos_enriched = []
             for anexo in task_dict["anexos"]:
@@ -128,21 +102,20 @@ def get_tasks():
                     anexo_obj = {
                         "id": anexo,
                         "name": anexo,
-                        "url": f"{request.scheme}://{request.host}/uploads/{anexo}",  # CORREÇÃO: URL dinâmica
+                        "url": f"{request.scheme}://{request.host}/uploads/{anexo}",
                         "size": 0,
                         "type": "application/octet-stream"
                     }
                 else:
                     anexo_obj = anexo.copy()
                     if "url" not in anexo_obj:
-                        anexo_obj["url"] = f"{request.scheme}://{request.host}/uploads/{anexo_obj.get('name', '')}"  # CORREÇÃO: URL dinâmica
+                        anexo_obj["url"] = f"{request.scheme}://{request.host}/uploads/{anexo_obj.get('name', '')}"
                 anexos_enriched.append(anexo_obj)
             task_dict["anexos"] = anexos_enriched
 
         tasks_data.append(task_dict)
 
     return jsonify(tasks_data)
-
 
 @task_bp.route("/tasks", methods=["POST"])
 @jwt_required()
@@ -165,16 +138,14 @@ def add_task():
         if data.get("due_date"):
             try:
                 due_date = datetime.fromisoformat(data["due_date"])
-                # Remover timezone info se presente para comparação consistente
                 if due_date.tzinfo is not None:
                     due_date = due_date.replace(tzinfo=None)
-                # Validação: não permitir datas passadas
                 if due_date < datetime.utcnow():
                     return jsonify({"error": "A data de vencimento não pode ser no passado."}), 400
             except ValueError:
                 return jsonify({"error": "Formato inválido para due_date. Use ISO 8601."}), 400
 
-        # 🔑 Lógica para validar criação de tarefa de equipe
+        # Verifica se a task é de equipe
         team_id = data.get("team_id")
         if team_id:
             try:
@@ -186,188 +157,88 @@ def add_task():
             if not team:
                 return jsonify({"error": "Time não encontrado."}), 404
 
-            # Verifica se o user é manager da equipe ou admin
             is_manager = user.is_admin or any(assoc.is_manager and assoc.team_id == team.id for assoc in user.teams)
             if not is_manager:
                 return jsonify({"error": "Apenas gestores podem criar tarefas para a equipe."}), 403
         else:
-            team_id = None  # tarefa pessoal
+            team_id = None
 
-        # Determinar o user_id da tarefa e assigned_by_user_id
-        task_user_id = user_id # Por padrão, a tarefa é para o próprio usuário
-        assigned_by_user_id = None
-
-        # CORREÇÃO: Permitir múltiplos usuários atribuídos
+        # Processar usuários atribuídos
         assigned_to_user_ids = data.get("assigned_to_user_ids")
         if assigned_to_user_ids:
             try:
                 if assigned_to_user_ids == "all":
-                    # Atribuir para todos os membros da equipe
                     if team_id:
                         team_members = UserTeam.query.filter_by(team_id=team_id).all()
                         assigned_to_user_ids = [member.user_id for member in team_members]
                     else:
-                        return jsonify({"error": "Não é possível atribuir para 'todos' sem especificar uma equipe."}), 400
+                        return jsonify({"error": "Não é possível atribuir para 'todos' sem equipe."}), 400
                 else:
                     assigned_to_user_ids = json.loads(assigned_to_user_ids)
                     if not isinstance(assigned_to_user_ids, list):
                         raise ValueError("assigned_to_user_ids deve ser uma lista de IDs ou 'all'.")
-                
-                # Validação: apenas gestores podem atribuir tarefas para outros
+
+                # Valida atribuição
                 if team_id:
-                    # Para tarefas de equipe, verificar se o usuário é gestor da equipe
-                    is_manager = user.is_admin or any(assoc.is_manager and assoc.team_id == team_id for assoc in user.teams)
-                    if not is_manager:
-                        return jsonify({"error": "Apenas gestores podem atribuir tarefas para outros membros."}), 403
-                    
-                    # Verificar se todos os usuários atribuídos são membros da equipe
-                    for assigned_to_user_id in assigned_to_user_ids:
-                        assigned_user = User.query.get(assigned_to_user_id)
+                    for assigned_user_id in assigned_to_user_ids:
+                        assigned_user = User.query.get(assigned_user_id)
                         if not assigned_user:
-                            return jsonify({"error": f"Usuário com ID {assigned_to_user_id} não encontrado."}), 404
-                        
+                            return jsonify({"error": f"Usuário {assigned_user_id} não encontrado."}), 404
                         is_team_member = any(assoc.team_id == team_id for assoc in assigned_user.teams)
                         if not is_team_member:
                             return jsonify({"error": f"O usuário {assigned_user.username} deve ser membro da equipe."}), 400
                 else:
-                    # Para tarefas pessoais, apenas o próprio usuário pode atribuir para si mesmo
                     if len(assigned_to_user_ids) > 1 or (len(assigned_to_user_ids) == 1 and assigned_to_user_ids[0] != user_id):
                         return jsonify({"error": "Você só pode atribuir tarefas pessoais para si mesmo."}), 403
-                
-                # Se múltiplos usuários, criar UMA tarefa com múltiplos responsáveis
-                if len(assigned_to_user_ids) > 1:
-                    # Processar colaboradores/observadores existentes
-                    collaborators = []
-                    if data.get("collaborator_ids"):
-                        try:
-                            collaborator_ids_data = data.get("collaborator_ids")
-                            if collaborator_ids_data == "all":
-                                # Adicionar todos os membros da equipe como colaboradores
-                                if team_id:
-                                    team_members = UserTeam.query.filter_by(team_id=team_id).all()
-                                    collaborators = [member.user_id for member in team_members]
-                                else:
-                                    return jsonify({"error": "Não é possível adicionar 'todos' como colaboradores sem especificar uma equipe."}), 400
-                            else:
-                                collaborators = json.loads(collaborator_ids_data)
-                                if not isinstance(collaborators, list):
-                                    raise ValueError("collaborator_ids deve ser uma lista de IDs ou 'all'.")
-                            
-                            # Validar que todos os colaboradores existem
-                            for collab_id in collaborators:
-                                collab_user = User.query.get(collab_id)
-                                if not collab_user:
-                                    return jsonify({"error": f"Colaborador com ID {collab_id} não encontrado."}), 404
-                                    
-                        except (json.JSONDecodeError, ValueError):
-                            return jsonify({"error": "Formato inválido para collaborator_ids. Use um array JSON de IDs ou 'all'."}), 400
-                    
-                    # Processar anexos com metadados completos
-                    anexos_data = []
-                    for file in files:
-                        if file.filename:
-                            filename = secure_filename(file.filename)
-                            filepath = os.path.join(current_app.config["UPLOAD_FOLDER"], filename)
-                            file.save(filepath)
-                            
-                            anexo_obj = {
-                                "id": filename,
-                                "name": filename,
-                                "size": os.path.getsize(filepath),
-                                "type": file.content_type or "application/octet-stream",
-                                "url": f"{request.scheme}://{request.host}/uploads/{filename}"
-                            }
-                            anexos_data.append(anexo_obj)
-
-                    try:
-                        lembretes = json.loads(data.get("lembretes", "[]"))
-                    except Exception:
-                        lembretes = []
-
-                    try:
-                        tags = json.loads(data.get("tags", "[]"))
-                    except Exception:
-                        tags = []
-
-                    # Criar UMA tarefa com múltiplos responsáveis
-                    # O primeiro usuário é o responsável principal, os outros são adicionados como assigned_users
-                    primary_user_id = assigned_to_user_ids[0]
-                    additional_assigned_users = assigned_to_user_ids[1:]
-                    
-                    new_task = Task(
-                        title=data["title"],
-                        description=data.get("description"),
-                        status=data.get("status", "pending"),
-                        due_date=due_date,
-                        user_id=primary_user_id,
-                        assigned_by_user_id=user_id if primary_user_id != user_id else None,
-                        collaborators=collaborators,
-                        assigned_users=assigned_to_user_ids,  # Todos os usuários atribuídos
-                        team_id=team_id,
-                        prioridade=data.get("prioridade"),
-                        categoria=data.get("categoria"),
-                        status_inicial=data.get("status_inicial"),
-                        tempo_estimado=data.get("tempo_estimado"),
-                        tempo_unidade=data.get("tempo_unidade"),
-                        relacionado_a=data.get("relacionado_a"),
-                        lembretes=lembretes,
-                        tags=tags,
-                        anexos=anexos_data
-                    )
-
-                    db.session.add(new_task)
-                    db.session.commit()
-                    return jsonify(new_task.to_dict()), 201
-                else:
-                    task_user_id = assigned_to_user_ids[0]
-                    assigned_by_user_id = user_id if assigned_to_user_ids[0] != user_id else None
-                    
             except (json.JSONDecodeError, ValueError) as e:
                 return jsonify({"error": f"Formato inválido para assigned_to_user_ids: {str(e)}"}), 400
 
-        # Processar colaboradores/observadores
+        # Definir usuário principal da tarefa
+        if assigned_to_user_ids:
+            task_user_id = assigned_to_user_ids[0]
+        else:
+            task_user_id = user_id  # garante sempre um responsável
+
+        assigned_by_user_id = user_id if task_user_id != user_id else None
+        assigned_users = assigned_to_user_ids if assigned_to_user_ids else [task_user_id]
+
+        # Processar colaboradores
         collaborators = []
         if data.get("collaborator_ids"):
             try:
                 collaborator_ids_data = data.get("collaborator_ids")
                 if collaborator_ids_data == "all":
-                    # Adicionar todos os membros da equipe como colaboradores
                     if team_id:
                         team_members = UserTeam.query.filter_by(team_id=team_id).all()
-                        collaborators = [member.user_id for member in team_members if member.user_id != task_user_id]
+                        collaborators = [m.user_id for m in team_members if m.user_id != task_user_id]
                     else:
-                        return jsonify({"error": "Não é possível adicionar 'todos' como colaboradores sem especificar uma equipe."}), 400
+                        return jsonify({"error": "Não é possível adicionar 'todos' como colaboradores sem equipe."}), 400
                 else:
                     collaborators = json.loads(collaborator_ids_data)
                     if not isinstance(collaborators, list):
-                        raise ValueError("collaborator_ids deve ser uma lista de IDs ou 'all'.")
-                
-                # Validar que todos os colaboradores existem
+                        raise ValueError("collaborator_ids deve ser lista ou 'all'.")
                 for collab_id in collaborators:
-                    collab_user = User.query.get(collab_id)
-                    if not collab_user:
-                        return jsonify({"error": f"Colaborador com ID {collab_id} não encontrado."}), 404
-                        
+                    if not User.query.get(collab_id):
+                        return jsonify({"error": f"Colaborador {collab_id} não encontrado."}), 404
             except (json.JSONDecodeError, ValueError):
-                return jsonify({"error": "Formato inválido para collaborator_ids. Use um array JSON de IDs ou 'all'."}), 400
+                return jsonify({"error": "Formato inválido para collaborator_ids."}), 400
 
-        # Processar anexos com metadados completos
+        # Processar anexos
         anexos_data = []
         for file in files:
             if file.filename:
                 filename = secure_filename(file.filename)
                 filepath = os.path.join(current_app.config["UPLOAD_FOLDER"], filename)
                 file.save(filepath)
-                
-                anexo_obj = {
+                anexos_data.append({
                     "id": filename,
                     "name": filename,
                     "size": os.path.getsize(filepath),
                     "type": file.content_type or "application/octet-stream",
-                    "url": f"{request.scheme}://{request.host}/uploads/{filename}"  # CORREÇÃO: URL dinâmica
-                }
-                anexos_data.append(anexo_obj)
+                    "url": f"{request.scheme}://{request.host}/uploads/{filename}"
+                })
 
+        # Lembretes e tags
         try:
             lembretes = json.loads(data.get("lembretes", "[]"))
         except Exception:
@@ -378,7 +249,7 @@ def add_task():
         except Exception:
             tags = []
 
-        # Criação da task
+        # Criar a task
         new_task = Task(
             title=data["title"],
             description=data.get("description"),
@@ -387,6 +258,7 @@ def add_task():
             user_id=task_user_id,
             assigned_by_user_id=assigned_by_user_id,
             collaborators=collaborators,
+            assigned_users=assigned_users,
             team_id=team_id,
             prioridade=data.get("prioridade"),
             categoria=data.get("categoria"),
@@ -408,6 +280,7 @@ def add_task():
         import traceback
         print(traceback.format_exc())
         return jsonify({"error": "Erro interno no servidor", "message": str(e)}), 500
+
 
 
 @task_bp.route("/tasks/<int:task_id>", methods=["GET"])
@@ -523,8 +396,6 @@ def update_task(task_id):
             try:
                 assigned_to_user_ids = json.loads(data["assigned_to_user_ids"])
                 if isinstance(assigned_to_user_ids, list) and len(assigned_to_user_ids) > 0:
-                    # Por enquanto, usar apenas o primeiro usuário da lista
-                    # TODO: Implementar suporte completo para múltiplos usuários atribuídos
                     task.user_id = assigned_to_user_ids[0]
                     task.assigned_by_user_id = user_id
             except (json.JSONDecodeError, ValueError):

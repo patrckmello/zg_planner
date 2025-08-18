@@ -1,35 +1,34 @@
 // frontend/src/auth.js
-import api from './services/axiosInstance';
+import api from "./services/axiosInstance";
 
 /**
  * Verifica se o usuário está autenticado e retorna os dados do usuário
  * @returns {Object|null} Dados do usuário ou null se não autenticado
  */
 export async function isAuthenticated() {
-  const token = localStorage.getItem('access_token');
-  const userStr = localStorage.getItem('user');
+  const token = localStorage.getItem("access_token");
+  const userStr = localStorage.getItem("user");
 
   if (!token || !userStr) {
     return null;
   }
 
   try {
-  
     // Verifica se o token ainda é válido fazendo uma requisição para o backend
     try {
-      const response = await api.get('/users/me');
+      const response = await api.get("/users/me");
       // Atualiza os dados do usuário no localStorage com dados frescos do servidor
       const updatedUser = response.data;
-      localStorage.setItem('user', JSON.stringify(updatedUser));
+      localStorage.setItem("user", JSON.stringify(updatedUser));
       return updatedUser;
     } catch (error) {
       // Se a requisição falhar (token inválido/expirado), limpa o localStorage
-      console.warn('Token inválido ou expirado:', error);
+      console.warn("Token inválido ou expirado:", error);
       clearAuth();
       return null;
     }
   } catch (error) {
-    console.error('Erro ao parsear dados do usuário:', error);
+    console.error("Erro ao parsear dados do usuário:", error);
     clearAuth();
     return null;
   }
@@ -64,9 +63,9 @@ export async function getCurrentUser() {
  * Limpa todos os dados de autenticação do localStorage
  */
 export function clearAuth() {
-  localStorage.removeItem('access_token');
-  localStorage.removeItem('user');
-  localStorage.removeItem('refresh_token'); // caso você use refresh tokens
+  localStorage.removeItem("access_token");
+  localStorage.removeItem("user");
+  localStorage.removeItem("refresh_token"); // caso você use refresh tokens
 }
 
 /**
@@ -76,10 +75,10 @@ export function clearAuth() {
  * @param {string} refreshToken - Token de refresh (opcional)
  */
 export function setAuth(token, user, refreshToken = null) {
-  localStorage.setItem('access_token', token);
-  localStorage.setItem('user', JSON.stringify(user));
+  localStorage.setItem("access_token", token);
+  localStorage.setItem("user", JSON.stringify(user));
   if (refreshToken) {
-    localStorage.setItem('refresh_token', refreshToken);
+    localStorage.setItem("refresh_token", refreshToken);
   }
 }
 
@@ -100,12 +99,12 @@ export async function hasRole(role) {
  */
 export async function belongsToTeam(teamId) {
   const user = await isAuthenticated();
-  return user && user.teams && user.teams.some(team => team.id === teamId);
+  return user && user.teams && user.teams.some((team) => team.id === teamId);
 }
 
 /**
- * Verifica se o usuário é gerente de alguma equipe
- * @returns {boolean} True se o usuário é gerente
+ * Verifica se o usuário é gestor de alguma equipe
+ * @returns {boolean} True se o usuário é gestor
  */
 export async function isManager() {
   const user = await isAuthenticated();
@@ -117,18 +116,17 @@ export async function isManager() {
  * Útil após operações que podem alterar permissões
  */
 export async function refreshAuth() {
-  const token = localStorage.getItem('access_token');
+  const token = localStorage.getItem("access_token");
   if (!token) return null;
 
   try {
-    const response = await api.get('/users/me');
+    const response = await api.get("/users/me");
     const user = response.data;
-    localStorage.setItem('user', JSON.stringify(user));
+    localStorage.setItem("user", JSON.stringify(user));
     return user;
   } catch (error) {
-    console.warn('Erro ao atualizar dados de autenticação:', error);
+    console.warn("Erro ao atualizar dados de autenticação:", error);
     clearAuth();
     return null;
   }
 }
-
