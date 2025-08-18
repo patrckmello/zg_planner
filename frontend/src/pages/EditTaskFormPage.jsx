@@ -66,7 +66,7 @@ function EditTaskFormPage() {
     lembretes: [],
     tags: [],
     anexos: [],
-    assigned_to_user_id: "",
+    assigned_to_user_ids: [], // Alterado para array
     collaborator_ids: [],
     team_id: "",
   });
@@ -196,7 +196,11 @@ function EditTaskFormPage() {
           lembretes: task.lembretes || [],
           tags: task.tags || [],
           anexos: adaptAnexos,
-          assigned_to_user_id: task.user_id || "",
+          assigned_to_user_ids: Array.isArray(task.assigned_to_user_ids)
+            ? task.assigned_to_user_ids.map((id) => parseInt(id))
+            : task.user_id
+            ? [parseInt(task.user_id)]
+            : [], // Garante que seja um array de números
           collaborator_ids: task.collaborator_ids || [],
           team_id: task.team_id || "",
         });
@@ -359,12 +363,10 @@ function EditTaskFormPage() {
       );
 
       // IDs opcionais
-      if (formData.assigned_to_user_id) {
-        formDataToSend.append(
-          "assigned_to_user_id",
-          formData.assigned_to_user_id
-        );
-      }
+      formDataToSend.append(
+        "assigned_to_user_ids",
+        JSON.stringify(formData.assigned_to_user_ids)
+      ); // Alterado para enviar array
       if (formData.team_id) {
         formDataToSend.append("team_id", formData.team_id);
       }
@@ -653,9 +655,9 @@ function EditTaskFormPage() {
                           <div className={styles.fullWidth}>
                             <TeamMemberSelector
                               teamId={parseInt(formData.team_id)}
-                              selectedMembers={formData.collaborator_ids}
+                              selectedMembers={formData.assigned_to_user_ids}
                               onSelectionChange={(members) => {
-                                updateField("collaborator_ids", members);
+                                updateField("assigned_to_user_ids", members);
                               }}
                               label="Atribuir para"
                               placeholder="Selecione membros da equipe"
@@ -696,9 +698,9 @@ function EditTaskFormPage() {
                       placeholder="Selecione usuários para colaborar ou observar esta tarefa"
                       excludeUserIds={[
                         currentUser?.id,
-                        formData.assigned_to_user_id
-                          ? parseInt(formData.assigned_to_user_id)
-                          : null,
+                        ...(formData.assigned_to_user_ids || []).map((id) =>
+                          parseInt(id)
+                        ),
                       ].filter(Boolean)}
                     />
                     <div className={styles.collaboratorNote}>

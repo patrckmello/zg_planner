@@ -56,7 +56,7 @@ function TaskFormPage() {
     lembretes: [],
     tags: [],
     anexos: [],
-    assigned_to_user_id: "",
+    assigned_to_user_ids: [], // Alterado para array
     collaborator_ids: [],
     team_id: "",
   });
@@ -254,12 +254,10 @@ function TaskFormPage() {
       );
 
       // IDs opcionais
-      if (formData.assigned_to_user_id) {
-        formDataToSend.append(
-          "assigned_to_user_id",
-          formData.assigned_to_user_id
-        );
-      }
+      formDataToSend.append(
+        "assigned_to_user_ids",
+        JSON.stringify(formData.assigned_to_user_ids)
+      ); // Alterado para enviar array
       if (formData.team_id) {
         formDataToSend.append("team_id", formData.team_id);
       }
@@ -490,9 +488,9 @@ function TaskFormPage() {
                           <div className={styles.fullWidth}>
                             <TeamMemberSelector
                               teamId={parseInt(formData.team_id)}
-                              selectedMembers={formData.collaborator_ids}
+                              selectedMembers={formData.assigned_to_user_ids}
                               onSelectionChange={(members) => {
-                                updateField("collaborator_ids", members);
+                                updateField("assigned_to_user_ids", members);
                               }}
                               label="Atribuir para"
                               placeholder="Selecione membros da equipe"
@@ -531,6 +529,11 @@ function TaskFormPage() {
                           }
                           label="Adicionar Colaboradores"
                           placeholder="Busque e selecione colaboradores"
+                          excludeUserIds={[
+                            ...(formData.assigned_to_user_ids || []).map((id) =>
+                              parseInt(id)
+                            ),
+                          ].filter(Boolean)}
                         />
                       </div>
                     </div>
