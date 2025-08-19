@@ -332,10 +332,14 @@ def update_task(task_id):
     if not task:
         return jsonify({"error": "Tarefa não encontrada"}), 404
 
-    # Verificar permissões de edição
-    if not task.can_be_viewed_by(user):
+    # Garantir que collaborators é uma lista de IDs
+    collaborators_ids = task.collaborators or []
+
+    # Permissão de edição: admin, gestor ou colaborador da task
+    if not (user.is_admin or task.can_be_assigned_by(user) or user.id in collaborators_ids):
         return jsonify({"error": "Acesso negado"}), 403
 
+    # Diferenciar JSON de multipart/form-data
     if request.is_json:
         data = request.get_json()
         files = []
@@ -343,13 +347,12 @@ def update_task(task_id):
         data = request.form
         files = request.files.getlist("new_files")
     else:
-        return jsonify({"error": "Tipo de requisição inválido. Content-Type deve ser application/json ou multipart/form-data."}), 400
+        return jsonify({"error": "Content-Type inválido. Use application/json ou multipart/form-data."}), 400
 
-    # Validação de data de vencimento
+    # Validação de due_date
     if data.get("due_date"):
         try:
             due_date = datetime.fromisoformat(data["due_date"])
-            # Remover timezone info se presente para comparação consistente
             if due_date.tzinfo is not None:
                 due_date = due_date.replace(tzinfo=None)
             if due_date < datetime.utcnow():
@@ -378,45 +381,36 @@ def update_task(task_id):
     if data.get("relacionado_a") is not None:
         task.relacionado_a = data["relacionado_a"]
 
-    # Atualizar colaboradores (apenas gestores ou admin)
-    if data.get("collaborator_ids") is not None:
-        if user.is_admin or task.can_be_assigned_by(user):
-            try:
-                collaborators = json.loads(data["collaborator_ids"])
-                if isinstance(collaborators, list):
-                    task.collaborators = collaborators
-            except (json.JSONDecodeError, ValueError):
-                return jsonify({"error": "Formato inválido para collaborator_ids."}), 400
-        else:
-            return jsonify({"error": "Apenas gestores podem modificar colaboradores."}), 403
+    # Atualizar colaboradores (apenas admin/gestor)
+    if data.get("collaborator_ids") is not None and (user.is_admin or task.can_be_assigned_by(user)):
+        try:
+            collaborators = json.loads(data["collaborator_ids"])
+            if isinstance(collaborators, list):
+                task.collaborators = collaborators
+        except (json.JSONDecodeError, ValueError):
+            return jsonify({"error": "Formato inválido para collaborator_ids."}), 400
 
-    # Atualizar atribuição (apenas gestores ou admin)
-    if data.get("assigned_to_user_ids") is not None:
-        if user.is_admin or task.can_be_assigned_by(user):
-            try:
-                assigned_to_user_ids = json.loads(data["assigned_to_user_ids"])
-                if isinstance(assigned_to_user_ids, list) and len(assigned_to_user_ids) > 0:
-                    task.user_id = assigned_to_user_ids[0]
-                    task.assigned_by_user_id = user_id
-            except (json.JSONDecodeError, ValueError):
-                return jsonify({"error": "assigned_to_user_ids inválido"}), 400
-        else:
-            return jsonify({"error": "Apenas gestores podem atribuir tarefas."}), 403
-    elif data.get("assigned_to_user_id") is not None:
-        if user.is_admin or task.can_be_assigned_by(user):
-            try:
-                assigned_to_user_id = int(data["assigned_to_user_id"])
-                if assigned_to_user_id != task.user_id:
-                    task.user_id = assigned_to_user_id
-                    task.assigned_by_user_id = user_id
-            except ValueError:
-                return jsonify({"error": "assigned_to_user_id inválido"}), 400
-        else:
-            return jsonify({"error": "Apenas gestores podem atribuir tarefas."}), 403
+    # Atualizar atribuição (apenas admin/gestor)
+    if data.get("assigned_to_user_ids") is not None and (user.is_admin or task.can_be_assigned_by(user)):
+        try:
+            assigned_to_user_ids = json.loads(data["assigned_to_user_ids"])
+            if isinstance(assigned_to_user_ids, list) and len(assigned_to_user_ids) > 0:
+                task.user_id = assigned_to_user_ids[0]
+                task.assigned_by_user_id = user_id
+        except (json.JSONDecodeError, ValueError):
+            return jsonify({"error": "assigned_to_user_ids inválido"}), 400
+    elif data.get("assigned_to_user_id") is not None and (user.is_admin or task.can_be_assigned_by(user)):
+        try:
+            assigned_to_user_id = int(data["assigned_to_user_id"])
+            if assigned_to_user_id != task.user_id:
+                task.user_id = assigned_to_user_id
+                task.assigned_by_user_id = user_id
+        except ValueError:
+            return jsonify({"error": "assigned_to_user_id inválido"}), 400
 
-    # Processar anexos (apenas para multipart/form-data)
+    # Processar anexos (multipart/form-data)
     if request.content_type and request.content_type.startswith("multipart/form-data"):
-        # Obter arquivos existentes que devem ser mantidos
+        # Arquivos existentes
         existing_files_data = data.get("existing_files")
         if existing_files_data:
             try:
@@ -424,32 +418,28 @@ def update_task(task_id):
                 task.anexos = existing_files
             except (json.JSONDecodeError, ValueError):
                 pass
-        
-        # Obter arquivos que devem ser removidos
+
+        # Arquivos a remover
         files_to_remove_data = data.get("files_to_remove")
         if files_to_remove_data:
             try:
                 files_to_remove = json.loads(files_to_remove_data)
-                # Remover arquivos físicos
                 for filename in files_to_remove:
                     filepath = os.path.join(current_app.config["UPLOAD_FOLDER"], filename)
                     if os.path.exists(filepath):
                         os.remove(filepath)
-                        print(f"Arquivo removido: {filepath}")
             except (json.JSONDecodeError, ValueError):
                 pass
-        
+
         # Adicionar novos arquivos
         if files:
             if task.anexos is None:
                 task.anexos = []
-            
             for file in files:
                 if file.filename:
                     filename = secure_filename(file.filename)
                     filepath = os.path.join(current_app.config["UPLOAD_FOLDER"], filename)
                     file.save(filepath)
-                    
                     anexo_obj = {
                         "id": filename,
                         "name": filename,
@@ -459,6 +449,7 @@ def update_task(task_id):
                     }
                     task.anexos.append(anexo_obj)
 
+    # Tags e lembretes
     try:
         lembretes = json.loads(data.get("lembretes", "[]"))
         if isinstance(lembretes, list):

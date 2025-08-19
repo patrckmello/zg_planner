@@ -458,7 +458,9 @@ function EditTaskFormPage() {
     return (
       currentUser.is_admin ||
       originalTask.user_id === currentUser.id ||
-      originalTask.assigned_by_user_id === currentUser.id
+      originalTask.assigned_by_user_id === currentUser.id ||
+      (originalTask.collaborators &&
+        originalTask.collaborators.includes(currentUser.id))
     );
   };
 
