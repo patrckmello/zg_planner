@@ -63,6 +63,20 @@ class Task(db.Model):
                         "email": user.email
                     })
         
+
+        # Buscar informações dos colaboradores
+        collaborators_info = []
+        if self.collaborators:
+            for user_id in self.collaborators:
+                user = User.query.get(user_id)
+                if user:
+                    collaborators_info.append({
+                        "id": user.id,
+                        "name": user.username,
+                        "username": user.username,
+                        "email": user.email
+                    })
+
         return {
             "id": self.id,
             "title": self.title,
@@ -101,6 +115,7 @@ class Task(db.Model):
                 "email": self.user.email
             } if self.user else None,
             "collaborators": self.collaborators,
+            "collaborators_info": collaborators_info,
             "assigned_users": self.assigned_users,
             "assigned_users_info": assigned_users_info,
             "team_id": self.team_id,

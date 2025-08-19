@@ -307,14 +307,14 @@ def get_task(task_id):
                 anexo_obj = {
                     "id": anexo,
                     "name": anexo,
-                    "url": f"{request.scheme}://{request.host}/uploads/{anexo}",  # CORREÇÃO: URL dinâmica
+                    "url": f"{request.scheme}://{request.host}/uploads/{anexo}",
                     "size": 0,
                     "type": "application/octet-stream"
                 }
             else:
                 anexo_obj = anexo.copy()
                 if "url" not in anexo_obj:
-                    anexo_obj["url"] = f"{request.scheme}://{request.host}/uploads/{anexo_obj.get('name', '')}"  # CORREÇÃO: URL dinâmica
+                    anexo_obj["url"] = f"{request.scheme}://{request.host}/uploads/{anexo_obj.get('name', '')}"
             
             anexos_enriched.append(anexo_obj)
         

@@ -48,7 +48,6 @@ migrate = Migrate(app, db)
 CORS(app, supports_credentials=True, resources={r"/api/*": {"origins": "*"}})
 jwt = JWTManager(app)
 
-# CORREÇÃO: Rota de download de anexos movida para o app principal
 @app.route("/uploads/<filename>")
 def uploaded_file(filename):
     """Rota para servir arquivos de upload"""
