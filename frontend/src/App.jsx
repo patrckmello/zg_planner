@@ -27,7 +27,7 @@ function App() {
           <Route path="/tasks" element={<TasksPage />} />
           <Route path="/tasks/new" element={<TaskFormPage />} />
           <Route path="/tasks/:id/edit" element={<EditTaskFormPage />} />
-          <Route path="/meus-relatorios" element={<ReportsPage />} />
+          <Route path="/reports" element={<ReportsPage />} />
         </Route>
 
         {/* Protegendo rotas de admin */}

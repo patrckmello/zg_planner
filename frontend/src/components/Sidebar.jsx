@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import api from '../services/axiosInstance';
-import styles from './Sidebar.module.css';
+import React, { useEffect, useState } from "react";
+import { Link, useLocation } from "react-router-dom";
+import api from "../services/axiosInstance";
+import styles from "./Sidebar.module.css";
 import {
   Home,
   ClipboardList,
@@ -13,7 +13,7 @@ import {
   Briefcase,
   Settings,
   LogOut,
-} from 'lucide-react';
+} from "lucide-react";
 
 function Sidebar({ isOpen, onLogout }) {
   const [user, setUser] = useState(null);
@@ -22,10 +22,10 @@ function Sidebar({ isOpen, onLogout }) {
   useEffect(() => {
     const fetchUser = async () => {
       try {
-        const response = await api.get('/users/me');
+        const response = await api.get("/users/me");
         setUser(response.data);
       } catch (error) {
-        console.error('Erro ao buscar usuário:', error);
+        console.error("Erro ao buscar usuário:", error);
       }
     };
 
@@ -39,16 +39,18 @@ function Sidebar({ isOpen, onLogout }) {
 
   if (!user) {
     return (
-      <aside className={`${styles.sidebar} ${isOpen ? styles.open : ''}`}>
+      <aside className={`${styles.sidebar} ${isOpen ? styles.open : ""}`}>
         <div>Carregando usuário...</div>
       </aside>
     );
   }
 
-  const userInitial = user.username ? user.username.charAt(0).toUpperCase() : 'U';
+  const userInitial = user.username
+    ? user.username.charAt(0).toUpperCase()
+    : "U";
 
   return (
-    <aside className={`${styles.sidebar} ${isOpen ? styles.open : ''}`}>
+    <aside className={`${styles.sidebar} ${isOpen ? styles.open : ""}`}>
       <div className={styles.userSection}>
         <div className={styles.userAvatar}>
           <span>{userInitial}</span>
@@ -62,9 +64,9 @@ function Sidebar({ isOpen, onLogout }) {
       <nav className={styles.navigation}>
         <ul>
           <li>
-            <Link 
-              to="/dashboard" 
-              className={isActiveLink('/dashboard') ? styles.activeLink : ''}
+            <Link
+              to="/dashboard"
+              className={isActiveLink("/dashboard") ? styles.activeLink : ""}
             >
               <Home size={20} className={styles.icon} />
               <span>Dashboard</span>
@@ -73,18 +75,18 @@ function Sidebar({ isOpen, onLogout }) {
 
           <li className={styles.sectionLabel}>Minhas Atividades</li>
           <li>
-            <Link 
+            <Link
               to="/tasks"
-              className={isActiveLink('/tasks') ? styles.activeLink : ''}
+              className={isActiveLink("/tasks") ? styles.activeLink : ""}
             >
               <ClipboardList size={20} className={styles.icon} />
               <span>Minhas Tarefas</span>
             </Link>
           </li>
           <li>
-            <Link 
-              to="/meus-relatorios"
-              className={isActiveLink('/meus-relatorios') ? styles.activeLink : ''}
+            <Link
+              to="/reports"
+              className={isActiveLink("/reports") ? styles.activeLink : ""}
             >
               <BarChart2 size={20} className={styles.icon} />
               <span>Relatórios Pessoais</span>
@@ -95,18 +97,22 @@ function Sidebar({ isOpen, onLogout }) {
             <>
               <li className={styles.sectionLabel}>Equipes</li>
               <li>
-                <Link 
+                <Link
                   to="/equipes/tarefas"
-                  className={isActiveLink('/equipes/tarefas') ? styles.activeLink : ''}
+                  className={
+                    isActiveLink("/equipes/tarefas") ? styles.activeLink : ""
+                  }
                 >
                   <Folder size={20} className={styles.icon} />
                   <span>Tarefas da Equipe</span>
                 </Link>
               </li>
               <li>
-                <Link 
+                <Link
                   to="/relatorios-equipe"
-                  className={isActiveLink('/relatorios-equipe') ? styles.activeLink : ''}
+                  className={
+                    isActiveLink("/relatorios-equipe") ? styles.activeLink : ""
+                  }
                 >
                   <PieChart size={20} className={styles.icon} />
                   <span>Relatórios da Equipe</span>
@@ -119,36 +125,47 @@ function Sidebar({ isOpen, onLogout }) {
             <>
               <li className={styles.sectionLabel}>Administração</li>
               <li>
-                <Link 
+                <Link
                   to="/admin/users/"
-                  className={isActiveLink('/admin/users/') || isActiveLink('/admin/users') ? styles.activeLink : ''}
+                  className={
+                    isActiveLink("/admin/users/") ||
+                    isActiveLink("/admin/users")
+                      ? styles.activeLink
+                      : ""
+                  }
                 >
                   <User size={20} className={styles.icon} />
                   <span>Usuários</span>
                 </Link>
               </li>
               <li>
-                <Link 
+                <Link
                   to="/admin/cargos"
-                  className={isActiveLink('/admin/cargos') ? styles.activeLink : ''}
+                  className={
+                    isActiveLink("/admin/cargos") ? styles.activeLink : ""
+                  }
                 >
                   <Briefcase size={20} className={styles.icon} />
                   <span>Cargos</span>
                 </Link>
               </li>
               <li>
-                <Link 
+                <Link
                   to="/admin/equipes"
-                  className={isActiveLink('/admin/equipes') ? styles.activeLink : ''}
+                  className={
+                    isActiveLink("/admin/equipes") ? styles.activeLink : ""
+                  }
                 >
                   <Users size={20} className={styles.icon} />
                   <span>Equipes</span>
                 </Link>
               </li>
               <li>
-                <Link 
+                <Link
                   to="/admin/config"
-                  className={isActiveLink('/admin/config') ? styles.activeLink : ''}
+                  className={
+                    isActiveLink("/admin/config") ? styles.activeLink : ""
+                  }
                 >
                   <Settings size={20} className={styles.icon} />
                   <span>Configurações</span>
@@ -159,9 +176,9 @@ function Sidebar({ isOpen, onLogout }) {
 
           <li className={styles.sectionLabel}>Conta</li>
           <li>
-            <Link 
+            <Link
               to="/meu-perfil"
-              className={isActiveLink('/meu-perfil') ? styles.activeLink : ''}
+              className={isActiveLink("/meu-perfil") ? styles.activeLink : ""}
             >
               <User size={20} className={styles.icon} />
               <span>Meu Perfil</span>
@@ -178,11 +195,12 @@ function Sidebar({ isOpen, onLogout }) {
       </div>
 
       <div className={styles.sidebarFooter}>
-        <span>{String.fromCodePoint(0x00A9)} Desenvolvido por TI Zavagna Gralha</span>
+        <span>
+          {String.fromCodePoint(0x00a9)} Desenvolvido por TI Zavagna Gralha
+        </span>
       </div>
     </aside>
   );
 }
 
 export default Sidebar;
-
