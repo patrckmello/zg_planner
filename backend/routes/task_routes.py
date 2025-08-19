@@ -591,3 +591,117 @@ def get_available_collaborators():
     
     return jsonify(collaborators)
 
+
+
+
+@task_bp.route("/tasks/reports", methods=["GET"])
+@jwt_required()
+def get_task_reports():
+    user_id = get_jwt_identity()
+    user = User.query.get(user_id)
+
+    if not user or not user.is_active:
+        return jsonify({"msg": "Usuário inválido ou inativo"}), 401
+
+    # Parâmetros de filtro
+    start_date_str = request.args.get("start_date")
+    end_date_str = request.args.get("end_date")
+    status = request.args.get("status")
+    priority = request.args.get("priority")
+    category = request.args.get("category")
+
+    query = Task.query.filter(or_(
+        Task.user_id == user_id,  # Tarefas atribuídas ao usuário
+        Task.assigned_by_user_id == user_id,  # Tarefas criadas pelo usuário
+        text("tasks.assigned_users::jsonb @> :user_id_json").params(user_id_json=f'[{user_id}]'), # Tarefas onde o usuário é um dos atribuídos
+        text("tasks.collaborators::jsonb @> :user_id_json").params(user_id_json=f'[{user_id}]') # Tarefas onde o usuário é colaborador
+    ))
+
+    if start_date_str:
+        try:
+            start_date = datetime.fromisoformat(start_date_str)
+            query = query.filter(Task.created_at >= start_date)
+        except ValueError:
+            return jsonify({"error": "Formato inválido para start_date. Use ISO 8601."}), 400
+
+    if end_date_str:
+        try:
+            end_date = datetime.fromisoformat(end_date_str)
+            query = query.filter(Task.created_at <= end_date)
+        except ValueError:
+            return jsonify({"error": "Formato inválido para end_date. Use ISO 8601."}), 400
+
+    if status:
+        query = query.filter(Task.status == status)
+
+    if priority:
+        query = query.filter(Task.prioridade == priority)
+
+    if category:
+        query = query.filter(Task.categoria == category)
+
+    tasks = query.all()
+
+    # Agregação de dados para o relatório
+    report_data = {
+        "total_tasks": len(tasks),
+        "tasks_by_status": {},
+        "tasks_by_priority": {},
+        "tasks_by_category": {},
+        "tasks_completed_on_time": 0,
+        "tasks_completed_late": 0,
+        "average_completion_time": "N/A",
+        "overdue_tasks": 0,
+        "upcoming_tasks": 0,
+        "detailed_tasks": []
+    }
+
+    completed_tasks_times = []
+    now = datetime.utcnow()
+
+    for task in tasks:
+        task_dict = task.to_dict()
+        report_data["detailed_tasks"].append(task_dict)
+
+        # Contagem por status
+        report_data["tasks_by_status"][task.status] = report_data["tasks_by_status"].get(task.status, 0) + 1
+
+        # Contagem por prioridade
+        if task.prioridade:
+            report_data["tasks_by_priority"][task.prioridade] = report_data["tasks_by_priority"].get(task.prioridade, 0) + 1
+
+        # Contagem por categoria
+        if task.categoria:
+            report_data["tasks_by_category"][task.categoria] = report_data["tasks_by_category"].get(task.categoria, 0) + 1
+
+        # Tarefas concluídas no prazo ou atrasadas
+        if task.status == 'done' and task.due_date:
+            if task.updated_at and task.updated_at <= task.due_date:
+                report_data["tasks_completed_on_time"] += 1
+            else:
+                report_data["tasks_completed_late"] += 1
+            
+            # Calcular tempo de conclusão se houver created_at e updated_at
+            if task.created_at and task.updated_at:
+                time_taken = (task.updated_at - task.created_at).total_seconds()
+                completed_tasks_times.append(time_taken)
+
+        # Tarefas atrasadas e próximas
+        if task.due_date:
+            if task.due_date < now and task.status != 'done':
+                report_data["overdue_tasks"] += 1
+            elif task.due_date > now and task.status != 'done':
+                report_data["upcoming_tasks"] += 1
+
+    # Calcular tempo médio de conclusão
+    if completed_tasks_times:
+        avg_seconds = sum(completed_tasks_times) / len(completed_tasks_times)
+        # Converter segundos para um formato mais legível (ex: dias, horas, minutos)
+        days = int(avg_seconds // (24 * 3600))
+        hours = int((avg_seconds % (24 * 3600)) // 3600)
+        minutes = int((avg_seconds % 3600) // 60)
+        report_data["average_completion_time"] = f"{days}d {hours}h {minutes}m"
+
+    return jsonify(report_data)
+
+

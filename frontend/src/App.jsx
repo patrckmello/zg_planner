@@ -1,17 +1,18 @@
-import React from 'react'
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
-import Login from './components/Login'
-import Dashboard from './components/Dashboard'
-import TasksPage from './pages/TasksPage'
-import PrivateRoute from './components/PrivateRoute'
-import SessionRedirect from './components/SessionRedirect'
-import AdminUsers from './pages/AdminUsers'
-import AdminRoles from './pages/AdminRoles'
-import AdminTeams from './pages/AdminTeams'
-import TaskFormPage from './pages/TaskFormPage'
-import EditTaskFormPage from './pages/EditTaskFormPage'
-import { ToastContainer } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
+import React from "react";
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import Login from "./components/Login";
+import Dashboard from "./components/Dashboard";
+import TasksPage from "./pages/TasksPage";
+import PrivateRoute from "./components/PrivateRoute";
+import SessionRedirect from "./components/SessionRedirect";
+import AdminUsers from "./pages/AdminUsers";
+import AdminRoles from "./pages/AdminRoles";
+import AdminTeams from "./pages/AdminTeams";
+import TaskFormPage from "./pages/TaskFormPage";
+import EditTaskFormPage from "./pages/EditTaskFormPage";
+import ReportsPage from "./pages/ReportsPage";
+import { ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 function App() {
   return (
@@ -19,13 +20,14 @@ function App() {
       <Routes>
         <Route path="/" element={<SessionRedirect />} />
         <Route path="/login" element={<Login />} />
-        
+
         {/* Protegendo rotas de usuário autenticado */}
         <Route element={<PrivateRoute />}>
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/tasks" element={<TasksPage />} />
           <Route path="/tasks/new" element={<TaskFormPage />} />
           <Route path="/tasks/:id/edit" element={<EditTaskFormPage />} />
+          <Route path="/meus-relatorios" element={<ReportsPage />} />
         </Route>
 
         {/* Protegendo rotas de admin */}
@@ -35,7 +37,7 @@ function App() {
           <Route path="/admin/equipes" element={<AdminTeams />} />
         </Route>
       </Routes>
-      <ToastContainer 
+      <ToastContainer
         position="top-right"
         autoClose={3000}
         hideProgressBar={false}
@@ -45,8 +47,7 @@ function App() {
         theme="colored"
       />
     </Router>
-  )
+  );
 }
 
-export default App
-
+export default App;
