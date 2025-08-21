@@ -341,11 +341,13 @@ function ConfigPage() {
                         className={styles.refreshBtn}
                         onClick={fetchBackups}
                         disabled={loadingBackups}
+                        title="Atualizar"
                       >
                         <RefreshCw
                           size={16}
                           className={loadingBackups ? styles.spinning : ""}
                         />
+                        <span className={styles.buttonText}>↻</span>
                       </button>
                     </div>
 
@@ -402,6 +404,7 @@ function ConfigPage() {
                                 title="Baixar backup"
                               >
                                 <Download size={16} />
+                                <span className={styles.buttonText}>⬇</span>
                               </button>
                               <button
                                 className={styles.deleteBtn}
@@ -409,6 +412,7 @@ function ConfigPage() {
                                 title="Excluir backup"
                               >
                                 <Trash2 size={16} />
+                                <span className={styles.buttonText}>🗑</span>
                               </button>
                             </div>
                           </div>
@@ -439,11 +443,13 @@ function ConfigPage() {
                         className={styles.refreshBtn}
                         onClick={fetchAuditLogs}
                         disabled={loadingAudit}
+                        title="Atualizar"
                       >
                         <RefreshCw
                           size={16}
                           className={loadingAudit ? styles.spinning : ""}
                         />
+                        <span className={styles.buttonText}>↻</span>
                       </button>
                     </div>
 

@@ -259,6 +259,20 @@
   cursor: pointer;
   color: #666;
   transition: all 0.2s ease;
+  position: relative;
+  overflow: visible;
+}
+
+.refreshBtn svg {
+  display: block;
+  pointer-events: none;
+}
+
+.refreshBtn .buttonText {
+  position: absolute;
+  font-size: 14px;
+  font-weight: bold;
+  color: inherit;
 }
 
 .refreshBtn:hover {
@@ -363,6 +377,22 @@
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.2s ease;
+  position: relative;
+  overflow: visible;
+}
+
+.downloadBtn svg,
+.deleteBtn svg {
+  display: block;
+  pointer-events: none;
+}
+
+.downloadBtn .buttonText,
+.deleteBtn .buttonText {
+  position: absolute;
+  font-size: 12px;
+  font-weight: bold;
+  color: inherit;
 }
 
 .downloadBtn {

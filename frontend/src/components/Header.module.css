@@ -137,7 +137,7 @@
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--accent-blue) 0%, var(--accent-blue-dark) 100%);
+  /* background será definido via style inline no JavaScript */
   color: white;
   display: flex;
   align-items: center;
@@ -145,7 +145,7 @@
   font-weight: 600;
   font-size: 14px;
   transition: all 0.3s ease;
-  box-shadow: 0 2px 8px rgba(52, 152, 219, 0.3);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 .userInfo:hover .userAvatar {
@@ -162,7 +162,8 @@
 }
 
 @keyframes pulse {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 1;
   }
   50% {
@@ -212,15 +213,15 @@
     padding: 0 16px;
     grid-template-columns: auto 1fr auto;
   }
-  
+
   .logoContainer {
     gap: 8px;
   }
-  
+
   .logo {
     font-size: 18px;
   }
-  
+
   .userDetails {
     display: none;
   }
@@ -230,13 +231,12 @@
   .logoContainer .logoIcon {
     display: none;
   }
-  
+
   .userInfo {
     padding: 4px;
   }
-  
+
   .header {
     grid-template-columns: auto 1fr auto;
   }
 }
-
