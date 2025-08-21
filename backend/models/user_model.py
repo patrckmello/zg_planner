@@ -1,5 +1,6 @@
 from extensions import db
 from werkzeug.security import generate_password_hash, check_password_hash
+from datetime import datetime
 
 user_roles = db.Table('user_roles',
     db.Column('user_username', db.String, db.ForeignKey('users.username')),
@@ -15,6 +16,8 @@ class User(db.Model):
     password_hash = db.Column(db.Text, nullable=False)
     is_admin = db.Column(db.Boolean, default=False)
     is_active = db.Column(db.Boolean, default=True)
+    icon_color = db.Column(db.String(7), default='#3498db')  # Cor do ícone do usuário
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     role_id = db.Column(db.Integer, db.ForeignKey('roles.id'), nullable=True)
     roles = db.relationship('Role', secondary=user_roles, back_populates='users')
@@ -49,6 +52,8 @@ class User(db.Model):
             'email': self.email,
             'is_admin': self.is_admin,
             'is_active': self.is_active,
+            'icon_color': self.icon_color,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
             # Lista das equipes desse usuário com info se ele é manager
             'equipes': [
                 {

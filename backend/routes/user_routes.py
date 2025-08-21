@@ -1,8 +1,10 @@
 from flask import Blueprint, request, jsonify
 from models.user_model import User
+from models.audit_log_model import AuditLog
 from extensions import db
 from decorators import admin_required
 from flask_jwt_extended import jwt_required, get_jwt_identity
+import re
 
 user_bp = Blueprint('user_bp', __name__, url_prefix='/api/users')
 
@@ -14,6 +16,83 @@ def get_me():
     if not user:
         return jsonify({"error": "Usuário não encontrado"}), 404
     return jsonify(user.to_dict())
+
+@user_bp.route('/change-password', methods=['PUT'])
+@jwt_required()
+def change_password():
+    current_user_id = get_jwt_identity()
+    user = User.query.get(current_user_id)
+    
+    if not user:
+        return jsonify({"error": "Usuário não encontrado"}), 404
+    
+    data = request.get_json()
+    current_password = data.get('current_password')
+    new_password = data.get('new_password')
+    
+    if not current_password or not new_password:
+        return jsonify({"error": "Senha atual e nova senha são obrigatórias"}), 400
+    
+    # Verificar senha atual
+    if not user.check_password(current_password):
+        return jsonify({"error": "Senha atual incorreta"}), 400
+    
+    # Validar nova senha
+    if len(new_password) < 6:
+        return jsonify({"error": "A nova senha deve ter pelo menos 6 caracteres"}), 400
+    
+    # Atualizar senha
+    user.set_password(new_password)
+    db.session.commit()
+    
+    # Log da ação
+    AuditLog.log_action(
+        user_id=current_user_id,
+        action='UPDATE',
+        description='Usuário alterou sua senha',
+        resource_type='user',
+        resource_id=current_user_id,
+        ip_address=request.remote_addr,
+        user_agent=request.headers.get('User-Agent')
+    )
+    
+    return jsonify({"message": "Senha alterada com sucesso"})
+
+@user_bp.route('/update-icon-color', methods=['PUT'])
+@jwt_required()
+def update_icon_color():
+    current_user_id = get_jwt_identity()
+    user = User.query.get(current_user_id)
+    
+    if not user:
+        return jsonify({"error": "Usuário não encontrado"}), 404
+    
+    data = request.get_json()
+    icon_color = data.get('icon_color')
+    
+    if not icon_color:
+        return jsonify({"error": "Cor do ícone é obrigatória"}), 400
+    
+    # Validar formato da cor (hex)
+    if not re.match(r'^#[0-9A-Fa-f]{6}$', icon_color):
+        return jsonify({"error": "Formato de cor inválido. Use formato hex (#RRGGBB)"}), 400
+    
+    # Atualizar cor
+    user.icon_color = icon_color
+    db.session.commit()
+    
+    # Log da ação
+    AuditLog.log_action(
+        user_id=current_user_id,
+        action='UPDATE',
+        description=f'Usuário alterou a cor do ícone para {icon_color}',
+        resource_type='user',
+        resource_id=current_user_id,
+        ip_address=request.remote_addr,
+        user_agent=request.headers.get('User-Agent')
+    )
+    
+    return jsonify({"message": "Cor do ícone atualizada com sucesso"})
 
 @user_bp.route('', methods=['GET'])
 @jwt_required()
@@ -33,6 +112,19 @@ def create_user():
     user.set_password(data['password'])
     db.session.add(user)
     db.session.commit()
+    
+    # Log da ação
+    current_user_id = get_jwt_identity()
+    AuditLog.log_action(
+        user_id=current_user_id,
+        action='CREATE',
+        description=f'Criou usuário: {user.username}',
+        resource_type='user',
+        resource_id=user.id,
+        ip_address=request.remote_addr,
+        user_agent=request.headers.get('User-Agent')
+    )
+    
     return jsonify(user.to_dict()), 201
 
 @user_bp.route('/<int:user_id>', methods=['PUT'])
@@ -43,15 +135,42 @@ def update_user(user_id):
     user.username = data.get('username', user.username)
     user.email = data.get('email', user.email)
     user.is_admin = data.get('is_admin', user.is_admin)
-    user.is_active = data.get('is_active', user.is_active)  # Aqui!
+    user.is_active = data.get('is_active', user.is_active)
 
     db.session.commit()
+    
+    # Log da ação
+    current_user_id = get_jwt_identity()
+    AuditLog.log_action(
+        user_id=current_user_id,
+        action='UPDATE',
+        description=f'Atualizou usuário: {user.username}',
+        resource_type='user',
+        resource_id=user_id,
+        ip_address=request.remote_addr,
+        user_agent=request.headers.get('User-Agent')
+    )
+    
     return jsonify(user.to_dict())
 
 @user_bp.route('/<int:user_id>', methods=['DELETE'])
 @admin_required
 def delete_user(user_id):
     user = User.query.get_or_404(user_id)
+    username = user.username
     db.session.delete(user)
     db.session.commit()
+    
+    # Log da ação
+    current_user_id = get_jwt_identity()
+    AuditLog.log_action(
+        user_id=current_user_id,
+        action='DELETE',
+        description=f'Excluiu usuário: {username}',
+        resource_type='user',
+        resource_id=user_id,
+        ip_address=request.remote_addr,
+        user_agent=request.headers.get('User-Agent')
+    )
+    
     return jsonify({'message': 'Usuário excluído com sucesso.'})

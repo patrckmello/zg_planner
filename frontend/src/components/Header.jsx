@@ -18,7 +18,7 @@ function Header({ onMenuToggle }) {
     };
 
     fetchUser();
-  }, []);
+  }, [user?.icon_color]); // Adiciona icon_color como dependência
 
   // Função para determinar a cor do badge baseada no tipo de usuário
   const getUserBadgeInfo = (user) => {
@@ -88,7 +88,10 @@ function Header({ onMenuToggle }) {
 
       <div className={styles.rightSection}>
         <div className={styles.userInfo}>
-          <div className={styles.userAvatar}>
+          <div
+            className={styles.userAvatar}
+            style={{ backgroundColor: user.icon_color || "#3498db" }}
+          >
             <span>{userInitial}</span>
           </div>
           <div className={styles.userDetails}>

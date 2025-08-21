@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, session, redirect, url_for, send_from_directory
+from flask import Flask, jsonify, session, redirect, url_for, send_from_directory, request
 from extensions import db
 from flask_cors import CORS
 from flask_migrate import Migrate
@@ -15,6 +15,8 @@ from models.team_model import Team
 from models.user_team_model import UserTeam
 from models.task_model import Task
 from models.comment_model import Comment  # Comment depende de Task, então vem por último
+from models.backup_model import Backup
+from models.audit_log_model import AuditLog
 
 from routes.auth_routes import auth_bp
 from routes.user_routes import user_bp
@@ -22,6 +24,7 @@ from routes.team_routes import team_bp
 from routes.task_routes import task_bp
 from routes.role_routes import role_bp
 from routes.comment_routes import comment_bp
+from routes.admin_routes import admin_bp
 
 load_dotenv()
 
@@ -45,9 +48,8 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 # Inicializa extensões
 db.init_app(app)
 migrate = Migrate(app, db)
-CORS(app, supports_credentials=True, resources={r"/api/*": {"origins": "*"}})
+CORS(app, supports_credentials=True)
 jwt = JWTManager(app)
-
 @app.route("/uploads/<filename>")
 def uploaded_file(filename):
     """Rota para servir arquivos de upload"""
@@ -63,6 +65,7 @@ app.register_blueprint(team_bp)
 app.register_blueprint(task_bp)
 app.register_blueprint(role_bp)
 app.register_blueprint(comment_bp)
+app.register_blueprint(admin_bp)
 
 primeira_vez = True
 

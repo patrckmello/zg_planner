@@ -52,7 +52,10 @@ function Sidebar({ isOpen, onLogout }) {
   return (
     <aside className={`${styles.sidebar} ${isOpen ? styles.open : ""}`}>
       <div className={styles.userSection}>
-        <div className={styles.userAvatar}>
+        <div
+          className={styles.userAvatar}
+          style={{ backgroundColor: user.icon_color || "#3498db" }}
+        >
           <span>{userInitial}</span>
         </div>
         <div className={styles.userDetails}>

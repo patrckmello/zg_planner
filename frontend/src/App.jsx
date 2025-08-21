@@ -11,6 +11,8 @@ import AdminTeams from "./pages/AdminTeams";
 import TaskFormPage from "./pages/TaskFormPage";
 import EditTaskFormPage from "./pages/EditTaskFormPage";
 import ReportsPage from "./pages/ReportsPage";
+import ProfilePage from "./pages/ProfilePage";
+import ConfigPage from "./pages/ConfigPage";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
@@ -28,6 +30,7 @@ function App() {
           <Route path="/tasks/new" element={<TaskFormPage />} />
           <Route path="/tasks/:id/edit" element={<EditTaskFormPage />} />
           <Route path="/reports" element={<ReportsPage />} />
+          <Route path="/meu-perfil" element={<ProfilePage />} />
         </Route>
 
         {/* Protegendo rotas de admin */}
@@ -35,6 +38,7 @@ function App() {
           <Route path="/admin/users" element={<AdminUsers />} />
           <Route path="/admin/cargos" element={<AdminRoles />} />
           <Route path="/admin/equipes" element={<AdminTeams />} />
+          <Route path="/admin/config" element={<ConfigPage />} />
         </Route>
       </Routes>
       <ToastContainer
