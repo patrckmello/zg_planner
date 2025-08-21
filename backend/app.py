@@ -26,6 +26,9 @@ from routes.role_routes import role_bp
 from routes.comment_routes import comment_bp
 from routes.admin_routes import admin_bp
 
+from routes.backup_routes import backup_bp
+from backup_scheduler import init_backup_scheduler
+
 load_dotenv()
 
 app = Flask(__name__)
@@ -66,6 +69,7 @@ app.register_blueprint(task_bp)
 app.register_blueprint(role_bp)
 app.register_blueprint(comment_bp)
 app.register_blueprint(admin_bp)
+app.register_blueprint(backup_bp)
 
 primeira_vez = True
 

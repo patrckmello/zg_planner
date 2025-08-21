@@ -68,91 +68,33 @@ def get_backups():
 @admin_bp.route('/create-backup', methods=['POST'])
 @admin_required
 def create_backup():
-    """Cria um novo backup do banco de dados"""
+    """Cria um novo backup do banco de dados usando o BackupService"""
+    from backup_service import BackupService
+    from app import app
+    
     current_user_id = get_jwt_identity()
     
     try:
-        # Gerar nome do arquivo
-        timestamp = datetime.datetime.now().strftime('%Y_%m_%d_%H_%M_%S')
-        filename = f'backup_zg_planner_{timestamp}.sql'
+        # Obter tipo de backup da requisição (padrão: full)
+        backup_type = request.json.get('type', 'full') if request.is_json else 'full'
         
-        # Diretório de backups
-        backup_dir = os.path.join(os.getcwd(), 'backups')
-        os.makedirs(backup_dir, exist_ok=True)
-        file_path = os.path.join(backup_dir, filename)
+        if backup_type not in ['full', 'schema_only', 'data_only']:
+            return jsonify({'error': 'Tipo de backup inválido'}), 400
         
-        # Criar registro do backup
-        backup = Backup(
-            filename=filename,
-            file_path=file_path,
-            status='pending',
-            created_by=current_user_id
-        )
-        db.session.add(backup)
-        db.session.commit()
+        # Usar o serviço de backup
+        backup_service = BackupService(app)
+        result = backup_service.create_full_backup(current_user_id, backup_type)
         
-        try:
-            # Executar comando de backup do PostgreSQL
-            # Nota: Você precisará configurar as variáveis de ambiente para PostgreSQL
-            database_url = os.getenv('DATABASE_URL', 'postgresql://user:password@localhost/zg_planner')
-            
-            # Extrair informações da URL do banco
-            # Para simplificar, vamos usar pg_dump com as configurações padrão
-            # Em produção, você deve configurar isso adequadamente
-            
-            # Comando de backup (ajuste conforme sua configuração)
-            cmd = [
-                'pg_dump',
-                '--no-password',
-                '--format=custom',
-                '--file', file_path,
-                database_url
-            ]
-            
-            # Executar backup (comentado para evitar erro em ambiente de teste)
-            # result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
-            
-            # Para demonstração, vamos criar um arquivo de exemplo
-            with open(file_path, 'w') as f:
-                f.write(f"-- Backup simulado criado em {datetime.datetime.now()}\n")
-                f.write("-- Este é um arquivo de exemplo para demonstração\n")
-                f.write("-- Em produção, este seria um backup real do PostgreSQL\n")
-            
-            # Obter tamanho do arquivo
-            file_size = os.path.getsize(file_path)
-            
-            # Atualizar status do backup
-            backup.status = 'completed'
-            backup.file_size = file_size
-            db.session.commit()
-            
-            # Log da ação
-            AuditLog.log_action(
-                user_id=current_user_id,
-                action='CREATE',
-                description=f'Criou backup: {filename}',
-                resource_type='backup',
-                resource_id=backup.id,
-                ip_address=request.remote_addr,
-                user_agent=request.headers.get('User-Agent')
-            )
-            
+        if result['success']:
             return jsonify({
-                'message': 'Backup criado com sucesso',
-                'backup': backup.to_dict()
+                'message': result['message'],
+                'backup': result['backup']
             })
-            
-        except subprocess.TimeoutExpired:
-            backup.status = 'error'
-            backup.error_message = 'Timeout durante a criação do backup'
-            db.session.commit()
-            return jsonify({'error': 'Timeout durante a criação do backup'}), 500
-            
-        except Exception as e:
-            backup.status = 'error'
-            backup.error_message = str(e)
-            db.session.commit()
-            return jsonify({'error': f'Erro ao criar backup: {str(e)}'}), 500
+        else:
+            return jsonify({
+                'error': result['error'],
+                'backup_id': result.get('backup_id')
+            }), 500
             
     except Exception as e:
         return jsonify({'error': str(e)}), 500

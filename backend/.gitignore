@@ -5,3 +5,5 @@ dist/
 static/
 templates/
 backups/
+readme_backup.md
+requirements_backup.txt
