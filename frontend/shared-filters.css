@@ -1,0 +1,404 @@
+/* Estilos compartilhados para filtros - ZG Planner */
+
+/* Card de filtros */
+.filtersCard {
+  background-color: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  border: 1px solid #f0f0f0;
+  margin-bottom: 24px;
+  overflow: hidden;
+}
+
+.filtersHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.filtersHeader:hover {
+  background: linear-gradient(135deg, #f1f3f4 0%, #f8f9fa 100%);
+}
+
+.filtersTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+}
+
+.filtersTitle svg {
+  color: #3498db;
+}
+
+.filtersContent {
+  padding: 24px;
+  background-color: #fafbfc;
+}
+
+.filtersGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+.filterGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.filterGroup label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  color: #374151;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.filterGroup label svg {
+  color: #6b7280;
+  width: 16px;
+  height: 16px;
+}
+
+/* Inputs e Selects Modernos */
+.filterGroup input,
+.filterGroup select {
+  padding: 12px 16px;
+  border: 2px solid #e5e7eb;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+  background: #ffffff;
+  transition: all 0.3s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  position: relative;
+}
+
+.filterGroup input:focus,
+.filterGroup select:focus {
+  outline: none;
+  border-color: #3498db;
+  box-shadow: 0 0 0 4px rgba(52, 152, 219, 0.1), 0 2px 8px rgba(0, 0, 0, 0.1);
+  transform: translateY(-1px);
+}
+
+.filterGroup input:hover,
+.filterGroup select:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+
+/* Select customizado */
+.filterGroup select {
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 16px;
+  padding-right: 40px;
+  cursor: pointer;
+}
+
+.filterGroup select:focus {
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%233498db' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e");
+}
+
+/* Input de data customizado - CORRIGIDO PARA CHROME */
+.filterGroup input[type="date"],
+.dateInput {
+  position: relative;
+  color: #374151;
+  padding-right: 40px;
+  background-color: #ffffff;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3crect x='3' y='4' width='18' height='18' rx='2' ry='2'%3e%3c/rect%3e%3cline x1='16' y1='2' x2='16' y2='6'%3e%3c/line%3e%3cline x1='8' y1='2' x2='8' y2='6'%3e%3c/line%3e%3cline x1='3' y1='10' x2='21' y2='10'%3e%3c/line%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 16px;
+}
+
+/* Estilização específica para Chrome */
+.filterGroup input[type="date"]::-webkit-calendar-picker-indicator,
+.dateInput::-webkit-calendar-picker-indicator {
+  background: transparent;
+  bottom: 0;
+  color: transparent;
+  cursor: pointer;
+  height: auto;
+  left: 0;
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: auto;
+  opacity: 0;
+}
+
+/* Container para posicionar o ícone corretamente */
+.filterGroup input[type="date"],
+.dateInput {
+  background-position: calc(100% - 12px) center;
+}
+
+.filterGroup input[type="date"]:focus,
+.dateInput:focus {
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%233498db' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3crect x='3' y='4' width='18' height='18' rx='2' ry='2'%3e%3c/rect%3e%3cline x1='16' y1='2' x2='16' y2='6'%3e%3c/line%3e%3cline x1='8' y1='2' x2='8' y2='6'%3e%3c/line%3e%3cline x1='3' y1='10' x2='21' y2='10'%3e%3c/line%3e%3c/svg%3e");
+}
+
+/* Estilização adicional para melhor aparência no Chrome */
+.filterGroup input[type="date"]::-webkit-datetime-edit,
+.dateInput::-webkit-datetime-edit {
+  padding: 0;
+  color: #374151;
+}
+
+.filterGroup input[type="date"]::-webkit-datetime-edit-fields-wrapper,
+.dateInput::-webkit-datetime-edit-fields-wrapper {
+  padding: 0;
+}
+
+.filterGroup input[type="date"]::-webkit-datetime-edit-text,
+.dateInput::-webkit-datetime-edit-text {
+  color: #6b7280;
+  padding: 0 2px;
+}
+
+.filterGroup input[type="date"]::-webkit-datetime-edit-month-field,
+.filterGroup input[type="date"]::-webkit-datetime-edit-day-field,
+.filterGroup input[type="date"]::-webkit-datetime-edit-year-field,
+.dateInput::-webkit-datetime-edit-month-field,
+.dateInput::-webkit-datetime-edit-day-field,
+.dateInput::-webkit-datetime-edit-year-field {
+  padding: 0 2px;
+  color: #374151;
+}
+
+.filterGroup input[type="date"]::-webkit-inner-spin-button,
+.filterGroup input[type="date"]::-webkit-clear-button,
+.dateInput::-webkit-inner-spin-button,
+.dateInput::-webkit-clear-button {
+  display: none;
+}
+
+/* Input de busca */
+.filterGroup input[type="text"],
+.searchInput {
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3ccircle cx='11' cy='11' r='8'%3e%3c/circle%3e%3cpath d='m21 21-4.35-4.35'%3e%3c/path%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 16px;
+  padding-right: 40px;
+}
+
+.filterGroup input[type="text"]:focus,
+.searchInput:focus {
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%233498db' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3ccircle cx='11' cy='11' r='8'%3e%3c/circle%3e%3cpath d='m21 21-4.35-4.35'%3e%3c/path%3e%3c/svg%3e");
+}
+
+/* Placeholder customizado */
+.filterGroup input::placeholder {
+  color: #9ca3af;
+  font-weight: 400;
+}
+
+/* Estados de validação */
+.filterGroup input:invalid {
+  border-color: #ef4444;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+}
+
+.filterGroup input:valid {
+  border-color: #10b981;
+}
+
+/* Hint para debounce */
+.debounceHint {
+  color: #6b7280;
+  font-size: 12px;
+  font-style: italic;
+  margin-top: 4px;
+  opacity: 0.8;
+}
+
+/* Seção de membros (para Team Tasks) */
+.membersSection {
+  margin: 24px 0;
+  padding: 20px;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border-radius: 12px;
+  border: 2px solid #e0f2fe;
+}
+
+.membersLabel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: #0f172a;
+  font-size: 15px;
+  margin-bottom: 16px;
+}
+
+.membersLabel svg {
+  color: #3498db;
+}
+
+.membersGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.memberCheckbox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: #ffffff;
+  border: 2px solid #e2e8f0;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+}
+
+.memberCheckbox:hover {
+  background: #f8fafc;
+  border-color: #3498db;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(52, 152, 219, 0.15);
+}
+
+.memberCheckbox input[type="checkbox"] {
+  margin: 0;
+  width: 18px;
+  height: 18px;
+  accent-color: #3498db;
+  cursor: pointer;
+}
+
+.memberCheckbox input[type="checkbox"]:checked + span {
+  color: #3498db;
+  font-weight: 600;
+}
+
+.managerBadge {
+  background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+  color: white;
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-weight: 600;
+  margin-left: auto;
+  box-shadow: 0 2px 4px rgba(52, 152, 219, 0.3);
+}
+
+/* Ações dos filtros */
+.filtersActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.clearBtn,
+.applyBtn {
+  padding: 12px 24px;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 2px solid transparent;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.clearBtn {
+  background: #f8f9fa;
+  color: #6b7280;
+  border-color: #e5e7eb;
+}
+
+.clearBtn:hover {
+  background: #e9ecef;
+  border-color: #dee2e6;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.applyBtn {
+  background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+  color: white;
+  border-color: #3498db;
+}
+
+.applyBtn:hover {
+  background: linear-gradient(135deg, #2980b9 0%, #1f5f8b 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
+}
+
+.applyBtn:active,
+.clearBtn:active {
+  transform: translateY(0);
+}
+
+/* Responsividade */
+@media (max-width: 768px) {
+  .filtersGrid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .membersGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .filtersActions {
+    flex-direction: column;
+  }
+
+  .clearBtn,
+  .applyBtn {
+    justify-content: center;
+  }
+
+  .filtersHeader,
+  .filtersContent {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .filterGroup input,
+  .filterGroup select {
+    padding: 10px 14px;
+    font-size: 13px;
+  }
+
+  .memberCheckbox {
+    padding: 10px 12px;
+    font-size: 13px;
+  }
+
+  .filtersCard {
+    border-radius: 8px;
+  }
+}

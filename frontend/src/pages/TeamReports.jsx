@@ -1,12 +1,12 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import Header from "../components/Header";
 import Sidebar from "../components/Sidebar";
 import api from "../services/axiosInstance";
-import styles from "./ReportsPage.module.css";
-import { exportToCSV, exportToPDF } from "../utils/exportUtils";
+import styles from "./TeamReports.module.css";
 import {
-  BarChart2,
+  BarChart3,
   TrendingUp,
   Clock,
   CheckCircle,
@@ -20,8 +20,8 @@ import {
   ChevronUp,
   Activity,
   PieChart,
-  Tag,
-  Search,
+  Users,
+  Zap,
 } from "lucide-react";
 
 // Função para normalizar prioridade
@@ -38,44 +38,225 @@ const normalizePriority = (priority) => {
   return priorityMap[priority.toLowerCase()] || priority;
 };
 
-// Hook personalizado para debounce
-const useDebounce = (value, delay) => {
-  const [debouncedValue, setDebouncedValue] = useState(value);
-
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedValue(value);
-    }, delay);
-
-    return () => {
-      clearTimeout(handler);
-    };
-  }, [value, delay]);
-
-  return debouncedValue;
+const normalizeCategory = (category) => {
+  if (!category) return category;
+  return category.charAt(0).toUpperCase() + category.slice(1).toLowerCase();
 };
 
-function ReportsPage() {
+// Funções de exportação simplificadas
+const exportToCSV = (data, teamName) => {
+  try {
+    const csvContent = [
+      ["Métrica", "Valor"],
+      ["Equipe", teamName || "N/A"],
+      ["Total de Tarefas", data.total_tasks || 0],
+      ["Concluídas no Prazo", data.tasks_completed_on_time || 0],
+      ["Tarefas Atrasadas", data.overdue_tasks || 0],
+      ["Tempo Médio", data.average_completion_time || "N/A"],
+      [
+        "Taxa de Conclusão",
+        data.total_tasks > 0
+          ? Math.round(
+              ((data.tasks_by_status?.done || 0) / data.total_tasks) * 100
+            ) + "%"
+          : "0%",
+      ],
+    ]
+      .map((row) => row.join(","))
+      .join("\n");
+
+    const blob = new Blob(["\uFEFF" + csvContent], {
+      type: "text/csv;charset=utf-8;",
+    });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute(
+      "download",
+      `relatorio_equipe_${teamName || "equipe"}_${
+        new Date().toISOString().split("T")[0]
+      }.csv`
+    );
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  } catch (error) {
+    console.error("Erro ao exportar CSV:", error);
+    throw error;
+  }
+};
+
+const exportToPDF = (data, teamName) => {
+  try {
+    // Criar conteúdo HTML para impressão
+    const printContent = `
+      <html>
+        <head>
+          <title>Relatório da Equipe - ${teamName || "Equipe"}</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 20px; }
+            h1 { color: #3498db; }
+            table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+            th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+            th { background-color: #f2f2f2; }
+            .metric { margin: 10px 0; }
+          </style>
+        </head>
+        <body>
+          <h1>Relatório da Equipe: ${teamName || "Equipe"}</h1>
+          <p>Data: ${new Date().toLocaleDateString("pt-BR")}</p>
+          
+          <h2>Métricas Principais</h2>
+          <div class="metric"><strong>Total de Tarefas:</strong> ${
+            data.total_tasks || 0
+          }</div>
+          <div class="metric"><strong>Concluídas no Prazo:</strong> ${
+            data.tasks_completed_on_time || 0
+          }</div>
+          <div class="metric"><strong>Tarefas Atrasadas:</strong> ${
+            data.overdue_tasks || 0
+          }</div>
+          <div class="metric"><strong>Tempo Médio:</strong> ${
+            data.average_completion_time || "N/A"
+          }</div>
+          <div class="metric"><strong>Taxa de Conclusão:</strong> ${
+            data.total_tasks > 0
+              ? Math.round(
+                  ((data.tasks_by_status?.done || 0) / data.total_tasks) * 100
+                ) + "%"
+              : "0%"
+          }</div>
+          
+          <h2>Distribuição por Status</h2>
+          <table>
+            <tr><th>Status</th><th>Quantidade</th></tr>
+            ${Object.entries(data.tasks_by_status || {})
+              .map(
+                ([status, count]) =>
+                  `<tr><td>${
+                    status === "done"
+                      ? "Concluída"
+                      : status === "pending"
+                      ? "Pendente"
+                      : status === "in_progress"
+                      ? "Em Andamento"
+                      : status
+                  }</td><td>${count}</td></tr>`
+              )
+              .join("")}
+          </table>
+          
+          <h2>Distribuição por Prioridade</h2>
+          <table>
+            <tr><th>Prioridade</th><th>Quantidade</th></tr>
+            ${Object.entries(data.tasks_by_priority || {})
+              .map(
+                ([priority, count]) =>
+                  `<tr><td>${priority}</td><td>${count}</td></tr>`
+              )
+              .join("")}
+          </table>
+        </body>
+      </html>
+    `;
+
+    // Abrir nova janela para impressão
+    const printWindow = window.open("", "_blank");
+    printWindow.document.write(printContent);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
+    printWindow.close();
+  } catch (error) {
+    console.error("Erro ao exportar PDF:", error);
+    throw error;
+  }
+};
+
+function TeamReports() {
+  const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 768);
   const [reportData, setReportData] = useState(null);
-  const [allTasks, setAllTasks] = useState([]); // Armazena todas as tarefas do usuário
   const [loading, setLoading] = useState(true);
   const [filtersVisible, setFiltersVisible] = useState(false);
   const [currentView, setCurrentView] = useState("status");
+  const [teams, setTeams] = useState([]);
+  const [selectedTeam, setSelectedTeam] = useState("");
+  const [teamProductivity, setTeamProductivity] = useState(null);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [allTasks, setAllTasks] = useState([]);
   const [filters, setFilters] = useState({
     start_date: "",
     end_date: "",
     status: "",
     priority: "",
     category: "",
+    user_id: "",
   });
 
-  // Debounce para o filtro de categoria (500ms)
-  const debouncedCategory = useDebounce(filters.category, 500);
+  // Verificar se o usuário tem permissão de acesso
+  const hasAccess = () => {
+    return currentUser?.is_admin || currentUser?.is_manager;
+  };
 
-  // Função para calcular métricas localmente
-  const calculateMetrics = (tasks) => {
-    if (!tasks || tasks.length === 0) {
+  useEffect(() => {
+    const fetchInitialData = async () => {
+      try {
+        // Buscar dados do usuário atual
+        const userResponse = await api.get("/users/me");
+        setCurrentUser(userResponse.data);
+
+        // Verificar se tem acesso
+        if (!userResponse.data.is_admin && !userResponse.data.is_manager) {
+          toast.error(
+            "Acesso negado. Apenas gestores e administradores podem acessar esta página."
+          );
+          navigate("/dashboard");
+          return;
+        }
+
+        const teamsResponse = await api.get("/teams");
+
+        // Se o usuário é gestor (não admin), filtrar apenas suas equipes
+        if (!userResponse.data.is_admin && userResponse.data.is_manager) {
+          const userTeams = teamsResponse.data.filter((team) =>
+            team.members.some(
+              (member) =>
+                member.user_id === userResponse.data.id && member.is_manager
+            )
+          );
+          setTeams(userTeams);
+        } else {
+          setTeams(teamsResponse.data);
+        }
+
+        // Buscar todas as tarefas para análise
+        const tasksResponse = await api.get("/tasks");
+        setAllTasks(tasksResponse.data);
+      } catch (error) {
+        console.error("Erro ao buscar dados iniciais:", error);
+        toast.error("Erro ao carregar dados. Faça login novamente.");
+        navigate("/login");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchInitialData();
+
+    const handleResize = () => {
+      if (window.innerWidth <= 768) {
+        setSidebarOpen(false);
+      }
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [navigate]);
+
+  const calculateTeamMetrics = (teamTasks, teamMembers) => {
+    if (!teamTasks || teamTasks.length === 0) {
       return {
         total_tasks: 0,
         tasks_by_status: {},
@@ -90,7 +271,7 @@ function ReportsPage() {
     }
 
     const metrics = {
-      total_tasks: tasks.length,
+      total_tasks: teamTasks.length,
       tasks_by_status: {},
       tasks_by_priority: {},
       tasks_by_category: {},
@@ -104,7 +285,7 @@ function ReportsPage() {
     let totalCompletionTime = 0;
     let completedTasksWithTime = 0;
 
-    tasks.forEach((task) => {
+    teamTasks.forEach((task) => {
       // Contagem por status
       metrics.tasks_by_status[task.status] =
         (metrics.tasks_by_status[task.status] || 0) + 1;
@@ -118,8 +299,9 @@ function ReportsPage() {
 
       // Contagem por categoria
       if (task.categoria) {
-        metrics.tasks_by_category[task.categoria] =
-          (metrics.tasks_by_category[task.categoria] || 0) + 1;
+        const normalizedCategory = normalizeCategory(task.categoria);
+        metrics.tasks_by_category[normalizedCategory] =
+          (metrics.tasks_by_category[normalizedCategory] || 0) + 1;
       }
 
       // Tarefas concluídas no prazo ou atrasadas
@@ -164,76 +346,90 @@ function ReportsPage() {
     return metrics;
   };
 
-  const fetchAllTasks = useCallback(async () => {
+  const fetchReportData = async () => {
+    if (!selectedTeam) {
+      setReportData(null);
+      setTeamProductivity(null);
+      return;
+    }
+
     try {
       setLoading(true);
-      const response = await api.get("/tasks");
-      setAllTasks(response.data);
+
+      const productivityResponse = await api.get(
+        `/teams/${selectedTeam}/productivity`
+      );
+      setTeamProductivity(productivityResponse.data);
+
+      // Obter IDs dos membros da equipe
+      const teamMemberIds = productivityResponse.data.productivity.map(
+        (member) => member.user_id
+      );
+
+      // Filtrar tarefas da equipe
+      let teamTasks = allTasks.filter((task) =>
+        teamMemberIds.includes(task.user_id)
+      );
+
+      // Aplicar filtros adicionais
+      if (filters.user_id) {
+        teamTasks = teamTasks.filter(
+          (task) => task.user_id === parseInt(filters.user_id)
+        );
+      }
+
+      if (filters.status) {
+        teamTasks = teamTasks.filter((task) => task.status === filters.status);
+      }
+
+      if (filters.priority) {
+        teamTasks = teamTasks.filter((task) => {
+          const normalizedTaskPriority = normalizePriority(task.prioridade);
+          return normalizedTaskPriority === filters.priority;
+        });
+      }
+
+      if (filters.category) {
+        teamTasks = teamTasks.filter(
+          (task) =>
+            task.categoria &&
+            task.categoria
+              .toLowerCase()
+              .includes(filters.category.toLowerCase())
+        );
+      }
+
+      if (filters.start_date) {
+        teamTasks = teamTasks.filter(
+          (task) => new Date(task.created_at) >= new Date(filters.start_date)
+        );
+      }
+
+      if (filters.end_date) {
+        teamTasks = teamTasks.filter(
+          (task) => new Date(task.created_at) <= new Date(filters.end_date)
+        );
+      }
+
+      // Calcular métricas da equipe
+      const calculatedMetrics = calculateTeamMetrics(
+        teamTasks,
+        productivityResponse.data.productivity
+      );
+      calculatedMetrics.detailed_tasks = teamTasks;
+
+      setReportData(calculatedMetrics);
     } catch (error) {
-      console.error("Erro ao buscar todas as tarefas:", error);
-      toast.error("Erro ao carregar tarefas");
+      console.error("Erro ao buscar dados do relatório:", error);
+      toast.error("Erro ao carregar relatório");
     } finally {
       setLoading(false);
     }
-  }, []);
+  };
 
   useEffect(() => {
-    fetchAllTasks();
-  }, [fetchAllTasks]);
-
-  useEffect(() => {
-    // Aplicar filtros localmente sempre que allTasks ou filters mudarem
-    let filteredTasks = allTasks;
-
-    if (filters.start_date) {
-      filteredTasks = filteredTasks.filter(
-        (task) => new Date(task.created_at) >= new Date(filters.start_date)
-      );
-    }
-
-    if (filters.end_date) {
-      filteredTasks = filteredTasks.filter(
-        (task) => new Date(task.created_at) <= new Date(filters.end_date)
-      );
-    }
-
-    if (filters.status) {
-      filteredTasks = filteredTasks.filter(
-        (task) => task.status === filters.status
-      );
-    }
-
-    if (filters.priority) {
-      filteredTasks = filteredTasks.filter((task) => {
-        const normalizedTaskPriority = normalizePriority(task.prioridade);
-        return normalizedTaskPriority === filters.priority;
-      });
-    }
-
-    // Usar debouncedCategory para o filtro de categoria
-    if (debouncedCategory) {
-      filteredTasks = filteredTasks.filter(
-        (task) =>
-          task.categoria &&
-          task.categoria.toLowerCase().includes(debouncedCategory.toLowerCase())
-      );
-    }
-
-    // Calcular métricas com as tarefas filtradas
-    const calculatedMetrics = calculateMetrics(filteredTasks);
-    setReportData(calculatedMetrics);
-  }, [allTasks, filters, debouncedCategory]); // Dependências atualizadas
-
-  useEffect(() => {
-    const handleResize = () => {
-      if (window.innerWidth <= 768) {
-        setSidebarOpen(false);
-      }
-    };
-
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
+    fetchReportData();
+  }, [selectedTeam, filters, allTasks]);
 
   const handleFilterChange = (key, value) => {
     setFilters((prev) => ({
@@ -249,7 +445,9 @@ function ReportsPage() {
       status: "",
       priority: "",
       category: "",
+      user_id: "",
     });
+    setSelectedTeam("");
   };
 
   const handleLogout = async () => {
@@ -259,7 +457,7 @@ function ReportsPage() {
       console.error("Erro ao fazer logout:", err);
     } finally {
       localStorage.removeItem("auth");
-      window.location.href = "/login";
+      navigate("/login");
     }
   };
 
@@ -268,10 +466,13 @@ function ReportsPage() {
   };
 
   const handleExportPDF = async () => {
-    if (!reportData) return;
+    if (!reportData || !teamProductivity) {
+      toast.error("Nenhum dado disponível para exportar");
+      return;
+    }
 
     try {
-      await exportToPDF(reportData, filters);
+      exportToPDF(reportData, teamProductivity.team_name);
       toast.success("Relatório PDF exportado com sucesso!");
     } catch (error) {
       console.error("Erro ao exportar PDF:", error);
@@ -280,10 +481,13 @@ function ReportsPage() {
   };
 
   const handleExportCSV = () => {
-    if (!reportData) return;
+    if (!reportData || !teamProductivity) {
+      toast.error("Nenhum dado disponível para exportar");
+      return;
+    }
 
     try {
-      exportToCSV(reportData, filters);
+      exportToCSV(reportData, teamProductivity.team_name);
       toast.success("Dados CSV exportados com sucesso!");
     } catch (error) {
       console.error("Erro ao exportar CSV:", error);
@@ -418,7 +622,52 @@ function ReportsPage() {
     );
   };
 
-  if (loading) {
+  const renderTeamProductivity = () => {
+    if (!teamProductivity || teamProductivity.productivity.length === 0)
+      return null;
+
+    const maxCompleted = Math.max(
+      ...teamProductivity.productivity.map((p) => p.completed_tasks),
+      1
+    );
+
+    return (
+      <div className={styles.productivityCard}>
+        <div className={styles.cardHeader}>
+          <h3 className={styles.cardTitle}>
+            <Users size={20} />
+            Produtividade da Equipe: {teamProductivity.team_name}
+          </h3>
+        </div>
+        <div className={styles.productivityGrid}>
+          {teamProductivity.productivity.map((member) => (
+            <div key={member.user_id} className={styles.productivityItem}>
+              <div className={styles.productivityLabel}>
+                <span className={styles.userName}>{member.user_name}</span>
+                <span className={styles.userRate}>
+                  {parseFloat(member.completion_rate).toFixed(1)}%
+                </span>
+              </div>
+              <div className={styles.productivityBar}>
+                <div
+                  className={styles.productivityFill}
+                  style={{
+                    width: `${(member.completed_tasks / maxCompleted) * 100}%`,
+                    backgroundColor: "#3498db",
+                  }}
+                ></div>
+              </div>
+              <div className={styles.productivityValue}>
+                {member.completed_tasks} / {member.total_tasks}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  if (loading && !currentUser) {
     return (
       <div className={styles.reportsPage}>
         <Header onMenuToggle={toggleSidebar} />
@@ -437,6 +686,29 @@ function ReportsPage() {
     );
   }
 
+  if (!hasAccess()) {
+    return (
+      <div className={styles.reportsPage}>
+        <Header onMenuToggle={toggleSidebar} />
+        <div className={styles.pageBody}>
+          <Sidebar isOpen={sidebarOpen} onLogout={handleLogout} />
+          <main className={styles.contentArea}>
+            <div className={styles.reportsWrapper}>
+              <div className={styles.accessDenied}>
+                <Users size={64} />
+                <h2>Acesso Restrito</h2>
+                <p>
+                  Esta página é acessível apenas para gestores de equipe e
+                  administradores.
+                </p>
+              </div>
+            </div>
+          </main>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={styles.reportsPage}>
       <Header onMenuToggle={toggleSidebar} />
@@ -447,15 +719,15 @@ function ReportsPage() {
             {/* Header da Página */}
             <div className={styles.pageHeader}>
               <div className={styles.headerContent}>
-                <h1 className={styles.pageTitle}>Relatórios Pessoais</h1>
+                <h1 className={styles.pageTitle}>Relatórios da Equipe</h1>
                 <p className={styles.pageSubtitle}>
-                  Análise detalhada do seu desempenho e produtividade
+                  Análise detalhada do desempenho e produtividade da sua equipe
                 </p>
               </div>
               <div className={styles.breadcrumb}>
-                <span>Minhas Atividades</span>
+                <span>Equipes</span>
                 <span className={styles.separator}>›</span>
-                <span className={styles.current}>Relatórios Pessoais</span>
+                <span className={styles.current}>Relatórios da Equipe</span>
               </div>
             </div>
 
@@ -500,10 +772,40 @@ function ReportsPage() {
                 <div className={styles.filtersContent}>
                   <div className={styles.filtersGrid}>
                     <div className={styles.filterGroup}>
-                      <label>
-                        <Calendar />
-                        Data Inicial
-                      </label>
+                      <label>Equipe *</label>
+                      <select
+                        value={selectedTeam}
+                        onChange={(e) => setSelectedTeam(e.target.value)}
+                        required
+                      >
+                        <option value="">Selecione uma equipe</option>
+                        {teams.map((team) => (
+                          <option key={team.id} value={team.id}>
+                            {team.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className={styles.filterGroup}>
+                      <label>Membro da Equipe</label>
+                      <select
+                        value={filters.user_id}
+                        onChange={(e) =>
+                          handleFilterChange("user_id", e.target.value)
+                        }
+                        disabled={!selectedTeam}
+                      >
+                        <option value="">Todos os Membros</option>
+                        {selectedTeam &&
+                          teamProductivity?.productivity.map((member) => (
+                            <option key={member.user_id} value={member.user_id}>
+                              {member.user_name}
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+                    <div className={styles.filterGroup}>
+                      <label>Data Inicial</label>
                       <input
                         type="date"
                         value={filters.start_date}
@@ -514,10 +816,7 @@ function ReportsPage() {
                       />
                     </div>
                     <div className={styles.filterGroup}>
-                      <label>
-                        <Calendar />
-                        Data Final
-                      </label>
+                      <label>Data Final</label>
                       <input
                         type="date"
                         value={filters.end_date}
@@ -528,17 +827,14 @@ function ReportsPage() {
                       />
                     </div>
                     <div className={styles.filterGroup}>
-                      <label>
-                        <Tag />
-                        Status
-                      </label>
+                      <label>Status</label>
                       <select
                         value={filters.status}
                         onChange={(e) =>
                           handleFilterChange("status", e.target.value)
                         }
                       >
-                        <option value="">Todos os Status</option>
+                        <option value="">Todos</option>
                         <option value="pending">Pendente</option>
                         <option value="in_progress">Em Andamento</option>
                         <option value="done">Concluída</option>
@@ -546,41 +842,30 @@ function ReportsPage() {
                       </select>
                     </div>
                     <div className={styles.filterGroup}>
-                      <label>
-                        <AlertTriangle />
-                        Prioridade
-                      </label>
+                      <label>Prioridade</label>
                       <select
                         value={filters.priority}
                         onChange={(e) =>
                           handleFilterChange("priority", e.target.value)
                         }
                       >
-                        <option value="">Todas as Prioridades</option>
+                        <option value="">Todas</option>
                         <option value="Alta">Alta</option>
                         <option value="Média">Média</option>
                         <option value="Baixa">Baixa</option>
                       </select>
                     </div>
                     <div className={styles.filterGroup}>
-                      <label>
-                        <Search />
-                        Categoria
-                      </label>
+                      <label>Categoria</label>
                       <input
                         type="text"
-                        placeholder="Digite a categoria..."
+                        placeholder="Digite a categoria"
                         value={filters.category}
                         onChange={(e) =>
                           handleFilterChange("category", e.target.value)
                         }
                         className={styles.searchInput}
                       />
-                      {filters.category && (
-                        <small className={styles.debounceHint}>
-                          Pesquisando por "{debouncedCategory}"...
-                        </small>
-                      )}
                     </div>
                   </div>
                   <div className={styles.filtersActions}>
@@ -594,7 +879,7 @@ function ReportsPage() {
 
             {reportData ? (
               <>
-                {/* Cards de métricas principais */}
+                {/* Cards de métricas principais da equipe */}
                 <div className={styles.metricsGrid}>
                   <div className={styles.metricCard}>
                     <div
@@ -620,7 +905,7 @@ function ReportsPage() {
                       <CheckCircle size={24} />
                     </div>
                     <div className={styles.metricContent}>
-                      <h3>{reportData.tasks_completed_on_time || 0}</h3>
+                      <h3>{reportData.tasks_completed_on_time}</h3>
                       <p>Concluídas no Prazo</p>
                     </div>
                     <div className={styles.metricProgress}>
@@ -636,13 +921,11 @@ function ReportsPage() {
                       <AlertTriangle size={24} />
                     </div>
                     <div className={styles.metricContent}>
-                      <h3>{reportData.overdue_tasks || 0}</h3>
+                      <h3>{reportData.overdue_tasks}</h3>
                       <p>Tarefas Atrasadas</p>
                     </div>
                     <div className={styles.metricAlert}>
-                      {(reportData.overdue_tasks || 0) > 0 && (
-                        <Activity size={16} />
-                      )}
+                      {reportData.overdue_tasks > 0 && <Zap size={16} />}
                     </div>
                   </div>
 
@@ -654,7 +937,7 @@ function ReportsPage() {
                       <Clock size={24} />
                     </div>
                     <div className={styles.metricContent}>
-                      <h3>{reportData.average_completion_time || "N/A"}</h3>
+                      <h3>{reportData.average_completion_time}</h3>
                       <p>Tempo Médio</p>
                     </div>
                     <div className={styles.metricInfo}>
@@ -663,26 +946,29 @@ function ReportsPage() {
                   </div>
                 </div>
 
-                {/* Gráfico principal */}
+                {/* Gráfico principal (distribuição de tarefas) */}
                 {renderChart()}
+
+                {/* Produtividade por Membro da Equipe */}
+                {renderTeamProductivity()}
 
                 {/* Card de resumo de performance */}
                 <div className={styles.performanceCard}>
                   <div className={styles.cardHeader}>
                     <h3 className={styles.cardTitle}>
-                      <BarChart2 size={20} />
-                      Resumo de Performance
+                      <BarChart3 size={20} />
+                      Resumo de Performance da Equipe
                     </h3>
                   </div>
                   <div className={styles.performanceGrid}>
                     <div className={styles.performanceItem}>
                       <div className={styles.performanceLabel}>
-                        Taxa de Conclusão
+                        Taxa de Conclusão da Equipe
                       </div>
                       <div className={styles.performanceValue}>
                         {reportData.total_tasks > 0
                           ? Math.round(
-                              ((reportData.tasks_by_status?.done || 0) /
+                              ((reportData.tasks_by_status.done || 0) /
                                 reportData.total_tasks) *
                                 100
                             )
@@ -708,7 +994,7 @@ function ReportsPage() {
                     </div>
                     <div className={styles.performanceItem}>
                       <div className={styles.performanceLabel}>
-                        Produtividade
+                        Produtividade Média
                       </div>
                       <div className={styles.performanceValue}>
                         {reportData.total_tasks > 0 &&
@@ -722,12 +1008,9 @@ function ReportsPage() {
               </>
             ) : (
               <div className={styles.emptyState}>
-                <BarChart2 size={64} />
-                <h3>Nenhum Dado Disponível</h3>
-                <p>
-                  Não há dados suficientes para gerar o relatório no período
-                  selecionado.
-                </p>
+                <BarChart3 size={64} />
+                <h3>Selecione uma Equipe</h3>
+                <p>Escolha uma equipe nos filtros para gerar o relatório.</p>
               </div>
             )}
           </div>
@@ -737,4 +1020,4 @@ function ReportsPage() {
   );
 }
 
-export default ReportsPage;
+export default TeamReports;

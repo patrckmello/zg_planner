@@ -1,70 +1,116 @@
-import React, { useState, useEffect } from 'react';
-import { toast } from 'react-toastify';
-import Header from './Header';
-import Sidebar from './Sidebar';
-import styles from './Dashboard.module.css';
-import DeleteConfirmModal from './DeleteConfirmModal';
-import api from '../services/axiosInstance';
-import { useNavigate } from 'react-router-dom';
-import { FiFilter, FiArrowDownCircle } from 'react-icons/fi';
-import Checkbox from "./Checkbox/Checkbox";
-
+import React, { useState, useEffect } from "react";
+import { toast } from "react-toastify";
+import { useNavigate } from "react-router-dom";
+import Header from "../components/Header";
+import Sidebar from "../components/Sidebar";
+import styles from "./Dashboard.module.css";
+import api from "../services/axiosInstance";
+import {
+  BarChart3,
+  Calendar,
+  CheckCircle,
+  Clock,
+  AlertTriangle,
+  TrendingUp,
+  Target,
+  Plus,
+  ArrowRight,
+  Activity,
+  Users,
+  Zap,
+} from "lucide-react";
 
 function Dashboard() {
   const navigate = useNavigate();
-  const [tasks, setTasks] = useState([]);
+  const [dashboardData, setDashboardData] = useState(null);
+  const [recentTasks, setRecentTasks] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filterStatus, setFilterStatus] = useState('all');
-  const [sortBy, setSortBy] = useState('due_date');
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [taskToDelete, setTaskToDelete] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 768);
-
-  const filteredTasks = tasks.filter(task => {
-    if (filterStatus === 'all') return true;
-    return task.status === filterStatus;
-  });
-
-  const toggleTaskStatus = async (taskId, newStatus) => {
-    try {
-      const response = await api.put(`/tasks/${taskId}`, {
-        status: newStatus
-      });
-
-      setTasks(prevTasks =>
-        prevTasks.map(t =>
-          t.id === taskId ? { ...t, status: response.data.status } : t
-        )
-      );
-    } catch (err) {
-      console.error('Erro ao atualizar status da tarefa', err);
-    }
-  };
-
-  const sortedTasks = [...filteredTasks].sort((a, b) => {
-    if (sortBy === 'title') return a.title.localeCompare(b.title);
-    if (sortBy === 'status') return a.status.localeCompare(b.status);
-    if (sortBy === 'due_date') return new Date(a.due_date || 0) - new Date(b.due_date || 0);
-  });
+  const [currentUser, setCurrentUser] = useState(null);
 
   useEffect(() => {
-  const fetchTasks = async () => {
-    try {
-      const response = await api.get('/tasks'); 
-      console.log('Tarefas recebidas no frontend:', response.data);
-      setTasks(response.data);
-    } catch (error) {
-      console.error('Erro ao buscar tarefas:', error);
-      toast.error('Erro ao buscar tarefas. Faça login novamente.', {
-        position: "top-right",
-        autoClose: 5000,
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+    const fetchDashboardData = async () => {
+      try {
+        // Buscar dados do usuário atual
+        const userResponse = await api.get("/users/me");
+        setCurrentUser(userResponse.data);
 
-  fetchTasks();
+        // Buscar todas as tarefas para calcular métricas
+        const tasksResponse = await api.get("/tasks");
+        const allTasks = tasksResponse.data;
+
+        // Filtrar tarefas do usuário atual
+        const userTasks = allTasks.filter(
+          (task) => task.user_id === userResponse.data.id
+        );
+
+        // Calcular métricas
+        const totalTasks = userTasks.length;
+        const completedTasks = userTasks.filter(
+          (task) => task.status === "done"
+        ).length;
+        const pendingTasks = userTasks.filter(
+          (task) => task.status === "pending"
+        ).length;
+        const overdueTasks = userTasks.filter(
+          (task) =>
+            task.due_date &&
+            new Date(task.due_date) < new Date() &&
+            task.status !== "done"
+        ).length;
+
+        // Tarefas próximas do vencimento (próximos 7 dias)
+        const upcomingTasks = userTasks.filter((task) => {
+          if (!task.due_date || task.status === "done") return false;
+          const dueDate = new Date(task.due_date);
+          const today = new Date();
+          const nextWeek = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
+          return dueDate >= today && dueDate <= nextWeek;
+        }).length;
+
+        // Tarefas recentes (últimas 5 tarefas modificadas)
+        const recentTasksList = userTasks
+          .sort(
+            (a, b) =>
+              new Date(b.updated_at || b.created_at) -
+              new Date(a.updated_at || a.created_at)
+          )
+          .slice(0, 5);
+
+        // Calcular taxa de conclusão
+        const completionRate =
+          totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
+        // Distribuição por status
+        const statusDistribution = {
+          pending: pendingTasks,
+          done: completedTasks,
+          overdue: overdueTasks,
+        };
+
+        setDashboardData({
+          totalTasks,
+          completedTasks,
+          pendingTasks,
+          overdueTasks,
+          upcomingTasks,
+          completionRate,
+          statusDistribution,
+        });
+
+        setRecentTasks(recentTasksList);
+      } catch (error) {
+        console.error("Erro ao buscar dados do dashboard:", error);
+        toast.error("Erro ao carregar dashboard. Faça login novamente.", {
+          position: "top-right",
+          autoClose: 5000,
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDashboardData();
 
     const handleResize = () => {
       if (window.innerWidth <= 768) {
@@ -72,177 +118,338 @@ function Dashboard() {
       }
     };
 
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
   }, []);
-
-  useEffect(() => {
-    const savedFilter = localStorage.getItem('filterStatus');
-    const savedSort = localStorage.getItem('sortBy');
-
-    if (savedFilter) setFilterStatus(savedFilter);
-    if (savedSort) setSortBy(savedSort);
-  }, []);
-
-  // Salva filtro no localStorage sempre que mudar
-  useEffect(() => {
-    localStorage.setItem('filterStatus', filterStatus);
-  }, [filterStatus]);
-
-  // Salva ordenação no localStorage sempre que mudar
-  useEffect(() => {
-    localStorage.setItem('sortBy', sortBy);
-  }, [sortBy]);
 
   const handleLogout = async () => {
     try {
-      await api.post('/logout');
+      await api.post("/logout");
     } catch (err) {
-      console.error('Erro ao fazer logout:', err);
+      console.error("Erro ao fazer logout:", err);
     } finally {
-      localStorage.removeItem('auth');
-      navigate('/login');
+      localStorage.removeItem("auth");
+      navigate("/login");
     }
   };
+
   const toggleSidebar = () => {
     setSidebarOpen(!sidebarOpen);
   };
-  
+
+  const getTaskStatusColor = (task) => {
+    if (task.status === "done") return "#10b981";
+    if (task.due_date && new Date(task.due_date) < new Date()) return "#ef4444";
+    return "#f59e0b";
+  };
+
+  const getTaskStatusText = (task) => {
+    if (task.status === "done") return "Concluída";
+    if (task.due_date && new Date(task.due_date) < new Date())
+      return "Atrasada";
+    return "Pendente";
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return "Sem prazo";
+    return new Date(dateString).toLocaleDateString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+  };
+
   if (loading) {
-  return (
-    <div className={styles.spinnerContainer}>
-      <div className={styles.spinner}></div>
-    </div>
-  );
-}
-
-const cancelDelete = () => {
-  setTaskToDelete(null);
-  setShowDeleteModal(false);
-};
-
-const confirmDelete = async () => {
-  if (!taskToDelete) return;
-
-  try {
-    await api.delete(`/tasks/${taskToDelete.id}`);
-    setTasks(prev => prev.filter(t => t.id !== taskToDelete.id));
-  } catch (error) {
-    console.error('Erro ao excluir tarefa:', error);
-  } finally {
-    setTaskToDelete(null);
-    setShowDeleteModal(false);
+    return (
+      <div className={styles.spinnerContainer}>
+        <div className={styles.spinner}></div>
+      </div>
+    );
   }
-};
 
   return (
-    // O container de toda a página
     <div className={styles.dashboardPage}>
       <Header onMenuToggle={toggleSidebar} />
 
-      {/* O corpo da página, que contém a sidebar e o conteúdo */}
       <div className={styles.pageBody}>
         <Sidebar isOpen={sidebarOpen} onLogout={handleLogout} />
-        
-        {/* A área de conteúdo principal, que será nosso fundo cinza */}
+
         <main className={styles.contentArea}>
-
-          {/* Um wrapper para o conteúdo das tarefas, para que possamos posicioná-lo */}
-          <div className={styles.tasksWrapper}>
-            <div className={styles.tasksHeader}>
-              <h2>Minhas Tarefas</h2>
-              <button className={styles.addTaskBtn} onClick={() => navigate('/tasks/new')}>+ Nova Tarefa</button>
-            </div>
-            
-            <div className={styles.controls}>
-              <div className={styles.controlGroup}>
-                <label className={styles.controlLabel}>
-                  <FiFilter className={styles.icon} />
-                  Filtrar:
-                  <select 
-                    className={styles.select} 
-                    value={filterStatus} 
-                    onChange={(e) => setFilterStatus(e.target.value)}
-                  >
-                    <option value="all">Todas</option>
-                    <option value="pending">Pendentes</option>
-                    <option value="done">Concluídas</option>
-                  </select>
-                </label>
+          <div className={styles.dashboardWrapper}>
+            {/* Header da página */}
+            <div className={styles.pageHeader}>
+              <div className={styles.headerContent}>
+                <h1 className={styles.pageTitle}>Dashboard</h1>
               </div>
-
-              <div className={styles.controlGroup}>
-                <label className={styles.controlLabel}>
-                  <FiArrowDownCircle className={styles.icon} />
-                  Ordenar por:
-                  <select 
-                    className={styles.select} 
-                    value={sortBy} 
-                    onChange={(e) => setSortBy(e.target.value)}
-                  >
-                    <option value="due_date">Data de vencimento</option>
-                    <option value="title">Título</option>
-                    <option value="status">Status</option>
-                  </select>
-                </label>
+              <div className={styles.breadcrumb}>
+                <span className={styles.current}>Dashboard</span>
               </div>
             </div>
 
-            <div className={styles.tasksList}>
-              {sortedTasks.length === 0 ? (
-                <div className={styles.emptyTasks}>
-                  {filterStatus === 'done' && "Nenhuma tarefa concluída encontrada."}
-                  {filterStatus === 'pending' && "Nenhuma tarefa pendente encontrada."}
-                  {filterStatus === 'all' && "Nenhuma tarefa cadastrada."}
+            {/* Cards de métricas principais */}
+            <div className={styles.metricsGrid}>
+              <div className={styles.metricCard}>
+                <div
+                  className={styles.metricIcon}
+                  style={{ backgroundColor: "#3b82f6" }}
+                >
+                  <Target size={24} />
                 </div>
-              ) : (
-                sortedTasks.map(task => {
-                  const isLate = task.due_date && new Date(task.due_date) < new Date() && task.status !== 'done';
+                <div className={styles.metricContent}>
+                  <h3>{dashboardData?.totalTasks || 0}</h3>
+                  <p>Total de Tarefas</p>
+                </div>
+                <div className={styles.metricTrend}>
+                  <TrendingUp size={16} />
+                </div>
+              </div>
 
-                  return (
+              <div className={styles.metricCard}>
+                <div
+                  className={styles.metricIcon}
+                  style={{ backgroundColor: "#10b981" }}
+                >
+                  <CheckCircle size={24} />
+                </div>
+                <div className={styles.metricContent}>
+                  <h3>{dashboardData?.completedTasks || 0}</h3>
+                  <p>Concluídas</p>
+                </div>
+                <div className={styles.metricProgress}>
+                  <span>{dashboardData?.completionRate || 0}%</span>
+                </div>
+              </div>
+
+              <div className={styles.metricCard}>
+                <div
+                  className={styles.metricIcon}
+                  style={{ backgroundColor: "#f59e0b" }}
+                >
+                  <Clock size={24} />
+                </div>
+                <div className={styles.metricContent}>
+                  <h3>{dashboardData?.pendingTasks || 0}</h3>
+                  <p>Pendentes</p>
+                </div>
+                <div className={styles.metricAction}>
+                  <button
+                    className={styles.quickActionBtn}
+                    onClick={() => navigate("/tasks")}
+                  >
+                    Ver todas
+                  </button>
+                </div>
+              </div>
+
+              <div className={styles.metricCard}>
+                <div
+                  className={styles.metricIcon}
+                  style={{ backgroundColor: "#ef4444" }}
+                >
+                  <AlertTriangle size={24} />
+                </div>
+                <div className={styles.metricContent}>
+                  <h3>{dashboardData?.overdueTasks || 0}</h3>
+                  <p>Atrasadas</p>
+                </div>
+                <div className={styles.metricAlert}>
+                  {dashboardData?.overdueTasks > 0 && <Zap size={16} />}
+                </div>
+              </div>
+            </div>
+
+            {/* Seção de progresso visual */}
+            <div className={styles.progressSection}>
+              <div className={styles.progressCard}>
+                <div className={styles.progressHeader}>
+                  <div className={styles.progressTitle}>
+                    <Activity size={20} />
+                    <span>Progresso Geral</span>
+                  </div>
+                  <span className={styles.progressPercentage}>
+                    {dashboardData?.completionRate || 0}%
+                  </span>
+                </div>
+                <div className={styles.progressBar}>
+                  <div
+                    className={styles.progressFill}
+                    style={{ width: `${dashboardData?.completionRate || 0}%` }}
+                  ></div>
+                </div>
+                <div className={styles.progressStats}>
+                  <div className={styles.progressStat}>
                     <div
-                      key={task.id}
-                      className={`${styles.taskItem} ${task.status === 'done' ? styles.completed : ''} ${isLate ? styles.taskLate : ''}`}
-                    >
-                      <Checkbox
-                        checked={task.status === 'done'}
-                        onCheckedChange={(checked) => toggleTaskStatus(task.id, checked ? 'done' : 'pending')}
-                      />
-                      <span className={styles.taskTitle}>{task.title}</span>
-                      <div className={styles.taskActions}>
+                      className={styles.statDot}
+                      style={{ backgroundColor: "#10b981" }}
+                    ></div>
+                    <span>
+                      Concluídas: {dashboardData?.completedTasks || 0}
+                    </span>
+                  </div>
+                  <div className={styles.progressStat}>
+                    <div
+                      className={styles.statDot}
+                      style={{ backgroundColor: "#f59e0b" }}
+                    ></div>
+                    <span>Pendentes: {dashboardData?.pendingTasks || 0}</span>
+                  </div>
+                  <div className={styles.progressStat}>
+                    <div
+                      className={styles.statDot}
+                      style={{ backgroundColor: "#ef4444" }}
+                    ></div>
+                    <span>Atrasadas: {dashboardData?.overdueTasks || 0}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className={styles.upcomingCard}>
+                <div className={styles.upcomingHeader}>
+                  <Calendar size={20} />
+                  <span>Próximos Vencimentos</span>
+                </div>
+                <div className={styles.upcomingContent}>
+                  <div className={styles.upcomingNumber}>
+                    {dashboardData?.upcomingTasks || 0}
+                  </div>
+                  <p>tarefas vencem nos próximos 7 dias</p>
+                  <button
+                    className={styles.upcomingBtn}
+                    onClick={() => navigate("/tasks")}
+                  >
+                    Ver detalhes
+                    <ArrowRight size={16} />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Seção de tarefas recentes e ações rápidas */}
+            <div className={styles.bottomSection}>
+              <div className={styles.recentTasksCard}>
+                <div className={styles.cardHeader}>
+                  <h3 className={styles.cardTitle}>
+                    <BarChart3 size={20} />
+                    Atividade Recente
+                  </h3>
+                  <button
+                    className={styles.viewAllBtn}
+                    onClick={() => navigate("/tasks")}
+                  >
+                    Ver todas
+                    <ArrowRight size={16} />
+                  </button>
+                </div>
+                <div className={styles.tasksList}>
+                  {recentTasks.length === 0 ? (
+                    <div className={styles.emptyState}>
+                      <Target size={48} />
+                      <p>Nenhuma tarefa encontrada</p>
+                      <button
+                        className={styles.createTaskBtn}
+                        onClick={() => navigate("/tasks/new")}
+                      >
+                        <Plus size={16} />
+                        Criar primeira tarefa
+                      </button>
+                    </div>
+                  ) : (
+                    recentTasks.map((task) => (
+                      <div key={task.id} className={styles.taskItem}>
+                        <div
+                          className={styles.taskStatus}
+                          style={{ backgroundColor: getTaskStatusColor(task) }}
+                        ></div>
+                        <div className={styles.taskContent}>
+                          <h4 className={styles.taskTitle}>{task.title}</h4>
+                          <div className={styles.taskMeta}>
+                            <span className={styles.taskDate}>
+                              {formatDate(task.due_date)}
+                            </span>
+                            <span
+                              className={styles.taskStatusText}
+                              style={{ color: getTaskStatusColor(task) }}
+                            >
+                              {getTaskStatusText(task)}
+                            </span>
+                          </div>
+                        </div>
                         <button
-                          className={styles.editBtn}
+                          className={styles.taskAction}
                           onClick={() => navigate(`/tasks/${task.id}/edit`)}
                         >
-                          Editar
-                        </button>
-                        <button
-                          className={styles.deleteBtn}
-                          onClick={() => {
-                            setTaskToDelete(task);
-                            setShowDeleteModal(true);
-                          }}
-                        >
-                          Excluir
+                          <ArrowRight size={16} />
                         </button>
                       </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <div className={styles.quickActionsCard}>
+                <div className={styles.cardHeader}>
+                  <h3 className={styles.cardTitle}>
+                    <Zap size={20} />
+                    Ações Rápidas
+                  </h3>
+                </div>
+                <div className={styles.quickActions}>
+                  <button
+                    className={styles.quickAction}
+                    onClick={() => navigate("/tasks/new")}
+                  >
+                    <div
+                      className={styles.quickActionIcon}
+                      style={{ backgroundColor: "#3b82f6" }}
+                    >
+                      <Plus size={20} />
                     </div>
-                  );
-                })
-              )}
+                    <span>Nova Tarefa</span>
+                  </button>
+                  <button
+                    className={styles.quickAction}
+                    onClick={() => navigate("/tasks")}
+                  >
+                    <div
+                      className={styles.quickActionIcon}
+                      style={{ backgroundColor: "#10b981" }}
+                    >
+                      <BarChart3 size={20} />
+                    </div>
+                    <span>Ver Tarefas</span>
+                  </button>
+                  <button
+                    className={styles.quickAction}
+                    onClick={() => navigate("/reports")}
+                  >
+                    <div
+                      className={styles.quickActionIcon}
+                      style={{ backgroundColor: "#f59e0b" }}
+                    >
+                      <TrendingUp size={20} />
+                    </div>
+                    <span>Relatórios</span>
+                  </button>
+                  <button
+                    className={styles.quickAction}
+                    onClick={() => navigate("/meu-perfil")}
+                  >
+                    <div
+                      className={styles.quickActionIcon}
+                      style={{ backgroundColor: "#8b5cf6" }}
+                    >
+                      <Users size={20} />
+                    </div>
+                    <span>Meu Perfil</span>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </main>
-        <DeleteConfirmModal 
-          isOpen={showDeleteModal} 
-          onCancel={cancelDelete} 
-          onConfirm={confirmDelete} 
-          taskTitle={taskToDelete?.title || ''} 
-        />
       </div>
     </div>
   );
 }
 
 export default Dashboard;
-

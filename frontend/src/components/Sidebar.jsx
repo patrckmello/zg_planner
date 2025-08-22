@@ -37,6 +37,11 @@ function Sidebar({ isOpen, onLogout }) {
     return location.pathname === path;
   };
 
+  // Função para verificar se o usuário é gestor ou admin
+  const isManagerOrAdmin = () => {
+    return user?.is_admin || user?.is_manager;
+  };
+
   if (!user) {
     return (
       <aside className={`${styles.sidebar} ${isOpen ? styles.open : ""}`}>
@@ -96,7 +101,8 @@ function Sidebar({ isOpen, onLogout }) {
             </Link>
           </li>
 
-          {user?.equipes?.length > 0 && user.is_manager && (
+          {/* Seção de Equipes - Visível apenas para gestores e administradores */}
+          {isManagerOrAdmin() && (
             <>
               <li className={styles.sectionLabel}>Equipes</li>
               <li>
@@ -112,9 +118,9 @@ function Sidebar({ isOpen, onLogout }) {
               </li>
               <li>
                 <Link
-                  to="/relatorios-equipe"
+                  to="/equipes/relatorios"
                   className={
-                    isActiveLink("/relatorios-equipe") ? styles.activeLink : ""
+                    isActiveLink("/equipes/relatorios") ? styles.activeLink : ""
                   }
                 >
                   <PieChart size={20} className={styles.icon} />
@@ -124,6 +130,7 @@ function Sidebar({ isOpen, onLogout }) {
             </>
           )}
 
+          {/* Seção de Administração - Visível apenas para administradores */}
           {user?.is_admin && (
             <>
               <li className={styles.sectionLabel}>Administração</li>

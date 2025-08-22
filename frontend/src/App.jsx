@@ -13,6 +13,8 @@ import EditTaskFormPage from "./pages/EditTaskFormPage";
 import ReportsPage from "./pages/ReportsPage";
 import ProfilePage from "./pages/ProfilePage";
 import ConfigPage from "./pages/ConfigPage";
+import TeamTasks from "./pages/TeamTasks"; // Nova página de Tarefas da Equipe
+import TeamReports from "./pages/TeamReports"; // Nova página de Relatórios da Equipe
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
@@ -31,6 +33,10 @@ function App() {
           <Route path="/tasks/:id/edit" element={<EditTaskFormPage />} />
           <Route path="/reports" element={<ReportsPage />} />
           <Route path="/meu-perfil" element={<ProfilePage />} />
+
+          {/* Novas rotas para funcionalidades de equipe */}
+          <Route path="/equipes/tarefas" element={<TeamTasks />} />
+          <Route path="/equipes/relatorios" element={<TeamReports />} />
         </Route>
 
         {/* Protegendo rotas de admin */}
