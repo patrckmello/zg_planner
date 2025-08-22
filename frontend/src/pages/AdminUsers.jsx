@@ -1,23 +1,25 @@
-import React, { useState, useEffect } from 'react';
-import Header from '../components/Header';
-import Sidebar from '../components/Sidebar';
-import DeleteConfirmModal from '../components/DeleteConfirmModal';
-import styles from './AdminUsers.module.css';
-import api from '../services/axiosInstance';
-import { useNavigate } from 'react-router-dom';
-import { 
-  FiFilter, 
-  FiArrowDownCircle, 
-  FiPlus, 
-  FiEdit, 
-  FiUser, 
-  FiMail, 
+import React, { useState, useEffect } from "react";
+import Header from "../components/Header";
+import Sidebar from "../components/Sidebar";
+import DeleteConfirmModal from "../components/DeleteConfirmModal";
+import UserRoleManager from "../components/UserRoleManager";
+import styles from "./AdminUsers.module.css";
+import api from "../services/axiosInstance";
+import { useNavigate } from "react-router-dom";
+import {
+  FiFilter,
+  FiArrowDownCircle,
+  FiPlus,
+  FiEdit,
+  FiUser,
+  FiMail,
   FiShield,
   FiUserX,
   FiUserCheck,
   FiMoreHorizontal,
-  FiTrash2
-} from 'react-icons/fi';
+  FiTrash2,
+  FiSettings,
+} from "react-icons/fi";
 
 function AdminUsers() {
   const navigate = useNavigate();
@@ -26,54 +28,57 @@ function AdminUsers() {
   const [error, setError] = useState(null);
   const [showUserForm, setShowUserForm] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
-  const [filterRole, setFilterRole] = useState('all');
-  const [filterStatus, setFilterStatus] = useState('all');
-  const [sortBy, setSortBy] = useState('username');
+  const [filterRole, setFilterRole] = useState("all");
+  const [filterStatus, setFilterStatus] = useState("all");
+  const [sortBy, setSortBy] = useState("username");
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [userToDelete, setUserToDelete] = useState(null);
   const [showDropdown, setShowDropdown] = useState(null);
+  const [showRoleManager, setShowRoleManager] = useState(false);
+  const [userToManageRoles, setUserToManageRoles] = useState(null);
 
   // Estado para novo usuário
   const [newUser, setNewUser] = useState({
-    username: '',
-    email: '',
+    username: "",
+    email: "",
     is_admin: false,
-    password: '',
+    password: "",
   });
 
   // Manteremos a sidebar aberta por padrão em telas maiores
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 768);
 
-  const filteredUsers = users.filter(user => {
+  const filteredUsers = users.filter((user) => {
     let roleMatch = true;
     let statusMatch = true;
 
-    if (filterRole === 'admin') roleMatch = user.is_admin;
-    if (filterRole === 'user') roleMatch = !user.is_admin;
-    
-    if (filterStatus === 'active') statusMatch = user.is_active !== false;
-    if (filterStatus === 'inactive') statusMatch = user.is_active === false;
+    if (filterRole === "admin") roleMatch = user.is_admin;
+    if (filterRole === "user") roleMatch = !user.is_admin;
+
+    if (filterStatus === "active") statusMatch = user.is_active !== false;
+    if (filterStatus === "inactive") statusMatch = user.is_active === false;
 
     return roleMatch && statusMatch;
   });
 
   const sortedUsers = [...filteredUsers].sort((a, b) => {
-    if (sortBy === 'username') return a.username.localeCompare(b.username);
-    if (sortBy === 'email') return a.email.localeCompare(b.email);
-    if (sortBy === 'role') return (b.is_admin ? 1 : 0) - (a.is_admin ? 1 : 0);
-    if (sortBy === 'status') return (b.is_active ? 1 : 0) - (a.is_active ? 1 : 0);
+    if (sortBy === "username") return a.username.localeCompare(b.username);
+    if (sortBy === "email") return a.email.localeCompare(b.email);
+    if (sortBy === "role") return (b.is_admin ? 1 : 0) - (a.is_admin ? 1 : 0);
+    if (sortBy === "status")
+      return (b.is_active ? 1 : 0) - (a.is_active ? 1 : 0);
     return 0;
   });
 
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        const response = await api.get('/users');
-        console.log('Usuários recebidos no frontend:', response.data);
+        const response = await api.get("/users");
+        console.log("Usuários recebidos no frontend:", response.data);
         setUsers(response.data);
       } catch (error) {
-        console.error('Erro ao buscar usuários:', error);
-        setError('Erro ao buscar usuários. Verifique suas permissões.');
+        console.error("Erro ao buscar usuários:", error);
+        setError("Erro ao buscar usuários. Verifique suas permissões.");
       } finally {
         setLoading(false);
       }
@@ -91,19 +96,19 @@ function AdminUsers() {
       setShowDropdown(null);
     };
 
-    window.addEventListener('resize', handleResize);
-    document.addEventListener('click', handleClickOutside);
-    
+    window.addEventListener("resize", handleResize);
+    document.addEventListener("click", handleClickOutside);
+
     return () => {
-      window.removeEventListener('resize', handleResize);
-      document.removeEventListener('click', handleClickOutside);
+      window.removeEventListener("resize", handleResize);
+      document.removeEventListener("click", handleClickOutside);
     };
   }, []);
 
   useEffect(() => {
-    const savedFilter = localStorage.getItem('userFilterRole');
-    const savedStatus = localStorage.getItem('userFilterStatus');
-    const savedSort = localStorage.getItem('userSortBy');
+    const savedFilter = localStorage.getItem("userFilterRole");
+    const savedStatus = localStorage.getItem("userFilterStatus");
+    const savedSort = localStorage.getItem("userSortBy");
 
     if (savedFilter) setFilterRole(savedFilter);
     if (savedStatus) setFilterStatus(savedStatus);
@@ -111,19 +116,19 @@ function AdminUsers() {
   }, []);
 
   useEffect(() => {
-    localStorage.setItem('userFilterRole', filterRole);
-    localStorage.setItem('userFilterStatus', filterStatus);
-    localStorage.setItem('userSortBy', sortBy);
+    localStorage.setItem("userFilterRole", filterRole);
+    localStorage.setItem("userFilterStatus", filterStatus);
+    localStorage.setItem("userSortBy", sortBy);
   }, [filterRole, filterStatus, sortBy]);
 
   const handleLogout = async () => {
     try {
-      await api.post('/logout');
+      await api.post("/logout");
     } catch (err) {
-      console.error('Erro ao fazer logout:', err);
+      console.error("Erro ao fazer logout:", err);
     } finally {
-      localStorage.removeItem('auth');
-      navigate('/login');
+      localStorage.removeItem("auth");
+      navigate("/login");
     }
   };
 
@@ -132,46 +137,52 @@ function AdminUsers() {
   };
 
   const resetForm = () => {
-    setNewUser({ username: '', email: '', is_admin: false, password: '' });
+    setNewUser({ username: "", email: "", is_admin: false, password: "" });
   };
 
   const handleCreateUser = async () => {
     if (!newUser.username || !newUser.email || !newUser.password) {
-      alert('Todos os campos são obrigatórios!');
+      alert("Todos os campos são obrigatórios!");
       return;
     }
 
     try {
-      const response = await api.post('/users/', newUser);
+      const response = await api.post("/users/", newUser);
       setUsers([...users, response.data]);
       resetForm();
       setShowUserForm(false);
-      console.log('Usuário criado com sucesso:', response.data);
+      console.log("Usuário criado com sucesso:", response.data);
     } catch (error) {
-      console.error('Erro ao criar usuário:', error);
-      alert('Erro ao criar usuário. Tente novamente.');
+      console.error("Erro ao criar usuário:", error);
+      alert("Erro ao criar usuário. Tente novamente.");
     }
   };
 
   const handleUpdateUser = async (userId, userData) => {
     try {
       const response = await api.put(`/users/${userId}`, userData);
-      setUsers(prev => prev.map(u => u.id === userId ? response.data : u));
+      setUsers((prev) =>
+        prev.map((u) => (u.id === userId ? response.data : u))
+      );
       setEditingUser(null);
-      console.log('Usuário atualizado com sucesso:', response.data);
+      console.log("Usuário atualizado com sucesso:", response.data);
     } catch (error) {
-      console.error('Erro ao atualizar usuário:', error);
-      alert('Erro ao atualizar usuário. Tente novamente.');
+      console.error("Erro ao atualizar usuário:", error);
+      alert("Erro ao atualizar usuário. Tente novamente.");
     }
   };
 
   const toggleAdmin = async (userId, currentValue) => {
     try {
       await api.put(`/users/${userId}`, { is_admin: !currentValue });
-      setUsers(users.map(u => u.id === userId ? { ...u, is_admin: !currentValue } : u));
+      setUsers(
+        users.map((u) =>
+          u.id === userId ? { ...u, is_admin: !currentValue } : u
+        )
+      );
     } catch (error) {
-      console.error('Erro ao alterar permissão:', error);
-      alert('Erro ao alterar permissão');
+      console.error("Erro ao alterar permissão:", error);
+      alert("Erro ao alterar permissão");
     }
   };
 
@@ -179,11 +190,13 @@ function AdminUsers() {
     try {
       const newStatus = !currentStatus;
       await api.put(`/users/${userId}`, { is_active: newStatus });
-      setUsers(users.map(u => u.id === userId ? { ...u, is_active: newStatus } : u));
+      setUsers(
+        users.map((u) => (u.id === userId ? { ...u, is_active: newStatus } : u))
+      );
       setShowDropdown(null);
     } catch (error) {
-      console.error('Erro ao alterar status do usuário:', error);
-      alert('Erro ao alterar status do usuário');
+      console.error("Erro ao alterar status do usuário:", error);
+      alert("Erro ao alterar status do usuário");
     }
   };
 
@@ -197,15 +210,28 @@ function AdminUsers() {
 
     try {
       await api.delete(`/users/${userToDelete.id}`);
-      setUsers(prev => prev.filter(u => u.id !== userToDelete.id));
+      setUsers((prev) => prev.filter((u) => u.id !== userToDelete.id));
     } catch (error) {
-      console.error('Erro ao excluir usuário:', error);
-      alert('Erro ao excluir usuário');
+      console.error("Erro ao excluir usuário:", error);
+      alert("Erro ao excluir usuário");
     } finally {
       setUserToDelete(null);
       setShowDeleteModal(false);
       setShowDropdown(null);
     }
+  };
+
+  const handleManageRoles = (user) => {
+    setUserToManageRoles(user);
+    setShowRoleManager(true);
+    setShowDropdown(null);
+  };
+
+  const handleUserUpdate = (updatedUser) => {
+    setUsers((prev) =>
+      prev.map((u) => (u.id === updatedUser.id ? updatedUser : u))
+    );
+    setUserToManageRoles(updatedUser);
   };
 
   if (loading) {
@@ -222,7 +248,9 @@ function AdminUsers() {
         <div className={styles.errorMessage}>
           <h2>Erro</h2>
           <p>{error}</p>
-          <button onClick={() => window.location.reload()}>Tentar Novamente</button>
+          <button onClick={() => window.location.reload()}>
+            Tentar Novamente
+          </button>
         </div>
       </div>
     );
@@ -234,25 +262,28 @@ function AdminUsers() {
 
       <div className={styles.pageBody}>
         <Sidebar isOpen={sidebarOpen} onLogout={handleLogout} />
-        
+
         <main className={styles.contentArea}>
           <div className={styles.usersWrapper}>
             <div className={styles.usersHeader}>
               <h2>Administração de Usuários</h2>
-              <button className={styles.addUserBtn} onClick={() => setShowUserForm(true)}>
+              <button
+                className={styles.addUserBtn}
+                onClick={() => setShowUserForm(true)}
+              >
                 <FiPlus className={styles.btnIcon} />
                 Novo Usuário
               </button>
             </div>
-            
+
             <div className={styles.controls}>
               <div className={styles.controlGroup}>
                 <label className={styles.controlLabel}>
                   <FiFilter className={styles.icon} />
                   Função:
-                  <select 
-                    className={styles.select} 
-                    value={filterRole} 
+                  <select
+                    className={styles.select}
+                    value={filterRole}
                     onChange={(e) => setFilterRole(e.target.value)}
                   >
                     <option value="all">Todos</option>
@@ -266,9 +297,9 @@ function AdminUsers() {
                 <label className={styles.controlLabel}>
                   <FiFilter className={styles.icon} />
                   Status:
-                  <select 
-                    className={styles.select} 
-                    value={filterStatus} 
+                  <select
+                    className={styles.select}
+                    value={filterStatus}
                     onChange={(e) => setFilterStatus(e.target.value)}
                   >
                     <option value="all">Todos</option>
@@ -282,9 +313,9 @@ function AdminUsers() {
                 <label className={styles.controlLabel}>
                   <FiArrowDownCircle className={styles.icon} />
                   Ordenar por:
-                  <select 
-                    className={styles.select} 
-                    value={sortBy} 
+                  <select
+                    className={styles.select}
+                    value={sortBy}
                     onChange={(e) => setSortBy(e.target.value)}
                   >
                     <option value="username">Nome de usuário</option>
@@ -299,15 +330,30 @@ function AdminUsers() {
             <div className={styles.usersList}>
               {sortedUsers.length === 0 ? (
                 <div className={styles.emptyUsers}>
-                  {filterRole === 'admin' && filterStatus === 'all' && "Nenhum administrador encontrado."}
-                  {filterRole === 'user' && filterStatus === 'all' && "Nenhum usuário encontrado."}
-                  {filterRole === 'all' && filterStatus === 'active' && "Nenhum usuário ativo encontrado."}
-                  {filterRole === 'all' && filterStatus === 'inactive' && "Nenhum usuário inativo encontrado."}
-                  {filterRole === 'all' && filterStatus === 'all' && "Nenhum usuário cadastrado."}
+                  {filterRole === "admin" &&
+                    filterStatus === "all" &&
+                    "Nenhum administrador encontrado."}
+                  {filterRole === "user" &&
+                    filterStatus === "all" &&
+                    "Nenhum usuário encontrado."}
+                  {filterRole === "all" &&
+                    filterStatus === "active" &&
+                    "Nenhum usuário ativo encontrado."}
+                  {filterRole === "all" &&
+                    filterStatus === "inactive" &&
+                    "Nenhum usuário inativo encontrado."}
+                  {filterRole === "all" &&
+                    filterStatus === "all" &&
+                    "Nenhum usuário cadastrado."}
                 </div>
               ) : (
-                sortedUsers.map(user => (
-                  <div key={user.id} className={`${styles.userItem} ${user.is_active === false ? styles.inactiveUser : ''}`}>
+                sortedUsers.map((user) => (
+                  <div
+                    key={user.id}
+                    className={`${styles.userItem} ${
+                      user.is_active === false ? styles.inactiveUser : ""
+                    }`}
+                  >
                     <div className={styles.userInfo}>
                       <div className={styles.userAvatar}>
                         <FiUser className={styles.avatarIcon} />
@@ -332,6 +378,15 @@ function AdminUsers() {
                           <FiMail className={styles.emailIcon} />
                           {user.email}
                         </div>
+                        {user.roles && user.roles.length > 0 && (
+                          <div className={styles.userRoles}>
+                            {user.roles.map((role) => (
+                              <span key={role.id} className={styles.roleBadge}>
+                                {role.name}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
                     <div className={styles.userActions}>
@@ -356,7 +411,9 @@ function AdminUsers() {
                           className={styles.moreBtn}
                           onClick={(e) => {
                             e.stopPropagation();
-                            setShowDropdown(showDropdown === user.id ? null : user.id);
+                            setShowDropdown(
+                              showDropdown === user.id ? null : user.id
+                            );
                           }}
                           title="Mais opções"
                         >
@@ -366,7 +423,19 @@ function AdminUsers() {
                           <div className={styles.dropdownMenu}>
                             <button
                               className={styles.dropdownItem}
-                              onClick={() => toggleUserStatus(user.id, user.is_active !== false)}
+                              onClick={() => handleManageRoles(user)}
+                            >
+                              <FiSettings className={styles.dropdownIcon} />
+                              Gerenciar Cargos
+                            </button>
+                            <button
+                              className={styles.dropdownItem}
+                              onClick={() =>
+                                toggleUserStatus(
+                                  user.id,
+                                  user.is_active !== false
+                                )
+                              }
                             >
                               {user.is_active !== false ? (
                                 <>
@@ -375,7 +444,9 @@ function AdminUsers() {
                                 </>
                               ) : (
                                 <>
-                                  <FiUserCheck className={styles.dropdownIcon} />
+                                  <FiUserCheck
+                                    className={styles.dropdownIcon}
+                                  />
                                   Ativar Usuário
                                 </>
                               )}
@@ -407,7 +478,7 @@ function AdminUsers() {
             <div className={styles.modalContent}>
               <div className={styles.modalHeader}>
                 <h3 className={styles.modalTitle}>Novo Usuário</h3>
-                <button 
+                <button
                   className={styles.closeButton}
                   onClick={() => {
                     setShowUserForm(false);
@@ -424,7 +495,9 @@ function AdminUsers() {
                     type="text"
                     className={styles.input}
                     value={newUser.username}
-                    onChange={(e) => setNewUser({ ...newUser, username: e.target.value })}
+                    onChange={(e) =>
+                      setNewUser({ ...newUser, username: e.target.value })
+                    }
                     placeholder="Digite o nome de usuário"
                   />
                 </div>
@@ -434,7 +507,9 @@ function AdminUsers() {
                     type="email"
                     className={styles.input}
                     value={newUser.email}
-                    onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
+                    onChange={(e) =>
+                      setNewUser({ ...newUser, email: e.target.value })
+                    }
                     placeholder="Digite o email"
                   />
                 </div>
@@ -444,7 +519,9 @@ function AdminUsers() {
                     type="password"
                     className={styles.input}
                     value={newUser.password}
-                    onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
+                    onChange={(e) =>
+                      setNewUser({ ...newUser, password: e.target.value })
+                    }
                     placeholder="Digite a senha"
                   />
                 </div>
@@ -453,14 +530,16 @@ function AdminUsers() {
                     <input
                       type="checkbox"
                       checked={newUser.is_admin}
-                      onChange={(e) => setNewUser({ ...newUser, is_admin: e.target.checked })}
+                      onChange={(e) =>
+                        setNewUser({ ...newUser, is_admin: e.target.checked })
+                      }
                     />
                     <span className={styles.checkboxText}>Administrador</span>
                   </label>
                 </div>
               </div>
               <div className={styles.modalFooter}>
-                <button 
+                <button
                   className={styles.cancelBtn}
                   onClick={() => {
                     setShowUserForm(false);
@@ -469,10 +548,7 @@ function AdminUsers() {
                 >
                   Cancelar
                 </button>
-                <button 
-                  className={styles.saveBtn}
-                  onClick={handleCreateUser}
-                >
+                <button className={styles.saveBtn} onClick={handleCreateUser}>
                   Criar Usuário
                 </button>
               </div>
@@ -486,7 +562,7 @@ function AdminUsers() {
             <div className={styles.modalContent}>
               <div className={styles.modalHeader}>
                 <h3 className={styles.modalTitle}>Editar Usuário</h3>
-                <button 
+                <button
                   className={styles.closeButton}
                   onClick={() => setEditingUser(null)}
                 >
@@ -500,7 +576,12 @@ function AdminUsers() {
                     type="text"
                     className={styles.input}
                     value={editingUser.username}
-                    onChange={(e) => setEditingUser({ ...editingUser, username: e.target.value })}
+                    onChange={(e) =>
+                      setEditingUser({
+                        ...editingUser,
+                        username: e.target.value,
+                      })
+                    }
                     placeholder="Digite o nome de usuário"
                   />
                 </div>
@@ -510,7 +591,9 @@ function AdminUsers() {
                     type="email"
                     className={styles.input}
                     value={editingUser.email}
-                    onChange={(e) => setEditingUser({ ...editingUser, email: e.target.value })}
+                    onChange={(e) =>
+                      setEditingUser({ ...editingUser, email: e.target.value })
+                    }
                     placeholder="Digite o email"
                   />
                 </div>
@@ -519,20 +602,25 @@ function AdminUsers() {
                     <input
                       type="checkbox"
                       checked={editingUser.is_admin}
-                      onChange={(e) => setEditingUser({ ...editingUser, is_admin: e.target.checked })}
+                      onChange={(e) =>
+                        setEditingUser({
+                          ...editingUser,
+                          is_admin: e.target.checked,
+                        })
+                      }
                     />
                     <span className={styles.checkboxText}>Administrador</span>
                   </label>
                 </div>
               </div>
               <div className={styles.modalFooter}>
-                <button 
+                <button
                   className={styles.cancelBtn}
                   onClick={() => setEditingUser(null)}
                 >
                   Cancelar
                 </button>
-                <button 
+                <button
                   className={styles.saveBtn}
                   onClick={() => handleUpdateUser(editingUser.id, editingUser)}
                 >
@@ -543,16 +631,26 @@ function AdminUsers() {
           </div>
         )}
 
-        <DeleteConfirmModal 
-          isOpen={showDeleteModal} 
-          onCancel={cancelDelete} 
-          onConfirm={confirmDelete} 
-          taskTitle={userToDelete?.username || ''} 
+        <DeleteConfirmModal
+          isOpen={showDeleteModal}
+          onCancel={cancelDelete}
+          onConfirm={confirmDelete}
+          taskTitle={userToDelete?.username || ""}
         />
+
+        {showRoleManager && userToManageRoles && (
+          <UserRoleManager
+            user={userToManageRoles}
+            onUserUpdate={handleUserUpdate}
+            onClose={() => {
+              setShowRoleManager(false);
+              setUserToManageRoles(null);
+            }}
+          />
+        )}
       </div>
     </div>
   );
 }
 
 export default AdminUsers;
-

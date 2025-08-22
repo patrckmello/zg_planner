@@ -18,8 +18,6 @@ class User(db.Model):
     is_active = db.Column(db.Boolean, default=True)
     icon_color = db.Column(db.String(7), default='#3498db')  # Cor do ícone do usuário
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-
-    role_id = db.Column(db.Integer, db.ForeignKey('roles.id'), nullable=True)
     roles = db.relationship('Role', secondary=user_roles, back_populates='users')
 
     tasks = db.relationship(
@@ -64,5 +62,6 @@ class User(db.Model):
                 for assoc in self.teams
             ],
             # Para facilitar, um boolean que indica se o user é manager de alguma equipe
-            'is_manager': any(assoc.is_manager for assoc in self.teams)
+            'is_manager': any(assoc.is_manager for assoc in self.teams),
+            'roles': [role.to_dict() for role in self.roles]
         }

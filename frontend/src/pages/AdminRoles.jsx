@@ -1,22 +1,23 @@
-import React, { useState, useEffect } from 'react';
-import Header from '../components/Header';
-import Sidebar from '../components/Sidebar';
-import DeleteConfirmModal from '../components/DeleteConfirmModal';
-import styles from './AdminRoles.module.css';
-import api from '../services/axiosInstance';
-import { useNavigate } from 'react-router-dom';
-import { 
-  FiFilter, 
-  FiArrowDownCircle, 
-  FiPlus, 
-  FiEdit, 
+import React, { useState, useEffect } from "react";
+import Header from "../components/Header";
+import Sidebar from "../components/Sidebar";
+import DeleteConfirmModal from "../components/DeleteConfirmModal";
+import RoleUserManager from "../components/RoleUserManager";
+import styles from "./AdminRoles.module.css";
+import api from "../services/axiosInstance";
+import { useNavigate } from "react-router-dom";
+import {
+  FiFilter,
+  FiArrowDownCircle,
+  FiPlus,
+  FiEdit,
   FiBriefcase,
   FiMoreHorizontal,
   FiTrash2,
-  FiUsers
-} from 'react-icons/fi';
-import { toast } from 'react-toastify';
-
+  FiUsers,
+  FiSettings,
+} from "react-icons/fi";
+import { toast } from "react-toastify";
 
 function AdminRoles() {
   const navigate = useNavigate();
@@ -25,36 +26,40 @@ function AdminRoles() {
   const [error, setError] = useState(null);
   const [showRoleForm, setShowRoleForm] = useState(false);
   const [editingRole, setEditingRole] = useState(null);
-  const [sortBy, setSortBy] = useState('name');
+  const [sortBy, setSortBy] = useState("name");
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [roleToDelete, setRoleToDelete] = useState(null);
   const [showDropdown, setShowDropdown] = useState(null);
+  const [showUserManager, setShowUserManager] = useState(false);
+  const [roleToManageUsers, setRoleToManageUsers] = useState(null);
 
   // Estado para novo cargo
   const [newRole, setNewRole] = useState({
-    name: '',
-    description: '',
+    name: "",
+    description: "",
   });
 
   // Manteremos a sidebar aberta por padrão em telas maiores
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 768);
 
   const sortedRoles = [...roles].sort((a, b) => {
-    if (sortBy === 'name') return a.name.localeCompare(b.name);
-    if (sortBy === 'description') return (a.description || '').localeCompare(b.description || '');
-    if (sortBy === 'users_count') return (b.users_count || 0) - (a.users_count || 0);
+    if (sortBy === "name") return a.name.localeCompare(b.name);
+    if (sortBy === "description")
+      return (a.description || "").localeCompare(b.description || "");
+    if (sortBy === "users_count")
+      return (b.users_count || 0) - (a.users_count || 0);
     return 0;
   });
 
   useEffect(() => {
     const fetchRoles = async () => {
       try {
-        const response = await api.get('/roles');
-        console.log('Cargos recebidos no frontend:', response.data);
+        const response = await api.get("/roles");
+        console.log("Cargos recebidos no frontend:", response.data);
         setRoles(response.data);
       } catch (error) {
-        console.error('Erro ao buscar cargos:', error);
-        setError('Erro ao buscar cargos. Verifique suas permissões.');
+        console.error("Erro ao buscar cargos:", error);
+        setError("Erro ao buscar cargos. Verifique suas permissões.");
       } finally {
         setLoading(false);
       }
@@ -72,32 +77,32 @@ function AdminRoles() {
       setShowDropdown(null);
     };
 
-    window.addEventListener('resize', handleResize);
-    document.addEventListener('click', handleClickOutside);
-    
+    window.addEventListener("resize", handleResize);
+    document.addEventListener("click", handleClickOutside);
+
     return () => {
-      window.removeEventListener('resize', handleResize);
-      document.removeEventListener('click', handleClickOutside);
+      window.removeEventListener("resize", handleResize);
+      document.removeEventListener("click", handleClickOutside);
     };
   }, []);
 
   useEffect(() => {
-    const savedSort = localStorage.getItem('roleSortBy');
+    const savedSort = localStorage.getItem("roleSortBy");
     if (savedSort) setSortBy(savedSort);
   }, []);
 
   useEffect(() => {
-    localStorage.setItem('roleSortBy', sortBy);
+    localStorage.setItem("roleSortBy", sortBy);
   }, [sortBy]);
 
   const handleLogout = async () => {
     try {
-      await api.post('/logout');
+      await api.post("/logout");
     } catch (err) {
-      console.error('Erro ao fazer logout:', err);
+      console.error("Erro ao fazer logout:", err);
     } finally {
-      localStorage.removeItem('auth');
-      navigate('/login');
+      localStorage.removeItem("auth");
+      navigate("/login");
     }
   };
 
@@ -106,28 +111,28 @@ function AdminRoles() {
   };
 
   const resetForm = () => {
-    setNewRole({ name: '', description: '' });
+    setNewRole({ name: "", description: "" });
   };
 
   const handleCreateRole = async () => {
     if (!newRole.name) {
-       toast.error('O nome do cargo é obrigatório!');
+      toast.error("O nome do cargo é obrigatório!");
       return;
     }
 
     try {
-      const response = await api.post('/roles', newRole);
+      const response = await api.post("/roles", newRole);
       setRoles([...roles, response.data]);
       resetForm();
       setShowRoleForm(false);
-      console.log('Cargo criado com sucesso:', response.data);
+      console.log("Cargo criado com sucesso:", response.data);
     } catch (error) {
-      console.error('Erro ao criar cargo:', error);
+      console.error("Erro ao criar cargo:", error);
 
       if (error.response?.status === 400 && error.response.data?.error) {
-         toast.error(`Erro: ${error.response.data.error}`);
+        toast.error(`Erro: ${error.response.data.error}`);
       } else {
-         toast.error('Erro ao criar cargo. Tente novamente.');
+        toast.error("Erro ao criar cargo. Tente novamente.");
       }
     }
   };
@@ -135,16 +140,18 @@ function AdminRoles() {
   const handleUpdateRole = async (roleId, roleData) => {
     try {
       const response = await api.put(`/roles/${roleId}`, roleData);
-      setRoles(prev => prev.map(r => r.id === roleId ? response.data : r));
+      setRoles((prev) =>
+        prev.map((r) => (r.id === roleId ? response.data : r))
+      );
       setEditingRole(null);
-      console.log('Cargo atualizado com sucesso:', response.data);
+      console.log("Cargo atualizado com sucesso:", response.data);
     } catch (error) {
-      console.error('Erro ao atualizar cargo:', error);
+      console.error("Erro ao atualizar cargo:", error);
 
       if (error.response?.status === 400 && error.response.data?.error) {
-         toast.error(`Erro: ${error.response.data.error}`);
+        toast.error(`Erro: ${error.response.data.error}`);
       } else {
-         toast.error('Erro ao atualizar cargo. Tente novamente.');
+        toast.error("Erro ao atualizar cargo. Tente novamente.");
       }
     }
   };
@@ -159,15 +166,30 @@ function AdminRoles() {
 
     try {
       await api.delete(`/roles/${roleToDelete.id}`);
-      setRoles(prev => prev.filter(r => r.id !== roleToDelete.id));
+      setRoles((prev) => prev.filter((r) => r.id !== roleToDelete.id));
     } catch (error) {
-      console.error('Erro ao excluir cargo:', error);
-       toast.error('Erro ao excluir cargo. Verifique se não há usuários vinculados a este cargo.');
+      console.error("Erro ao excluir cargo:", error);
+      toast.error(
+        "Erro ao excluir cargo. Verifique se não há usuários vinculados a este cargo."
+      );
     } finally {
       setRoleToDelete(null);
       setShowDeleteModal(false);
       setShowDropdown(null);
     }
+  };
+
+  const handleManageUsers = (role) => {
+    setRoleToManageUsers(role);
+    setShowUserManager(true);
+    setShowDropdown(null);
+  };
+
+  const handleRoleUpdate = (updatedRole) => {
+    setRoles((prev) =>
+      prev.map((r) => (r.id === updatedRole.id ? updatedRole : r))
+    );
+    setRoleToManageUsers(updatedRole);
   };
 
   if (loading) {
@@ -184,7 +206,9 @@ function AdminRoles() {
         <div className={styles.errorMessage}>
           <h2>Erro</h2>
           <p>{error}</p>
-          <button onClick={() => window.location.reload()}>Tentar Novamente</button>
+          <button onClick={() => window.location.reload()}>
+            Tentar Novamente
+          </button>
         </div>
       </div>
     );
@@ -196,25 +220,28 @@ function AdminRoles() {
 
       <div className={styles.pageBody}>
         <Sidebar onLogout={handleLogout} isOpen={sidebarOpen} />
-        
+
         <main className={styles.contentArea}>
           <div className={styles.rolesWrapper}>
             <div className={styles.rolesHeader}>
               <h2>Administração de Cargos</h2>
-              <button className={styles.addRoleBtn} onClick={() => setShowRoleForm(true)}>
+              <button
+                className={styles.addRoleBtn}
+                onClick={() => setShowRoleForm(true)}
+              >
                 <FiPlus className={styles.btnIcon} />
                 Novo Cargo
               </button>
             </div>
-            
+
             <div className={styles.controls}>
               <div className={styles.controlGroup}>
                 <label className={styles.controlLabel}>
                   <FiArrowDownCircle className={styles.icon} />
                   Ordenar por:
-                  <select 
-                    className={styles.select} 
-                    value={sortBy} 
+                  <select
+                    className={styles.select}
+                    value={sortBy}
                     onChange={(e) => setSortBy(e.target.value)}
                   >
                     <option value="name">Nome</option>
@@ -231,18 +258,16 @@ function AdminRoles() {
                   Nenhum cargo cadastrado.
                 </div>
               ) : (
-                sortedRoles.map(role => (
+                sortedRoles.map((role) => (
                   <div key={role.id} className={styles.roleItem}>
                     <div className={styles.roleInfo}>
                       <div className={styles.roleIcon}>
                         <FiBriefcase className={styles.iconBriefcase} />
                       </div>
                       <div className={styles.roleDetails}>
-                        <div className={styles.roleName}>
-                          {role.name}
-                        </div>
+                        <div className={styles.roleName}>{role.name}</div>
                         <div className={styles.roleDescription}>
-                          {role.description || 'Sem descrição'}
+                          {role.description || "Sem descrição"}
                         </div>
                         <div className={styles.roleStats}>
                           <FiUsers className={styles.statsIcon} />
@@ -263,7 +288,9 @@ function AdminRoles() {
                           className={styles.moreBtn}
                           onClick={(e) => {
                             e.stopPropagation();
-                            setShowDropdown(showDropdown === role.id ? null : role.id);
+                            setShowDropdown(
+                              showDropdown === role.id ? null : role.id
+                            );
                           }}
                           title="Mais opções"
                         >
@@ -271,6 +298,13 @@ function AdminRoles() {
                         </button>
                         {showDropdown === role.id && (
                           <div className={styles.dropdownMenu}>
+                            <button
+                              className={styles.dropdownItem}
+                              onClick={() => handleManageUsers(role)}
+                            >
+                              <FiSettings className={styles.dropdownIcon} />
+                              Gerenciar Usuários
+                            </button>
                             <button
                               className={`${styles.dropdownItem} ${styles.dangerItem}`}
                               onClick={() => {
@@ -298,7 +332,7 @@ function AdminRoles() {
             <div className={styles.modalContent}>
               <div className={styles.modalHeader}>
                 <h3 className={styles.modalTitle}>Novo Cargo</h3>
-                <button 
+                <button
                   className={styles.closeButton}
                   onClick={() => {
                     setShowRoleForm(false);
@@ -315,7 +349,9 @@ function AdminRoles() {
                     type="text"
                     className={styles.input}
                     value={newRole.name}
-                    onChange={(e) => setNewRole({ ...newRole, name: e.target.value })}
+                    onChange={(e) =>
+                      setNewRole({ ...newRole, name: e.target.value })
+                    }
                     placeholder="Digite o nome do cargo"
                   />
                 </div>
@@ -324,14 +360,16 @@ function AdminRoles() {
                   <textarea
                     className={styles.textarea}
                     value={newRole.description}
-                    onChange={(e) => setNewRole({ ...newRole, description: e.target.value })}
+                    onChange={(e) =>
+                      setNewRole({ ...newRole, description: e.target.value })
+                    }
                     placeholder="Digite uma descrição para o cargo (opcional)"
                     rows="3"
                   />
                 </div>
               </div>
               <div className={styles.modalFooter}>
-                <button 
+                <button
                   className={styles.cancelBtn}
                   onClick={() => {
                     setShowRoleForm(false);
@@ -340,10 +378,7 @@ function AdminRoles() {
                 >
                   Cancelar
                 </button>
-                <button 
-                  className={styles.saveBtn}
-                  onClick={handleCreateRole}
-                >
+                <button className={styles.saveBtn} onClick={handleCreateRole}>
                   Criar Cargo
                 </button>
               </div>
@@ -357,7 +392,7 @@ function AdminRoles() {
             <div className={styles.modalContent}>
               <div className={styles.modalHeader}>
                 <h3 className={styles.modalTitle}>Editar Cargo</h3>
-                <button 
+                <button
                   className={styles.closeButton}
                   onClick={() => setEditingRole(null)}
                 >
@@ -371,7 +406,9 @@ function AdminRoles() {
                     type="text"
                     className={styles.input}
                     value={editingRole.name}
-                    onChange={(e) => setEditingRole({ ...editingRole, name: e.target.value })}
+                    onChange={(e) =>
+                      setEditingRole({ ...editingRole, name: e.target.value })
+                    }
                     placeholder="Digite o nome do cargo"
                   />
                 </div>
@@ -379,21 +416,26 @@ function AdminRoles() {
                   <label className={styles.label}>Descrição</label>
                   <textarea
                     className={styles.textarea}
-                    value={editingRole.description || ''}
-                    onChange={(e) => setEditingRole({ ...editingRole, description: e.target.value })}
+                    value={editingRole.description || ""}
+                    onChange={(e) =>
+                      setEditingRole({
+                        ...editingRole,
+                        description: e.target.value,
+                      })
+                    }
                     placeholder="Digite uma descrição para o cargo (opcional)"
                     rows="3"
                   />
                 </div>
               </div>
               <div className={styles.modalFooter}>
-                <button 
+                <button
                   className={styles.cancelBtn}
                   onClick={() => setEditingRole(null)}
                 >
                   Cancelar
                 </button>
-                <button 
+                <button
                   className={styles.saveBtn}
                   onClick={() => handleUpdateRole(editingRole.id, editingRole)}
                 >
@@ -404,16 +446,26 @@ function AdminRoles() {
           </div>
         )}
 
-        <DeleteConfirmModal 
-          isOpen={showDeleteModal} 
-          onCancel={cancelDelete} 
-          onConfirm={confirmDelete} 
-          taskTitle={roleToDelete?.name || ''} 
+        <DeleteConfirmModal
+          isOpen={showDeleteModal}
+          onCancel={cancelDelete}
+          onConfirm={confirmDelete}
+          taskTitle={roleToDelete?.name || ""}
         />
+
+        {showUserManager && roleToManageUsers && (
+          <RoleUserManager
+            role={roleToManageUsers}
+            onRoleUpdate={handleRoleUpdate}
+            onClose={() => {
+              setShowUserManager(false);
+              setRoleToManageUsers(null);
+            }}
+          />
+        )}
       </div>
     </div>
   );
 }
 
 export default AdminRoles;
-

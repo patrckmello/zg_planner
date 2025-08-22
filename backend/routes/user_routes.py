@@ -174,3 +174,71 @@ def delete_user(user_id):
     )
     
     return jsonify({'message': 'Usuário excluído com sucesso.'})
+
+
+@user_bp.route('/<int:user_id>/roles', methods=['POST'])
+@admin_required
+def add_role_to_user(user_id):
+    """Adiciona uma role a um usuário"""
+    from models.role_model import Role
+    
+    user = User.query.get_or_404(user_id)
+    data = request.json
+    role_id = data.get('role_id')
+    
+    if not role_id:
+        return jsonify({'error': 'role_id é obrigatório'}), 400
+    
+    role = Role.query.get_or_404(role_id)
+    
+    # Verifica se o usuário já possui essa role
+    if role in user.roles:
+        return jsonify({'error': 'Usuário já possui essa role'}), 400
+    
+    user.roles.append(role)
+    db.session.commit()
+    
+    # Log da ação
+    current_user_id = get_jwt_identity()
+    AuditLog.log_action(
+        user_id=current_user_id,
+        action='UPDATE',
+        description=f'Adicionou role "{role.name}" ao usuário {user.username}',
+        resource_type='user',
+        resource_id=user_id,
+        ip_address=request.remote_addr,
+        user_agent=request.headers.get('User-Agent')
+    )
+    
+    return jsonify(user.to_dict())
+
+@user_bp.route('/<int:user_id>/roles/<int:role_id>', methods=['DELETE'])
+@admin_required
+def remove_role_from_user(user_id, role_id):
+    """Remove uma role de um usuário"""
+    from models.role_model import Role
+    
+    user = User.query.get_or_404(user_id)
+    role = Role.query.get_or_404(role_id)
+    
+    # Verifica se o usuário possui essa role
+    if role not in user.roles:
+        return jsonify({'error': 'Usuário não possui essa role'}), 400
+    
+    user.roles.remove(role)
+    db.session.commit()
+    
+    # Log da ação
+    current_user_id = get_jwt_identity()
+    AuditLog.log_action(
+        user_id=current_user_id,
+        action='UPDATE',
+        description=f'Removeu role "{role.name}" do usuário {user.username}',
+        resource_type='user',
+        resource_id=user_id,
+        ip_address=request.remote_addr,
+        user_agent=request.headers.get('User-Agent')
+    )
+    
+    return jsonify(user.to_dict())
+
