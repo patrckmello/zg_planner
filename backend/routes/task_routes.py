@@ -41,22 +41,6 @@ def get_tasks():
             text("tasks.assigned_users::jsonb @> :user_id_json").params(user_id_json=f'[{user_id}]'),
             text("tasks.collaborators::jsonb @> :user_id_json").params(user_id_json=f'[{user_id}]')
         ]
-        # Se o usuário for gestor de alguma equipe, ele pode ver as tarefas de todos os membros dessas equipes
-        managed_team_ids = [team.id for team in user.managed_teams]
-        if managed_team_ids:
-            # Encontrar todos os usuários que pertencem às equipes gerenciadas
-            team_member_ids = db.session.query(UserTeam.user_id).filter(UserTeam.team_id.in_(managed_team_ids)).distinct().all()
-            team_member_ids = [uid[0] for uid in team_member_ids]
-
-            # Adicionar condições para incluir tarefas criadas por membros da equipe, atribuídas a eles, ou onde são colaboradores
-            conditions.append(or_(
-                Task.user_id.in_(team_member_ids),  # Tarefas criadas por membros da equipe
-                Task.assigned_by_user_id.in_(team_member_ids),  # Tarefas atribuídas por membros da equipe
-                Task.team_id.in_(managed_team_ids), # Tarefas da equipe
-                text("tasks.assigned_users::jsonb @> ANY(ARRAY[:team_member_ids_json]::jsonb[])").params(team_member_ids_json=[f'[{uid}]' for uid in team_member_ids]),
-                text("tasks.collaborators::jsonb @> ANY(ARRAY[:team_member_ids_json_collab]::jsonb[])").params(team_member_ids_json_collab=[f'[{uid}]' for uid in team_member_ids])
-            ))
-
         query = Task.query.filter(or_(*conditions))
 
     # Filtro de status

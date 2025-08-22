@@ -167,10 +167,27 @@ function ReportsPage() {
   const fetchAllTasks = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await api.get("/tasks");
-      setAllTasks(response.data);
+
+      // Buscar dados do usuário logado
+      const userResponse = await api.get("/users/me");
+      const userId = userResponse.data.id;
+      if (!userId) throw new Error("Usuário não encontrado");
+
+      // Buscar todas as tarefas
+      const tasksResponse = await api.get("/tasks");
+      const allTasksData = tasksResponse.data;
+
+      // Filtrar tarefas do usuário (responsável, colaborador ou criador)
+      const myTasks = allTasksData.filter(
+        (task) =>
+          task.assigned_users?.includes(userId) ||
+          task.collaborators?.includes(userId) ||
+          task.user_id === userId
+      );
+
+      setAllTasks(myTasks);
     } catch (error) {
-      console.error("Erro ao buscar todas as tarefas:", error);
+      console.error("Erro ao buscar tarefas:", error);
       toast.error("Erro ao carregar tarefas");
     } finally {
       setLoading(false);
@@ -448,9 +465,6 @@ function ReportsPage() {
             <div className={styles.pageHeader}>
               <div className={styles.headerContent}>
                 <h1 className={styles.pageTitle}>Relatórios Pessoais</h1>
-                <p className={styles.pageSubtitle}>
-                  Análise detalhada do seu desempenho e produtividade
-                </p>
               </div>
               <div className={styles.breadcrumb}>
                 <span>Minhas Atividades</span>

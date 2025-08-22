@@ -682,3 +682,247 @@
     gap: 4px;
   }
 }
+
+/* Estilos para filtros de auditoria */
+.auditFilters {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  padding: 16px;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.filterGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.filterGroup label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.filterSelect {
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background-color: white;
+  font-size: 14px;
+  color: #374151;
+  min-width: 140px;
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+}
+
+.filterSelect:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.clearFiltersBtn {
+  padding: 8px 16px;
+  background-color: #ef4444;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  margin-left: auto;
+}
+
+.clearFiltersBtn:hover {
+  background-color: #dc2626;
+}
+
+/* Estilos para paginação */
+.pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  border-top: 1px solid #e5e7eb;
+  background-color: #f9fafb;
+  border-radius: 0 0 8px 8px;
+}
+
+.paginationInfo {
+  font-size: 14px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.paginationControls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.paginationBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid #d1d5db;
+  background-color: white;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: #374151;
+}
+
+.paginationBtn:hover:not(:disabled) {
+  background-color: #f3f4f6;
+  border-color: #9ca3af;
+}
+
+.paginationBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background-color: #f9fafb;
+}
+
+.pageNumbers {
+  display: flex;
+  gap: 4px;
+  margin: 0 8px;
+}
+
+.pageNumberBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid #d1d5db;
+  background-color: white;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: #374151;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.pageNumberBtn:hover {
+  background-color: #f3f4f6;
+  border-color: #9ca3af;
+}
+
+.pageNumberBtn.active {
+  background-color: #3b82f6;
+  border-color: #3b82f6;
+  color: white;
+}
+
+.pageNumberBtn.active:hover {
+  background-color: #2563eb;
+  border-color: #2563eb;
+}
+
+/* Estilos para contadores */
+.totalCount {
+  font-size: 14px;
+  color: #6b7280;
+  font-weight: 400;
+  margin-left: 8px;
+}
+
+.auditControls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Estilos para ícones de ação */
+.createIcon {
+  color: #10b981;
+}
+
+.updateIcon {
+  color: #3b82f6;
+}
+
+.deleteIcon {
+  color: #ef4444;
+}
+
+.loginIcon {
+  color: #8b5cf6;
+}
+
+.backupIcon {
+  color: #f59e0b;
+}
+
+.exportIcon {
+  color: #06b6d4;
+}
+
+.defaultIcon {
+  color: #6b7280;
+}
+
+/* Melhorias nos itens de auditoria */
+.auditResource {
+  font-size: 12px;
+  color: #6b7280;
+  background-color: #f3f4f6;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: monospace;
+}
+
+/* Responsividade para filtros */
+@media (max-width: 768px) {
+  .auditFilters {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .filterGroup {
+    width: 100%;
+  }
+
+  .filterSelect {
+    min-width: auto;
+    width: 100%;
+  }
+
+  .clearFiltersBtn {
+    margin-left: 0;
+    align-self: flex-start;
+  }
+}
+
+/* Responsividade para paginação */
+@media (max-width: 640px) {
+  .pagination {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .paginationInfo {
+    text-align: center;
+  }
+
+  .pageNumbers {
+    margin: 0;
+  }
+
+  .paginationBtn,
+  .pageNumberBtn {
+    width: 32px;
+    height: 32px;
+  }
+}

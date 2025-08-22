@@ -720,9 +720,6 @@ function TeamReports() {
             <div className={styles.pageHeader}>
               <div className={styles.headerContent}>
                 <h1 className={styles.pageTitle}>Relatórios da Equipe</h1>
-                <p className={styles.pageSubtitle}>
-                  Análise detalhada do desempenho e produtividade da sua equipe
-                </p>
               </div>
               <div className={styles.breadcrumb}>
                 <span>Equipes</span>

@@ -6,6 +6,7 @@ from models.user_model import User
 from models.user_team_model import UserTeam
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from models.task_model import Task
+from models.audit_log_model import AuditLog
 
 # REMOVA a barra final do url_prefix
 team_bp = Blueprint("team_bp", __name__, url_prefix="/api/teams")
@@ -50,6 +51,18 @@ def create_team():
     team = Team(name=name, description=description)
     db.session.add(team)
     db.session.commit()
+
+    current_user_id = get_jwt_identity()
+    AuditLog.log_action(
+        user_id=current_user_id,
+        action='CREATE',
+        description=f'Criou equipe: {team.name}',
+        resource_type='team',
+        resource_id=team.id,
+        ip_address=request.remote_addr,
+        user_agent=request.headers.get('User-Agent')
+    )
+
     return jsonify(team.to_dict()), 201
 
 @team_bp.route("/<int:team_id>", methods=["PUT"])
@@ -57,17 +70,43 @@ def create_team():
 def update_team(team_id):
     team = Team.query.get_or_404(team_id)
     data = request.json
+    old_name = team.name
     team.name = data.get("name", team.name)
     team.description = data.get("description", team.description)
     db.session.commit()
+
+    current_user_id = get_jwt_identity()
+    AuditLog.log_action(
+        user_id=current_user_id,
+        action='UPDATE',
+        description=f'Atualizou equipe: {old_name} para {team.name}',
+        resource_type='team',
+        resource_id=team.id,
+        ip_address=request.remote_addr,
+        user_agent=request.headers.get('User-Agent')
+    )
+
     return jsonify(team.to_dict())
 
 @team_bp.route("/<int:team_id>", methods=["DELETE"])
 @admin_required
 def delete_team(team_id):
     team = Team.query.get_or_404(team_id)
+    team_name = team.name
     db.session.delete(team)
     db.session.commit()
+
+    current_user_id = get_jwt_identity()
+    AuditLog.log_action(
+        user_id=current_user_id,
+        action='DELETE',
+        description=f'Excluiu equipe: {team_name}',
+        resource_type='team',
+        resource_id=team_id,
+        ip_address=request.remote_addr,
+        user_agent=request.headers.get('User-Agent')
+    )
+
     return jsonify({"message": "Time excluído com sucesso."})
 
 # Se quiser gerenciar membros do time:
@@ -95,6 +134,17 @@ def add_user_to_team(team_id):
     db.session.add(user_team)
     db.session.commit()
 
+    current_user_id = get_jwt_identity()
+    AuditLog.log_action(
+        user_id=current_user_id,
+        action='ADD_MEMBER',
+        description=f'Adicionou {user.username} à equipe {team.name} (Gestor: {is_manager})',
+        resource_type='team_member',
+        resource_id=user_id,
+        ip_address=request.remote_addr,
+        user_agent=request.headers.get('User-Agent')
+    )
+
     # Atualiza o time para pegar os membros atualizados
     updated_team = Team.query.get(team_id)
     return jsonify(updated_team.to_dict()), 201
@@ -121,8 +171,22 @@ def remove_user_from_team(team_id, user_id):
     if not association:
         return jsonify({"error": "Associação não encontrada"}), 404
 
+    user = User.query.get(user_id)
+    team = Team.query.get(team_id)
+
     db.session.delete(association)
     db.session.commit()
+
+    current_user_id = get_jwt_identity()
+    AuditLog.log_action(
+        user_id=current_user_id,
+        action='REMOVE_MEMBER',
+        description=f'Removeu {user.username} da equipe {team.name}',
+        resource_type='team_member',
+        resource_id=user_id,
+        ip_address=request.remote_addr,
+        user_agent=request.headers.get('User-Agent')
+    )
 
     # Pega o time atualizado com membros atualizados
     team = Team.query.get_or_404(team_id)
@@ -154,10 +218,23 @@ def update_user_in_team(team_id, user_id):
     if not user_team:
         return jsonify({"error": "Usuário não está associado a este time."}), 404
 
+    old_is_manager = user_team.is_manager
     if is_manager is not None:
         user_team.is_manager = is_manager
 
     db.session.commit()
+
+    current_user_id = get_jwt_identity()
+    action_desc = f'Atualizou status de {user_team.user.username} na equipe {user_team.team.name}: Gestor de {old_is_manager} para {is_manager}'
+    AuditLog.log_action(
+        user_id=current_user_id,
+        action='UPDATE_MEMBER_ROLE',
+        description=action_desc,
+        resource_type='team_member',
+        resource_id=user_id,
+        ip_address=request.remote_addr,
+        user_agent=request.headers.get('User-Agent')
+    )
 
     # Pega o time atualizado com membros atualizados
     team = Team.query.get_or_404(team_id)
@@ -212,3 +289,5 @@ def team_productivity(team_id):
         })
 
     return jsonify({"team_id": team.id, "team_name": team.name, "productivity": data}), 200
+
+

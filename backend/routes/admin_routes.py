@@ -13,9 +13,9 @@ import csv
 import io
 from werkzeug.utils import secure_filename
 
-admin_bp = Blueprint('admin_bp', __name__, url_prefix='/api/admin')
+admin_bp = Blueprint("admin_bp", __name__, url_prefix="/api/admin")
 
-@admin_bp.route('/system-stats', methods=['GET'])
+@admin_bp.route("/system-stats", methods=["GET"])
 @admin_required
 def get_system_stats():
     """Retorna estatísticas do sistema"""
@@ -55,7 +55,7 @@ def get_system_stats():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@admin_bp.route('/backups', methods=['GET'])
+@admin_bp.route("/backups", methods=["GET"])
 @admin_required
 def get_backups():
     """Lista todos os backups"""
@@ -65,7 +65,7 @@ def get_backups():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@admin_bp.route('/create-backup', methods=['POST'])
+@admin_bp.route("/create-backup", methods=["POST"])
 @admin_required
 def create_backup():
     """Cria um novo backup do banco de dados usando o BackupService"""
@@ -85,6 +85,17 @@ def create_backup():
         backup_service = BackupService(app)
         result = backup_service.create_full_backup(current_user_id, backup_type)
         
+        # Log da ação
+        AuditLog.log_action(
+            user_id=current_user_id,
+            action='CREATE_BACKUP',
+            description=f"Criou backup do tipo: {backup_type}",
+            resource_type='backup',
+            resource_id=result.get('backup_id'),
+            ip_address=request.remote_addr,
+            user_agent=request.headers.get('User-Agent')
+        )
+
         if result['success']:
             return jsonify({
                 'message': result['message'],
@@ -99,7 +110,7 @@ def create_backup():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@admin_bp.route('/download-backup/<int:backup_id>', methods=['GET'])
+@admin_bp.route("/download-backup/<int:backup_id>", methods=["GET"])
 @admin_required
 def download_backup(backup_id):
     """Faz download de um backup específico"""
@@ -116,8 +127,8 @@ def download_backup(backup_id):
         current_user_id = get_jwt_identity()
         AuditLog.log_action(
             user_id=current_user_id,
-            action='DOWNLOAD',
-            description=f'Fez download do backup: {backup.filename}',
+            action='DOWNLOAD_BACKUP',
+            description=f"Fez download do backup: {backup.filename}",
             resource_type='backup',
             resource_id=backup_id,
             ip_address=request.remote_addr,
@@ -134,7 +145,7 @@ def download_backup(backup_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@admin_bp.route('/delete-backup/<int:backup_id>', methods=['DELETE'])
+@admin_bp.route("/delete-backup/<int:backup_id>", methods=["DELETE"])
 @admin_required
 def delete_backup(backup_id):
     """Exclui um backup específico"""
@@ -154,23 +165,22 @@ def delete_backup(backup_id):
         current_user_id = get_jwt_identity()
         AuditLog.log_action(
             user_id=current_user_id,
-            action='DELETE',
-            description=f'Excluiu backup: {filename}',
+            action='DELETE_BACKUP',
+            description=f"Excluiu backup: {filename}",
             resource_type='backup',
             resource_id=backup_id,
             ip_address=request.remote_addr,
             user_agent=request.headers.get('User-Agent')
         )
         
-        return jsonify({'message': 'Backup excluído com sucesso'})
-        
+        return jsonify({'message': 'Backup excluído com sucesso'}) 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@admin_bp.route('/audit-logs', methods=['GET'])
+@admin_bp.route("/audit-logs", methods=["GET"])
 @admin_required
 def get_audit_logs():
-    """Lista logs de auditoria"""
+    """Lista logs de auditoria com paginação e metadados"""
     try:
         # Parâmetros de paginação
         page = request.args.get('page', 1, type=int)
@@ -191,18 +201,33 @@ def get_audit_logs():
         query = query.order_by(AuditLog.created_at.desc())
         
         # Paginação
-        logs = query.paginate(
+        logs_pagination = query.paginate(
             page=page,
             per_page=per_page,
             error_out=False
         )
         
-        return jsonify([log.to_dict() for log in logs.items])
+        # Preparar resposta com logs e metadados de paginação
+        response_data = {
+            "items": [log.to_dict() for log in logs_pagination.items],
+            "pagination": {
+                "total_items": logs_pagination.total,
+                "total_pages": logs_pagination.pages,
+                "current_page": logs_pagination.page,
+                "per_page": logs_pagination.per_page,
+                "has_next": logs_pagination.has_next,
+                "has_prev": logs_pagination.has_prev,
+                "next_num": logs_pagination.next_num,
+                "prev_num": logs_pagination.prev_num
+            }
+        }
+        
+        return jsonify(response_data)
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@admin_bp.route('/export-audit-logs', methods=['GET'])
+@admin_bp.route("/export-audit-logs", methods=["GET"])
 @admin_required
 def export_audit_logs():
     """Exporta logs de auditoria em CSV"""
@@ -241,7 +266,7 @@ def export_audit_logs():
         current_user_id = get_jwt_identity()
         AuditLog.log_action(
             user_id=current_user_id,
-            action='EXPORT',
+            action='EXPORT_AUDIT_LOGS',
             description='Exportou logs de auditoria',
             resource_type='audit_log',
             ip_address=request.remote_addr,
@@ -260,4 +285,5 @@ def export_audit_logs():
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
 
