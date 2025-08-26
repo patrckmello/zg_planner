@@ -73,7 +73,38 @@ function ReportsPage() {
   // Debounce para o filtro de categoria (500ms)
   const debouncedCategory = useDebounce(filters.category, 500);
 
-  // Função para calcular métricas localmente
+  // Função para converter datas para horário de Brasília (UTC-3)
+  const getBrasiliaDate = (isoDate) => {
+    if (!isoDate) return null;
+    const date = new Date(isoDate);
+    return new Date(date.getTime() - 3 * 60 * 60 * 1000);
+  };
+
+  // Função para normalizar prioridade
+  const normalizePriority = (priority) => {
+    if (!priority) return priority;
+    const priorityMap = {
+      alta: "Alta",
+      media: "Média",
+      baixa: "Baixa",
+      high: "Alta",
+      medium: "Média",
+      low: "Baixa",
+    };
+    return priorityMap[priority.toLowerCase()] || priority;
+  };
+
+  // Função unificada para status da tarefa
+  const getTaskStatus = (task) => {
+    const now = new Date();
+    const dueDate = getBrasiliaDate(task.due_date);
+
+    if (task.status === "done") return { text: "Concluída", color: "#10b981" };
+    if (dueDate && dueDate < now) return { text: "Atrasada", color: "#ef4444" };
+    return { text: "Pendente", color: "#f59e0b" };
+  };
+
+  // Função refatorada para calcular métricas
   const calculateMetrics = (tasks) => {
     if (!tasks || tasks.length === 0) {
       return {
@@ -100,16 +131,16 @@ function ReportsPage() {
       upcoming_tasks: 0,
     };
 
-    const now = new Date();
     let totalCompletionTime = 0;
     let completedTasksWithTime = 0;
+    const now = new Date();
 
     tasks.forEach((task) => {
       // Contagem por status
       metrics.tasks_by_status[task.status] =
         (metrics.tasks_by_status[task.status] || 0) + 1;
 
-      // Contagem por prioridade (normalizada)
+      // Contagem por prioridade
       if (task.prioridade) {
         const normalizedPriority = normalizePriority(task.prioridade);
         metrics.tasks_by_priority[normalizedPriority] =
@@ -122,10 +153,16 @@ function ReportsPage() {
           (metrics.tasks_by_category[task.categoria] || 0) + 1;
       }
 
+      // Status atual da tarefa
+      const statusInfo = getTaskStatus(task);
+
+      if (statusInfo.text === "Atrasada") metrics.overdue_tasks += 1;
+      if (statusInfo.text === "Pendente") metrics.upcoming_tasks += 1;
+
       // Tarefas concluídas no prazo ou atrasadas
       if (task.status === "done" && task.due_date) {
-        const dueDate = new Date(task.due_date);
-        const updatedAt = new Date(task.updated_at);
+        const dueDate = getBrasiliaDate(task.due_date);
+        const updatedAt = getBrasiliaDate(task.updated_at);
 
         if (updatedAt <= dueDate) {
           metrics.tasks_completed_on_time += 1;
@@ -133,33 +170,20 @@ function ReportsPage() {
           metrics.tasks_completed_late += 1;
         }
 
-        // Calcular tempo de conclusão
-        const createdAt = new Date(task.created_at);
+        const createdAt = getBrasiliaDate(task.created_at);
         const completionTime = Math.ceil(
           (updatedAt - createdAt) / (1000 * 60 * 60 * 24)
         ); // dias
         totalCompletionTime += completionTime;
         completedTasksWithTime += 1;
       }
-
-      // Tarefas atrasadas e próximas
-      if (task.due_date && task.status !== "done") {
-        const dueDate = new Date(task.due_date);
-        if (dueDate < now) {
-          metrics.overdue_tasks += 1;
-        } else {
-          metrics.upcoming_tasks += 1;
-        }
-      }
     });
 
     // Calcular tempo médio de conclusão
-    if (completedTasksWithTime > 0) {
-      const avgDays = Math.round(totalCompletionTime / completedTasksWithTime);
-      metrics.average_completion_time = `${avgDays} dias`;
-    } else {
-      metrics.average_completion_time = "N/A";
-    }
+    metrics.average_completion_time =
+      completedTasksWithTime > 0
+        ? `${Math.round(totalCompletionTime / completedTasksWithTime)} dias`
+        : "N/A";
 
     return metrics;
   };

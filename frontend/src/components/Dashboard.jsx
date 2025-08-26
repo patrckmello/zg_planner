@@ -35,53 +35,66 @@ function Dashboard() {
         const userResponse = await api.get("/users/me");
         setCurrentUser(userResponse.data);
 
-        // Buscar todas as tarefas para calcular métricas
+        // Buscar todas as tarefas
         const tasksResponse = await api.get("/tasks");
         const allTasks = tasksResponse.data;
 
-        // Filtrar tarefas do usuário atual
+        // Filtrar tarefas do usuário ou onde é colaborador
         const userTasks = allTasks.filter(
-          (task) => task.user_id === userResponse.data.id
+          (task) =>
+            task.user_id === userResponse.data.id ||
+            (task.collaborators || []).includes(userResponse.data.id)
         );
 
-        // Calcular métricas
+        const now = new Date();
+
+        // Função para converter para horário de Brasília
+        const getBrasiliaDate = (isoDate) => {
+          const date = new Date(isoDate);
+          return new Date(date.getTime() - 3 * 60 * 60 * 1000);
+        };
+
+        // Função unificada para status da tarefa
+        const getTaskStatus = (task) => {
+          if (task.status === "done")
+            return { text: "Concluída", color: "#10b981" };
+          if (task.due_date && getBrasiliaDate(task.due_date) < now)
+            return { text: "Atrasada", color: "#ef4444" };
+          return { text: "Pendente", color: "#f59e0b" };
+        };
+
+        // Métricas
         const totalTasks = userTasks.length;
         const completedTasks = userTasks.filter(
-          (task) => task.status === "done"
+          (t) => t.status === "done"
         ).length;
         const pendingTasks = userTasks.filter(
-          (task) => task.status === "pending"
+          (t) => getTaskStatus(t).text === "Pendente"
         ).length;
         const overdueTasks = userTasks.filter(
-          (task) =>
-            task.due_date &&
-            new Date(task.due_date) < new Date() &&
-            task.status !== "done"
+          (t) => getTaskStatus(t).text === "Atrasada"
         ).length;
 
-        // Tarefas próximas do vencimento (próximos 7 dias)
-        const upcomingTasks = userTasks.filter((task) => {
-          if (!task.due_date || task.status === "done") return false;
-          const dueDate = new Date(task.due_date);
-          const today = new Date();
-          const nextWeek = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
-          return dueDate >= today && dueDate <= nextWeek;
+        const upcomingTasks = userTasks.filter((t) => {
+          if (!t.due_date || t.status === "done") return false;
+          const due = getBrasiliaDate(t.due_date);
+          const nextWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+          return due >= now && due <= nextWeek;
         }).length;
 
-        // Tarefas recentes (últimas 5 tarefas modificadas)
+        // Tarefas recentes
         const recentTasksList = userTasks
           .sort(
             (a, b) =>
               new Date(b.updated_at || b.created_at) -
               new Date(a.updated_at || a.created_at)
           )
-          .slice(0, 5);
+          .slice(0, 5)
+          .map((task) => ({ ...task, statusInfo: getTaskStatus(task) })); // adiciona statusInfo para usar na renderização
 
-        // Calcular taxa de conclusão
         const completionRate =
           totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
-        // Distribuição por status
         const statusDistribution = {
           pending: pendingTasks,
           done: completedTasks,
@@ -113,9 +126,7 @@ function Dashboard() {
     fetchDashboardData();
 
     const handleResize = () => {
-      if (window.innerWidth <= 768) {
-        setSidebarOpen(false);
-      }
+      if (window.innerWidth <= 768) setSidebarOpen(false);
     };
 
     window.addEventListener("resize", handleResize);
@@ -143,10 +154,20 @@ function Dashboard() {
     return "#f59e0b";
   };
 
+  const getBrasiliaDate = (isoDate) => {
+    const date = new Date(isoDate); // ISO UTC
+    // Converte para horário local (Brasília)
+    return new Date(date.getTime() - 3 * 60 * 60 * 1000);
+  };
+
   const getTaskStatusText = (task) => {
     if (task.status === "done") return "Concluída";
-    if (task.due_date && new Date(task.due_date) < new Date())
-      return "Atrasada";
+
+    if (task.due_date) {
+      const due = getBrasiliaDate(task.due_date);
+      if (due < new Date()) return "Atrasada";
+    }
+
     return "Pendente";
   };
 

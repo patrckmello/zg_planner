@@ -574,7 +574,7 @@ function TaskFormPage() {
                           key={option.value}
                           label={option.label}
                           checked={formData.lembretes.includes(option.value)}
-                          onChange={(checked) => {
+                          onCheckedChange={(checked) => {
                             if (checked) {
                               updateField("lembretes", [
                                 ...formData.lembretes,

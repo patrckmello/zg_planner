@@ -11,8 +11,13 @@ from models.user_model import User
 from models.team_model import Team
 from models.user_team_model import UserTeam
 from sqlalchemy import text, or_, and_
+from reminder_scheduler import schedule_task_reminders_safe
+from pytz import timezone
 
 task_bp = Blueprint("tasks", __name__, url_prefix="/api")
+
+brazil_tz = timezone("America/Sao_Paulo")
+now_brazil = datetime.now(brazil_tz)
 
 @task_bp.route("/tasks", methods=["GET"])
 @jwt_required()
@@ -274,6 +279,10 @@ def add_task():
         db.session.add(new_task)
         db.session.commit()
 
+        # Agendar lembretes se configurados
+        if new_task.lembretes and new_task.due_date:
+            schedule_task_reminders_safe(new_task)
+
         return jsonify(new_task.to_dict()), 201
 
     except Exception as e:
@@ -466,6 +475,9 @@ def update_task(task_id):
 
     task.updated_at = datetime.utcnow()
     db.session.commit()
+
+    if task.lembretes and task.due_date:
+        schedule_task_reminders_safe(task)
 
     return jsonify(task.to_dict())
 
@@ -661,6 +673,16 @@ def get_task_reports():
 
     for task in tasks:
         task_dict = task.to_dict()
+
+        # converter due_date para timezone de Brasil
+        due_date_local = task.due_date.replace(tzinfo=timezone("UTC")).astimezone(brazil_tz) if task.due_date else None
+        
+        if due_date_local:
+            if due_date_local < now_brazil and task.status != 'done':
+                report_data["overdue_tasks"] += 1
+            elif due_date_local > now_brazil and task.status != 'done':
+                report_data["upcoming_tasks"] += 1
+
         report_data["detailed_tasks"].append(task_dict)
 
         # Contagem por status

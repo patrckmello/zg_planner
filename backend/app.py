@@ -28,6 +28,7 @@ from routes.admin_routes import admin_bp
 
 from routes.backup_routes import backup_bp
 from backup_scheduler import init_backup_scheduler
+from reminder_scheduler import init_reminder_scheduler, stop_reminder_scheduler
 
 load_dotenv()
 
@@ -72,6 +73,8 @@ app.register_blueprint(admin_bp)
 app.register_blueprint(backup_bp)
 
 primeira_vez = True
+import atexit
+atexit.register(stop_reminder_scheduler)
 
 @app.route('/')
 def index():
@@ -88,7 +91,10 @@ def dashboard():
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
-        
         run_seeds()
+        # Só inicia o scheduler no processo real
+        if os.environ.get("WERKZEUG_RUN_MAIN") == "true":
+            init_reminder_scheduler(app)
+        
     app.run(debug=True, host='0.0.0.0', port=5555)
 

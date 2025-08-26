@@ -20,6 +20,8 @@ import {
   FiTrash2,
   FiSettings,
 } from "react-icons/fi";
+import { toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 function AdminUsers() {
   const navigate = useNavigate();
@@ -142,7 +144,7 @@ function AdminUsers() {
 
   const handleCreateUser = async () => {
     if (!newUser.username || !newUser.email || !newUser.password) {
-      alert("Todos os campos são obrigatórios!");
+      toast.error("Todos os campos são obrigatórios!", { autoClose: 3000 });
       return;
     }
 
@@ -154,7 +156,11 @@ function AdminUsers() {
       console.log("Usuário criado com sucesso:", response.data);
     } catch (error) {
       console.error("Erro ao criar usuário:", error);
-      alert("Erro ao criar usuário. Tente novamente.");
+      toast.error(
+        error.response?.data?.error ||
+          "Erro ao criar usuário. Tente novamente.",
+        { autoClose: 5000 }
+      );
     }
   };
 
@@ -168,7 +174,11 @@ function AdminUsers() {
       console.log("Usuário atualizado com sucesso:", response.data);
     } catch (error) {
       console.error("Erro ao atualizar usuário:", error);
-      alert("Erro ao atualizar usuário. Tente novamente.");
+      toast.error(
+        error.response?.data?.error ||
+          "Erro ao atualizar usuário. Tente novamente.",
+        { autoClose: 5000 }
+      );
     }
   };
 
@@ -182,7 +192,9 @@ function AdminUsers() {
       );
     } catch (error) {
       console.error("Erro ao alterar permissão:", error);
-      alert("Erro ao alterar permissão");
+      toast.error(error.response?.data?.error || "Erro ao alterar permissão", {
+        autoClose: 5000,
+      });
     }
   };
 
@@ -196,7 +208,10 @@ function AdminUsers() {
       setShowDropdown(null);
     } catch (error) {
       console.error("Erro ao alterar status do usuário:", error);
-      alert("Erro ao alterar status do usuário");
+      toast.error(
+        error.response?.data?.error || "Erro ao alterar status do usuário",
+        { autoClose: 5000 }
+      );
     }
   };
 
@@ -211,9 +226,22 @@ function AdminUsers() {
     try {
       await api.delete(`/users/${userToDelete.id}`);
       setUsers((prev) => prev.filter((u) => u.id !== userToDelete.id));
+      toast.success(`Usuário ${userToDelete.username} excluído com sucesso!`, {
+        position: "top-right",
+        autoClose: 4000,
+      });
     } catch (error) {
       console.error("Erro ao excluir usuário:", error);
-      alert("Erro ao excluir usuário");
+
+      // Pega a mensagem do backend, se existir
+      const errorMessage =
+        error.response?.data?.error ||
+        "Erro ao excluir usuário. Tente novamente.";
+
+      toast.error(errorMessage, {
+        position: "top-right",
+        autoClose: 5000,
+      });
     } finally {
       setUserToDelete(null);
       setShowDeleteModal(false);

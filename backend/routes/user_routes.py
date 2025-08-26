@@ -6,6 +6,8 @@ from decorators import admin_required
 from flask_jwt_extended import jwt_required, get_jwt_identity
 import re
 
+from models.task_model import Task
+
 user_bp = Blueprint('user_bp', __name__, url_prefix='/api/users')
 
 @user_bp.route('/me')
@@ -157,6 +159,18 @@ def update_user(user_id):
 @admin_required
 def delete_user(user_id):
     user = User.query.get_or_404(user_id)
+    
+    # Verifica tasks ativas
+    active_tasks = Task.query.filter(
+        Task.user_id == user.id,
+        Task.status.in_(["pending", "in_progress"])
+    ).count()
+    
+    if active_tasks > 0:
+        return jsonify({
+            "error": "Usuário não pode ser excluído. Possui tasks ativas."
+        }), 400
+
     username = user.username
     db.session.delete(user)
     db.session.commit()

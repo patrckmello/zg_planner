@@ -16,22 +16,28 @@ team_bp = Blueprint("team_bp", __name__, url_prefix="/api/teams")
 def list_teams():
     teams = Team.query.all()
     teams_data = []
+
     for team in teams:
+        members_data = []
+        for ut in team.members:
+            if ut.user:
+                members_data.append({
+                    "user_id": ut.user.id,
+                    "username": ut.user.username,
+                    "email": ut.user.email,
+                    "is_manager": ut.is_manager
+                })
+
         teams_data.append({
             "id": team.id,
             "name": team.name,
             "description": team.description,
             "created_at": team.created_at.isoformat(),
-            "members": [
-                {
-                    "user_id": ut.user.id,
-                    "username": ut.user.username,
-                    "email": ut.user.email,
-                    "is_manager": ut.is_manager
-                } for ut in team.members
-            ]
+            "members": members_data
         })
+
     return jsonify(teams_data)
+
 
 @team_bp.route("", methods=["POST"])
 @admin_required
@@ -246,6 +252,7 @@ def update_user_in_team(team_id, user_id):
             "is_manager": ut.is_manager
         }
         for ut in team.members
+        if ut.user is not None
     ]
 
     return jsonify({
@@ -277,6 +284,9 @@ def team_productivity(team_id):
     data = []
     for ut in user_teams:
         member = ut.user
+        if not member:  # ignora registros órfãos
+            continue
+
         total_tasks = Task.query.filter_by(user_id=member.id).count()
         completed_tasks = Task.query.filter_by(user_id=member.id, status="done").count()
 
@@ -287,7 +297,7 @@ def team_productivity(team_id):
             "completed_tasks": completed_tasks,
             "completion_rate": f"{(completed_tasks / total_tasks * 100) if total_tasks else 0:.1f}%"
         })
-
+        
     return jsonify({"team_id": team.id, "team_name": team.name, "productivity": data}), 200
 
 
