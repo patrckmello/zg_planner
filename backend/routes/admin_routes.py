@@ -237,7 +237,8 @@ def export_audit_logs():
         
         # Criar CSV em memória
         output = io.StringIO()
-        writer = csv.writer(output)
+        output.write('\ufeff')
+        writer = csv.writer(output, delimiter=';', quotechar='"', quoting=csv.QUOTE_MINIMAL)
         
         # Cabeçalho
         writer.writerow([
@@ -247,16 +248,17 @@ def export_audit_logs():
         
         # Dados
         for log in logs:
+            data = log.to_dict()
             writer.writerow([
-                log.id,
-                log.user_name,
-                log.action,
-                log.resource_type or '',
-                log.resource_id or '',
-                log.description,
-                log.ip_address or '',
-                log.user_agent or '',
-                log.created_at.strftime('%d/%m/%Y %H:%M:%S') if log.created_at else ''
+                data['id'],
+                data['user_name'],
+                data['action'],
+                data['resource_type'] or '',
+                data['resource_id'] or '',
+                data['description'],
+                data['ip_address'] or '',
+                data['user_agent'] or '',
+                datetime.datetime.strptime(data['created_at'], '%Y-%m-%dT%H:%M:%S.%f').strftime('%d/%m/%Y %H:%M:%S') if data['created_at'] else ''
             ])
         
         # Preparar arquivo para download

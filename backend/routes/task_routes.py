@@ -13,6 +13,7 @@ from models.user_team_model import UserTeam
 from sqlalchemy import text, or_, and_
 from reminder_scheduler import schedule_task_reminders_safe
 from pytz import timezone
+from models.audit_log_model import AuditLog
 
 task_bp = Blueprint("tasks", __name__, url_prefix="/api")
 
@@ -279,6 +280,17 @@ def add_task():
         db.session.add(new_task)
         db.session.commit()
 
+        # Registrar auditoria
+        AuditLog.log_action(
+            user_id=user_id,
+            action="CREATE",
+            resource_type="Task",
+            resource_id=new_task.id,
+            description=f"Tarefa criada: {new_task.title}. Atribuídos: {assigned_users}, Colaboradores: {collaborators}",
+            ip_address=request.remote_addr,
+            user_agent=request.headers.get("User-Agent")
+        )
+
         # Agendar lembretes se configurados
         if new_task.lembretes and new_task.due_date:
             schedule_task_reminders_safe(new_task)
@@ -474,7 +486,19 @@ def update_task(task_id):
         pass
 
     task.updated_at = datetime.utcnow()
+    old_task_data = task.to_dict()
+
     db.session.commit()
+
+    AuditLog.log_action(
+        user_id=user_id,
+        action="UPDATE",
+        resource_type="Task",
+        resource_id=task.id,
+        description=f"Tarefa atualizada. Antes: {old_task_data}, Depois: {task.to_dict()}",
+        ip_address=request.remote_addr,
+        user_agent=request.headers.get("User-Agent")
+    )    
 
     if task.lembretes and task.due_date:
         schedule_task_reminders_safe(task)
@@ -541,6 +565,16 @@ def delete_task(task_id):
                     print(f"[DEBUG] Arquivo removido: {filepath}")
                 except OSError as e:
                     print(f"[DEBUG] Erro ao remover arquivo {filepath}: {e}")
+
+    AuditLog.log_action(
+        user_id=user_id,
+        action="DELETE",
+        resource_type="Task",
+        resource_id=task.id,
+        description=f"Tarefa excluída: {task.title}. Atribuídos: {task.assigned_users}, Colaboradores: {task.collaborators}",
+        ip_address=request.remote_addr,
+        user_agent=request.headers.get("User-Agent")
+    )
 
     db.session.delete(task)
     db.session.commit()
