@@ -19,7 +19,15 @@ import {
   FiMoreHorizontal,
   FiTrash2,
   FiSettings,
+  FiSearch,
+  FiRefreshCw,
 } from "react-icons/fi";
+import {
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+} from "lucide-react";
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
@@ -39,6 +47,20 @@ function AdminUsers() {
   const [showRoleManager, setShowRoleManager] = useState(false);
   const [userToManageRoles, setUserToManageRoles] = useState(null);
 
+  // Estados para paginação e busca
+  const [searchTerm, setSearchTerm] = useState("");
+  const [pagination, setPagination] = useState({
+    total_items: 0,
+    total_pages: 0,
+    current_page: 1,
+    per_page: 20,
+    has_next: false,
+    has_prev: false,
+    next_num: null,
+    prev_num: null,
+  });
+  const [loadingUsers, setLoadingUsers] = useState(false);
+
   // Estado para novo usuário
   const [newUser, setNewUser] = useState({
     username: "",
@@ -49,6 +71,78 @@ function AdminUsers() {
 
   // Manteremos a sidebar aberta por padrão em telas maiores
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 768);
+
+  // Função para buscar usuários com paginação e busca
+  const fetchUsers = async (page = 1, perPage = 20, search = "") => {
+    setLoadingUsers(true);
+    try {
+      const params = new URLSearchParams({
+        page: page.toString(),
+        per_page: perPage.toString(),
+      });
+
+      if (search.trim()) {
+        params.append("search", search.trim());
+      }
+
+      const response = await api.get(`/users?${params}`);
+
+      // Verificar se a resposta tem a estrutura esperada com paginação
+      if (response.data.items && response.data.pagination) {
+        setUsers(response.data.items);
+        setPagination(response.data.pagination);
+      } else {
+        // Fallback para compatibilidade com resposta antiga
+        setUsers(Array.isArray(response.data) ? response.data : []);
+        setPagination({
+          total_items: Array.isArray(response.data) ? response.data.length : 0,
+          total_pages: 1,
+          current_page: 1,
+          per_page: perPage,
+          has_next: false,
+          has_prev: false,
+          next_num: null,
+          prev_num: null,
+        });
+      }
+    } catch (error) {
+      console.error("Erro ao buscar usuários:", error);
+      setError("Erro ao buscar usuários. Verifique suas permissões.");
+      setUsers([]);
+    } finally {
+      setLoadingUsers(false);
+      setLoading(false);
+    }
+  };
+
+  // Função para lidar com mudança de página
+  const handlePageChange = (newPage) => {
+    if (newPage >= 1 && newPage <= pagination.total_pages) {
+      fetchUsers(newPage, pagination.per_page, searchTerm);
+    }
+  };
+
+  // Função para lidar com mudança de itens por página
+  const handlePerPageChange = (newPerPage) => {
+    fetchUsers(1, newPerPage, searchTerm);
+  };
+
+  // Função para lidar com busca
+  const handleSearch = (search) => {
+    setSearchTerm(search);
+    fetchUsers(1, pagination.per_page, search);
+  };
+
+  // Debounce para busca
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (searchTerm !== undefined) {
+        handleSearch(searchTerm);
+      }
+    }, 500);
+
+    return () => clearTimeout(timeoutId);
+  }, [searchTerm]);
 
   const filteredUsers = users.filter((user) => {
     let roleMatch = true;
@@ -73,19 +167,6 @@ function AdminUsers() {
   });
 
   useEffect(() => {
-    const fetchUsers = async () => {
-      try {
-        const response = await api.get("/users");
-        console.log("Usuários recebidos no frontend:", response.data);
-        setUsers(response.data);
-      } catch (error) {
-        console.error("Erro ao buscar usuários:", error);
-        setError("Erro ao buscar usuários. Verifique suas permissões.");
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchUsers();
 
     const handleResize = () => {
@@ -150,9 +231,11 @@ function AdminUsers() {
 
     try {
       const response = await api.post("/users/", newUser);
-      setUsers([...users, response.data]);
+      // Recarregar a lista de usuários após criar
+      fetchUsers(pagination.current_page, pagination.per_page, searchTerm);
       resetForm();
       setShowUserForm(false);
+      toast.success("Usuário criado com sucesso!", { autoClose: 3000 });
       console.log("Usuário criado com sucesso:", response.data);
     } catch (error) {
       console.error("Erro ao criar usuário:", error);
@@ -167,10 +250,10 @@ function AdminUsers() {
   const handleUpdateUser = async (userId, userData) => {
     try {
       const response = await api.put(`/users/${userId}`, userData);
-      setUsers((prev) =>
-        prev.map((u) => (u.id === userId ? response.data : u))
-      );
+      // Recarregar a lista de usuários após atualizar
+      fetchUsers(pagination.current_page, pagination.per_page, searchTerm);
       setEditingUser(null);
+      toast.success("Usuário atualizado com sucesso!", { autoClose: 3000 });
       console.log("Usuário atualizado com sucesso:", response.data);
     } catch (error) {
       console.error("Erro ao atualizar usuário:", error);
@@ -185,11 +268,9 @@ function AdminUsers() {
   const toggleAdmin = async (userId, currentValue) => {
     try {
       await api.put(`/users/${userId}`, { is_admin: !currentValue });
-      setUsers(
-        users.map((u) =>
-          u.id === userId ? { ...u, is_admin: !currentValue } : u
-        )
-      );
+      // Recarregar a lista de usuários após alterar permissão
+      fetchUsers(pagination.current_page, pagination.per_page, searchTerm);
+      toast.success("Permissão alterada com sucesso!", { autoClose: 3000 });
     } catch (error) {
       console.error("Erro ao alterar permissão:", error);
       toast.error(error.response?.data?.error || "Erro ao alterar permissão", {
@@ -202,10 +283,12 @@ function AdminUsers() {
     try {
       const newStatus = !currentStatus;
       await api.put(`/users/${userId}`, { is_active: newStatus });
-      setUsers(
-        users.map((u) => (u.id === userId ? { ...u, is_active: newStatus } : u))
-      );
+      // Recarregar a lista de usuários após alterar status
+      fetchUsers(pagination.current_page, pagination.per_page, searchTerm);
       setShowDropdown(null);
+      toast.success("Status do usuário alterado com sucesso!", {
+        autoClose: 3000,
+      });
     } catch (error) {
       console.error("Erro ao alterar status do usuário:", error);
       toast.error(
@@ -225,7 +308,8 @@ function AdminUsers() {
 
     try {
       await api.delete(`/users/${userToDelete.id}`);
-      setUsers((prev) => prev.filter((u) => u.id !== userToDelete.id));
+      // Recarregar a lista de usuários após excluir
+      fetchUsers(pagination.current_page, pagination.per_page, searchTerm);
       toast.success(`Usuário ${userToDelete.username} excluído com sucesso!`, {
         position: "top-right",
         autoClose: 4000,
@@ -256,9 +340,8 @@ function AdminUsers() {
   };
 
   const handleUserUpdate = (updatedUser) => {
-    setUsers((prev) =>
-      prev.map((u) => (u.id === updatedUser.id ? updatedUser : u))
-    );
+    // Recarregar a lista de usuários após atualizar roles
+    fetchUsers(pagination.current_page, pagination.per_page, searchTerm);
     setUserToManageRoles(updatedUser);
   };
 
@@ -294,14 +377,53 @@ function AdminUsers() {
         <main className={styles.contentArea}>
           <div className={styles.usersWrapper}>
             <div className={styles.usersHeader}>
-              <h2>Administração de Usuários</h2>
-              <button
-                className={styles.addUserBtn}
-                onClick={() => setShowUserForm(true)}
-              >
-                <FiPlus className={styles.btnIcon} />
-                Novo Usuário
-              </button>
+              <h2>
+                Administração de Usuários
+                {pagination.total_items > 0 && (
+                  <span className={styles.totalCount}>
+                    ({pagination.total_items} usuários)
+                  </span>
+                )}
+              </h2>
+              <div className={styles.headerActions}>
+                <button
+                  className={styles.refreshBtn}
+                  onClick={() =>
+                    fetchUsers(
+                      pagination.current_page,
+                      pagination.per_page,
+                      searchTerm
+                    )
+                  }
+                  disabled={loadingUsers}
+                  title="Atualizar lista"
+                >
+                  <FiRefreshCw
+                    className={loadingUsers ? styles.spinning : ""}
+                  />
+                </button>
+                <button
+                  className={styles.addUserBtn}
+                  onClick={() => setShowUserForm(true)}
+                >
+                  <FiPlus className={styles.btnIcon} />
+                  Novo Usuário
+                </button>
+              </div>
+            </div>
+
+            {/* Barra de busca */}
+            <div className={styles.searchContainer}>
+              <div className={styles.searchBox}>
+                <FiSearch className={styles.searchIcon} />
+                <input
+                  type="text"
+                  placeholder="Buscar por nome de usuário ou email..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className={styles.searchInput}
+                />
+              </div>
             </div>
 
             <div className={styles.controls}>
@@ -353,329 +475,435 @@ function AdminUsers() {
                   </select>
                 </label>
               </div>
+
+              <div className={styles.controlGroup}>
+                <label className={styles.controlLabel}>
+                  Itens por página:
+                  <select
+                    className={styles.select}
+                    value={pagination.per_page}
+                    onChange={(e) =>
+                      handlePerPageChange(parseInt(e.target.value))
+                    }
+                  >
+                    <option value={10}>10</option>
+                    <option value={20}>20</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                  </select>
+                </label>
+              </div>
             </div>
 
-            <div className={styles.usersList}>
-              {sortedUsers.length === 0 ? (
-                <div className={styles.emptyUsers}>
-                  {filterRole === "admin" &&
-                    filterStatus === "all" &&
-                    "Nenhum administrador encontrado."}
-                  {filterRole === "user" &&
-                    filterStatus === "all" &&
-                    "Nenhum usuário encontrado."}
-                  {filterRole === "all" &&
-                    filterStatus === "active" &&
-                    "Nenhum usuário ativo encontrado."}
-                  {filterRole === "all" &&
-                    filterStatus === "inactive" &&
-                    "Nenhum usuário inativo encontrado."}
-                  {filterRole === "all" &&
-                    filterStatus === "all" &&
-                    "Nenhum usuário cadastrado."}
-                </div>
-              ) : (
-                sortedUsers.map((user) => (
-                  <div
-                    key={user.id}
-                    className={`${styles.userItem} ${
-                      user.is_active === false ? styles.inactiveUser : ""
-                    }`}
-                  >
-                    <div className={styles.userInfo}>
-                      <div className={styles.userAvatar}>
-                        <FiUser className={styles.avatarIcon} />
-                      </div>
-                      <div className={styles.userDetails}>
-                        <div className={styles.userName}>
-                          {user.username}
-                          {user.is_admin && (
-                            <span className={styles.adminBadge}>
-                              <FiShield className={styles.badgeIcon} />
-                              Admin
-                            </span>
-                          )}
-                          {user.is_active === false && (
-                            <span className={styles.inactiveBadge}>
-                              <FiUserX className={styles.badgeIcon} />
-                              Inativo
-                            </span>
-                          )}
-                        </div>
-                        <div className={styles.userEmail}>
-                          <FiMail className={styles.emailIcon} />
-                          {user.email}
-                        </div>
-                        {user.roles && user.roles.length > 0 && (
-                          <div className={styles.userRoles}>
-                            {user.roles.map((role) => (
-                              <span key={role.id} className={styles.roleBadge}>
-                                {role.name}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                      </div>
+            {loadingUsers ? (
+              <div className={styles.loadingState}>
+                <div className={styles.smallSpinner}></div>
+                <span>Carregando usuários...</span>
+              </div>
+            ) : (
+              <>
+                <div className={styles.usersList}>
+                  {sortedUsers.length === 0 ? (
+                    <div className={styles.emptyUsers}>
+                      {searchTerm ? (
+                        <>
+                          <FiUser size={48} />
+                          <h3>Nenhum usuário encontrado</h3>
+                          <p>
+                            Nenhum usuário corresponde à busca "{searchTerm}"
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          {filterRole === "admin" &&
+                            filterStatus === "all" &&
+                            "Nenhum administrador encontrado."}
+                          {filterRole === "user" &&
+                            filterStatus === "all" &&
+                            "Nenhum usuário encontrado."}
+                          {filterRole === "all" &&
+                            filterStatus === "active" &&
+                            "Nenhum usuário ativo encontrado."}
+                          {filterRole === "all" &&
+                            filterStatus === "inactive" &&
+                            "Nenhum usuário inativo encontrado."}
+                          {filterRole === "all" &&
+                            filterStatus === "all" &&
+                            "Nenhum usuário cadastrado."}
+                        </>
+                      )}
                     </div>
-                    <div className={styles.userActions}>
-                      <label className={styles.adminToggle}>
-                        <input
-                          type="checkbox"
-                          checked={user.is_admin}
-                          onChange={() => toggleAdmin(user.id, user.is_admin)}
-                        />
-                        <span className={styles.toggleSlider}></span>
-                        <span className={styles.toggleLabel}>Admin</span>
-                      </label>
-                      <button
-                        className={styles.editBtn}
-                        onClick={() => setEditingUser(user)}
-                        title="Editar usuário"
+                  ) : (
+                    sortedUsers.map((user) => (
+                      <div
+                        key={user.id}
+                        className={`${styles.userItem} ${
+                          user.is_active === false ? styles.inactiveUser : ""
+                        }`}
                       >
-                        <FiEdit />
-                      </button>
-                      <div className={styles.dropdown}>
-                        <button
-                          className={styles.moreBtn}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setShowDropdown(
-                              showDropdown === user.id ? null : user.id
-                            );
-                          }}
-                          title="Mais opções"
-                        >
-                          <FiMoreHorizontal />
-                        </button>
-                        {showDropdown === user.id && (
-                          <div className={styles.dropdownMenu}>
-                            <button
-                              className={styles.dropdownItem}
-                              onClick={() => handleManageRoles(user)}
-                            >
-                              <FiSettings className={styles.dropdownIcon} />
-                              Gerenciar Cargos
-                            </button>
-                            <button
-                              className={styles.dropdownItem}
-                              onClick={() =>
-                                toggleUserStatus(
-                                  user.id,
-                                  user.is_active !== false
-                                )
-                              }
-                            >
-                              {user.is_active !== false ? (
-                                <>
-                                  <FiUserX className={styles.dropdownIcon} />
-                                  Inativar Usuário
-                                </>
-                              ) : (
-                                <>
-                                  <FiUserCheck
-                                    className={styles.dropdownIcon}
-                                  />
-                                  Ativar Usuário
-                                </>
-                              )}
-                            </button>
-                            <button
-                              className={`${styles.dropdownItem} ${styles.dangerItem}`}
-                              onClick={() => {
-                                setUserToDelete(user);
-                                setShowDeleteModal(true);
-                              }}
-                            >
-                              <FiTrash2 className={styles.dropdownIcon} />
-                              Excluir Permanentemente
-                            </button>
+                        <div className={styles.userInfo}>
+                          <div className={styles.userAvatar}>
+                            <FiUser className={styles.avatarIcon} />
                           </div>
-                        )}
+                          <div className={styles.userDetails}>
+                            <div className={styles.userName}>
+                              {user.username}
+                              {user.is_admin && (
+                                <span className={styles.adminBadge}>
+                                  <FiShield className={styles.badgeIcon} />
+                                  Admin
+                                </span>
+                              )}
+                              {user.is_active === false && (
+                                <span className={styles.inactiveBadge}>
+                                  <FiUserX className={styles.badgeIcon} />
+                                  Inativo
+                                </span>
+                              )}
+                            </div>
+                            <div className={styles.userEmail}>
+                              <FiMail className={styles.emailIcon} />
+                              {user.email}
+                            </div>
+                            {user.roles && user.roles.length > 0 && (
+                              <div className={styles.userRoles}>
+                                {user.roles.map((role) => (
+                                  <span
+                                    key={role.id}
+                                    className={styles.roleBadge}
+                                  >
+                                    {role.name}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <div className={styles.userActions}>
+                          <label className={styles.adminToggle}>
+                            <input
+                              type="checkbox"
+                              checked={user.is_admin}
+                              onChange={() =>
+                                toggleAdmin(user.id, user.is_admin)
+                              }
+                            />
+                            <span className={styles.toggleSlider}></span>
+                            <span className={styles.toggleLabel}>Admin</span>
+                          </label>
+                          <button
+                            className={styles.editBtn}
+                            onClick={() => setEditingUser(user)}
+                            title="Editar usuário"
+                          >
+                            <FiEdit />
+                          </button>
+                          <div className={styles.dropdown}>
+                            <button
+                              className={styles.moreBtn}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setShowDropdown(
+                                  showDropdown === user.id ? null : user.id
+                                );
+                              }}
+                              title="Mais opções"
+                            >
+                              <FiMoreHorizontal />
+                            </button>
+                            {showDropdown === user.id && (
+                              <div className={styles.dropdownMenu}>
+                                <button
+                                  className={styles.dropdownItem}
+                                  onClick={() => handleManageRoles(user)}
+                                >
+                                  <FiSettings className={styles.dropdownIcon} />
+                                  Gerenciar Cargos
+                                </button>
+                                <button
+                                  className={styles.dropdownItem}
+                                  onClick={() =>
+                                    toggleUserStatus(
+                                      user.id,
+                                      user.is_active !== false
+                                    )
+                                  }
+                                >
+                                  {user.is_active !== false ? (
+                                    <>
+                                      <FiUserX
+                                        className={styles.dropdownIcon}
+                                      />
+                                      Desativar
+                                    </>
+                                  ) : (
+                                    <>
+                                      <FiUserCheck
+                                        className={styles.dropdownIcon}
+                                      />
+                                      Ativar
+                                    </>
+                                  )}
+                                </button>
+                                <button
+                                  className={`${styles.dropdownItem} ${styles.deleteItem}`}
+                                  onClick={() => {
+                                    setUserToDelete(user);
+                                    setShowDeleteModal(true);
+                                  }}
+                                >
+                                  <FiTrash2 className={styles.dropdownIcon} />
+                                  Excluir
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       </div>
+                    ))
+                  )}
+                </div>
+
+                {/* Paginação */}
+                {pagination.total_pages > 1 && (
+                  <div className={styles.pagination}>
+                    <div className={styles.paginationInfo}>
+                      Página {pagination.current_page} de{" "}
+                      {pagination.total_pages} ({pagination.total_items}{" "}
+                      usuários)
+                    </div>
+
+                    <div className={styles.paginationControls}>
+                      <button
+                        className={styles.paginationBtn}
+                        onClick={() => handlePageChange(1)}
+                        disabled={!pagination.has_prev}
+                        title="Primeira página"
+                      >
+                        <ChevronsLeft size={16} />
+                      </button>
+
+                      <button
+                        className={styles.paginationBtn}
+                        onClick={() => handlePageChange(pagination.prev_num)}
+                        disabled={!pagination.has_prev}
+                        title="Página anterior"
+                      >
+                        <ChevronLeft size={16} />
+                      </button>
+
+                      <span className={styles.pageNumbers}>
+                        {Array.from(
+                          {
+                            length: Math.min(5, pagination.total_pages),
+                          },
+                          (_, i) => {
+                            let pageNum;
+                            if (pagination.total_pages <= 5) {
+                              pageNum = i + 1;
+                            } else if (pagination.current_page <= 3) {
+                              pageNum = i + 1;
+                            } else if (
+                              pagination.current_page >=
+                              pagination.total_pages - 2
+                            ) {
+                              pageNum = pagination.total_pages - 4 + i;
+                            } else {
+                              pageNum = pagination.current_page - 2 + i;
+                            }
+
+                            return (
+                              <button
+                                key={pageNum}
+                                className={`${styles.pageNumberBtn} ${
+                                  pageNum === pagination.current_page
+                                    ? styles.active
+                                    : ""
+                                }`}
+                                onClick={() => handlePageChange(pageNum)}
+                              >
+                                {pageNum}
+                              </button>
+                            );
+                          }
+                        )}
+                      </span>
+
+                      <button
+                        className={styles.paginationBtn}
+                        onClick={() => handlePageChange(pagination.next_num)}
+                        disabled={!pagination.has_next}
+                        title="Próxima página"
+                      >
+                        <ChevronRight size={16} />
+                      </button>
+
+                      <button
+                        className={styles.paginationBtn}
+                        onClick={() => handlePageChange(pagination.total_pages)}
+                        disabled={!pagination.has_next}
+                        title="Última página"
+                      >
+                        <ChevronsRight size={16} />
+                      </button>
                     </div>
                   </div>
-                ))
-              )}
-            </div>
+                )}
+              </>
+            )}
           </div>
+
+          {/* Modal de criação/edição de usuário */}
+          {(showUserForm || editingUser) && (
+            <div className={styles.modal}>
+              <div className={styles.modalContent}>
+                <h3>{editingUser ? "Editar Usuário" : "Novo Usuário"}</h3>
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (editingUser) {
+                      handleUpdateUser(editingUser.id, {
+                        username: editingUser.username,
+                        email: editingUser.email,
+                        is_admin: editingUser.is_admin,
+                        is_active: editingUser.is_active,
+                      });
+                    } else {
+                      handleCreateUser();
+                    }
+                  }}
+                >
+                  <div className={styles.formGroup}>
+                    <label>Nome de usuário:</label>
+                    <input
+                      type="text"
+                      value={
+                        editingUser ? editingUser.username : newUser.username
+                      }
+                      onChange={(e) =>
+                        editingUser
+                          ? setEditingUser({
+                              ...editingUser,
+                              username: e.target.value,
+                            })
+                          : setNewUser({ ...newUser, username: e.target.value })
+                      }
+                      required
+                    />
+                  </div>
+                  <div className={styles.formGroup}>
+                    <label>Email:</label>
+                    <input
+                      type="email"
+                      value={editingUser ? editingUser.email : newUser.email}
+                      onChange={(e) =>
+                        editingUser
+                          ? setEditingUser({
+                              ...editingUser,
+                              email: e.target.value,
+                            })
+                          : setNewUser({ ...newUser, email: e.target.value })
+                      }
+                      required
+                    />
+                  </div>
+                  {!editingUser && (
+                    <div className={styles.formGroup}>
+                      <label>Senha:</label>
+                      <input
+                        type="password"
+                        value={newUser.password}
+                        onChange={(e) =>
+                          setNewUser({ ...newUser, password: e.target.value })
+                        }
+                        required
+                      />
+                    </div>
+                  )}
+                  <div className={styles.formGroup}>
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={
+                          editingUser ? editingUser.is_admin : newUser.is_admin
+                        }
+                        onChange={(e) =>
+                          editingUser
+                            ? setEditingUser({
+                                ...editingUser,
+                                is_admin: e.target.checked,
+                              })
+                            : setNewUser({
+                                ...newUser,
+                                is_admin: e.target.checked,
+                              })
+                        }
+                      />
+                      Administrador
+                    </label>
+                  </div>
+                  {editingUser && (
+                    <div className={styles.formGroup}>
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={editingUser.is_active !== false}
+                          onChange={(e) =>
+                            setEditingUser({
+                              ...editingUser,
+                              is_active: e.target.checked,
+                            })
+                          }
+                        />
+                        Ativo
+                      </label>
+                    </div>
+                  )}
+                  <div className={styles.formActions}>
+                    <button type="submit" className={styles.saveBtn}>
+                      {editingUser ? "Salvar" : "Criar"}
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.cancelBtn}
+                      onClick={() => {
+                        setShowUserForm(false);
+                        setEditingUser(null);
+                        resetForm();
+                      }}
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* Modal de confirmação de exclusão */}
+          {showDeleteModal && (
+            <DeleteConfirmModal
+              isOpen={showDeleteModal}
+              onConfirm={confirmDelete}
+              onCancel={cancelDelete}
+              itemName={userToDelete?.username}
+              itemType="usuário"
+            />
+          )}
+
+          {/* Modal de gerenciamento de roles */}
+          {showRoleManager && userToManageRoles && (
+            <UserRoleManager
+              user={userToManageRoles}
+              isOpen={showRoleManager}
+              onClose={() => {
+                setShowRoleManager(false);
+                setUserToManageRoles(null);
+              }}
+              onUserUpdate={handleUserUpdate}
+            />
+          )}
         </main>
-
-        {/* Modal para criar novo usuário */}
-        {showUserForm && (
-          <div className={styles.modalOverlay}>
-            <div className={styles.modalContent}>
-              <div className={styles.modalHeader}>
-                <h3 className={styles.modalTitle}>Novo Usuário</h3>
-                <button
-                  className={styles.closeButton}
-                  onClick={() => {
-                    setShowUserForm(false);
-                    resetForm();
-                  }}
-                >
-                  ×
-                </button>
-              </div>
-              <div className={styles.modalBody}>
-                <div className={styles.formGroup}>
-                  <label className={styles.label}>Nome de usuário</label>
-                  <input
-                    type="text"
-                    className={styles.input}
-                    value={newUser.username}
-                    onChange={(e) =>
-                      setNewUser({ ...newUser, username: e.target.value })
-                    }
-                    placeholder="Digite o nome de usuário"
-                  />
-                </div>
-                <div className={styles.formGroup}>
-                  <label className={styles.label}>Email</label>
-                  <input
-                    type="email"
-                    className={styles.input}
-                    value={newUser.email}
-                    onChange={(e) =>
-                      setNewUser({ ...newUser, email: e.target.value })
-                    }
-                    placeholder="Digite o email"
-                  />
-                </div>
-                <div className={styles.formGroup}>
-                  <label className={styles.label}>Senha</label>
-                  <input
-                    type="password"
-                    className={styles.input}
-                    value={newUser.password}
-                    onChange={(e) =>
-                      setNewUser({ ...newUser, password: e.target.value })
-                    }
-                    placeholder="Digite a senha"
-                  />
-                </div>
-                <div className={styles.formGroup}>
-                  <label className={styles.checkboxLabel}>
-                    <input
-                      type="checkbox"
-                      checked={newUser.is_admin}
-                      onChange={(e) =>
-                        setNewUser({ ...newUser, is_admin: e.target.checked })
-                      }
-                    />
-                    <span className={styles.checkboxText}>Administrador</span>
-                  </label>
-                </div>
-              </div>
-              <div className={styles.modalFooter}>
-                <button
-                  className={styles.cancelBtn}
-                  onClick={() => {
-                    setShowUserForm(false);
-                    resetForm();
-                  }}
-                >
-                  Cancelar
-                </button>
-                <button className={styles.saveBtn} onClick={handleCreateUser}>
-                  Criar Usuário
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Modal para editar usuário */}
-        {editingUser && (
-          <div className={styles.modalOverlay}>
-            <div className={styles.modalContent}>
-              <div className={styles.modalHeader}>
-                <h3 className={styles.modalTitle}>Editar Usuário</h3>
-                <button
-                  className={styles.closeButton}
-                  onClick={() => setEditingUser(null)}
-                >
-                  ×
-                </button>
-              </div>
-              <div className={styles.modalBody}>
-                <div className={styles.formGroup}>
-                  <label className={styles.label}>Nome de usuário</label>
-                  <input
-                    type="text"
-                    className={styles.input}
-                    value={editingUser.username}
-                    onChange={(e) =>
-                      setEditingUser({
-                        ...editingUser,
-                        username: e.target.value,
-                      })
-                    }
-                    placeholder="Digite o nome de usuário"
-                  />
-                </div>
-                <div className={styles.formGroup}>
-                  <label className={styles.label}>Email</label>
-                  <input
-                    type="email"
-                    className={styles.input}
-                    value={editingUser.email}
-                    onChange={(e) =>
-                      setEditingUser({ ...editingUser, email: e.target.value })
-                    }
-                    placeholder="Digite o email"
-                  />
-                </div>
-                <div className={styles.formGroup}>
-                  <label className={styles.checkboxLabel}>
-                    <input
-                      type="checkbox"
-                      checked={editingUser.is_admin}
-                      onChange={(e) =>
-                        setEditingUser({
-                          ...editingUser,
-                          is_admin: e.target.checked,
-                        })
-                      }
-                    />
-                    <span className={styles.checkboxText}>Administrador</span>
-                  </label>
-                </div>
-              </div>
-              <div className={styles.modalFooter}>
-                <button
-                  className={styles.cancelBtn}
-                  onClick={() => setEditingUser(null)}
-                >
-                  Cancelar
-                </button>
-                <button
-                  className={styles.saveBtn}
-                  onClick={() => handleUpdateUser(editingUser.id, editingUser)}
-                >
-                  Salvar Alterações
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <DeleteConfirmModal
-          isOpen={showDeleteModal}
-          onCancel={cancelDelete}
-          onConfirm={confirmDelete}
-          taskTitle={userToDelete?.username || ""}
-        />
-
-        {showRoleManager && userToManageRoles && (
-          <UserRoleManager
-            user={userToManageRoles}
-            onUserUpdate={handleUserUpdate}
-            onClose={() => {
-              setShowRoleManager(false);
-              setUserToManageRoles(null);
-            }}
-          />
-        )}
       </div>
     </div>
   );

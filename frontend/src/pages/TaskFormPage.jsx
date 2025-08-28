@@ -117,10 +117,13 @@ function TaskFormPage() {
           api.get("/teams"),
           api.get("/users/me"),
         ]);
-        setTeams(teamsResponse.data);
+
+        // Garante que sempre será array
+        setTeams(Array.isArray(teamsResponse.data) ? teamsResponse.data : []);
         setCurrentUser(userResponse.data);
       } catch (error) {
         console.error("Erro ao carregar dados:", error);
+        setTeams([]); // fallback
       }
     };
 
@@ -476,10 +479,14 @@ function TaskFormPage() {
                             onChange={(e) =>
                               updateField("team_id", e.target.value)
                             }
-                            options={teams.map((team) => ({
-                              value: team.id,
-                              label: team.name,
-                            }))}
+                            options={
+                              Array.isArray(teams)
+                                ? teams.map((team) => ({
+                                    value: team.id,
+                                    label: team.name,
+                                  }))
+                                : []
+                            }
                             placeholder="Selecione uma equipe"
                           />
                         </div>

@@ -99,8 +99,59 @@ def update_icon_color():
 @user_bp.route('', methods=['GET'])
 @jwt_required()
 def list_users():
-    users = User.query.all()
-    return jsonify([user.to_dict() for user in users])
+    """Lista usuários com paginação e busca por nome"""
+    try:
+        # Parâmetros de paginação
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 20, type=int)
+        
+        # Parâmetro de busca por nome
+        search = request.args.get('search', '').strip()
+        
+        # Construir query base
+        query = User.query
+        
+        # Aplicar filtro de busca se fornecido
+        if search:
+            # Busca por username ou email (case-insensitive)
+            search_filter = f"%{search}%"
+            query = query.filter(
+                db.or_(
+                    User.username.ilike(search_filter),
+                    User.email.ilike(search_filter)
+                )
+            )
+        
+        # Ordenar por username
+        query = query.order_by(User.username.asc())
+        
+        # Aplicar paginação
+        users_pagination = query.paginate(
+            page=page,
+            per_page=per_page,
+            error_out=False
+        )
+        
+        # Preparar resposta com usuários e metadados de paginação
+        response_data = {
+            "items": [user.to_dict() for user in users_pagination.items],
+            "pagination": {
+                "total_items": users_pagination.total,
+                "total_pages": users_pagination.pages,
+                "current_page": users_pagination.page,
+                "per_page": users_pagination.per_page,
+                "has_next": users_pagination.has_next,
+                "has_prev": users_pagination.has_prev,
+                "next_num": users_pagination.next_num,
+                "prev_num": users_pagination.prev_num
+            },
+            "search": search
+        }
+        
+        return jsonify(response_data)
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @user_bp.route('/', methods=['POST'])
 @admin_required
