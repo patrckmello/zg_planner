@@ -123,6 +123,33 @@ def get_tasks():
 
     return jsonify(tasks_data)
 
+@task_bp.route("/tasks/counts", methods=["GET"])
+@jwt_required()
+def get_task_counts():
+    user_id = get_jwt_identity()
+    user = User.query.get(user_id)
+
+    if not user or not user.is_active:
+        return jsonify({"msg": "Usuário inválido ou inativo"}), 401
+
+    # Contagem de Minhas Tarefas
+    my_tasks_count = Task.query.filter_by(user_id=user_id).count()
+
+    # Contagem de Tarefas da Equipe
+    team_tasks_count = 0
+    user_teams = [ut.team_id for ut in user.teams]
+    if user_teams:
+        team_tasks_count = Task.query.filter(Task.team_id.in_(user_teams)).count()
+
+    # Contagem de Tarefas Colaborativas
+    collaborative_tasks_count = Task.query.filter(text("tasks.collaborators::jsonb @> :user_id_json").params(user_id_json=f'[{user_id}]')).count()
+
+    return jsonify({
+        "my_tasks": my_tasks_count,
+        "team_tasks": team_tasks_count,
+        "collaborative_tasks": collaborative_tasks_count
+    })
+
 @task_bp.route("/tasks", methods=["POST"])
 @jwt_required()
 def add_task():
@@ -604,7 +631,8 @@ def get_team_members(team_id):
     
     members = []
     for member_assoc in team.members:
-        # Excluir o usuário atual (gestor) da lista de membros para atribuição
+        if not member_assoc.user:
+            continue  # pula registros sem usuário
         if member_assoc.user.id != user_id:
             members.append({
                 "id": member_assoc.user.id,
