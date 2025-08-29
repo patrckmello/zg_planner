@@ -185,13 +185,25 @@ def create_user():
 def update_user(user_id):
     user = User.query.get_or_404(user_id)
     data = request.json
+
+    # 🔒 Proteção do admin master
+    if user_id == 6:
+        # impede perder privilégios de admin
+        if "is_admin" in data and data["is_admin"] is False:
+            return jsonify({"error": "O admin master não pode perder privilégios"}), 403
+        # impede ser inativado
+        if "is_active" in data and data["is_active"] is False:
+            return jsonify({"error": "O admin master não pode ser inativado"}), 403
+
     user.username = data.get('username', user.username)
     user.email = data.get('email', user.email)
-    user.is_admin = data.get('is_admin', user.is_admin)
-    user.is_active = data.get('is_active', user.is_active)
+    # se não for admin master, permite alterar is_admin e is_active
+    if user_id != 6:
+        user.is_admin = data.get('is_admin', user.is_admin)
+        user.is_active = data.get('is_active', user.is_active)
 
     db.session.commit()
-    
+
     # Log da ação
     current_user_id = get_jwt_identity()
     AuditLog.log_action(
@@ -203,20 +215,25 @@ def update_user(user_id):
         ip_address=request.remote_addr,
         user_agent=request.headers.get('User-Agent')
     )
-    
+
     return jsonify(user.to_dict())
+
+
 
 @user_bp.route('/<int:user_id>', methods=['DELETE'])
 @admin_required
 def delete_user(user_id):
+    if user_id == 6:
+        return jsonify({"error": "O admin master não pode ser excluído"}), 403
+
     user = User.query.get_or_404(user_id)
-    
+
     # Verifica tasks ativas
     active_tasks = Task.query.filter(
         Task.user_id == user.id,
         Task.status.in_(["pending", "in_progress"])
     ).count()
-    
+
     if active_tasks > 0:
         return jsonify({
             "error": "Usuário não pode ser excluído. Possui tasks ativas."
@@ -225,8 +242,8 @@ def delete_user(user_id):
     username = user.username
     db.session.delete(user)
     db.session.commit()
-    
-    # Log da ação
+
+    # Log
     current_user_id = get_jwt_identity()
     AuditLog.log_action(
         user_id=current_user_id,
@@ -237,8 +254,9 @@ def delete_user(user_id):
         ip_address=request.remote_addr,
         user_agent=request.headers.get('User-Agent')
     )
-    
+
     return jsonify({'message': 'Usuário excluído com sucesso.'})
+
 
 
 @user_bp.route('/<int:user_id>/roles', methods=['POST'])

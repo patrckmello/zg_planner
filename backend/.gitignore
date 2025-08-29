@@ -9,3 +9,4 @@ readme_backup.md
 requirements_backup.txt
 seeds.py
 sent_reminders.txt
+__pycache__/
