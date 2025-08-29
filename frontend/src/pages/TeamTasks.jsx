@@ -45,6 +45,8 @@ function TeamTasks() {
   const [teams, setTeams] = useState([]);
   const [teamMembers, setTeamMembers] = useState([]);
   const [filtersVisible, setFiltersVisible] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   // Estados dos filtros
   const [filters, setFilters] = useState({
@@ -59,6 +61,11 @@ function TeamTasks() {
     createdDateTo: "",
     searchTerm: "",
   });
+
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentTasks = filteredTasks.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(filteredTasks.length / itemsPerPage);
 
   // Verificar se o usuário tem permissão de acesso
   const hasAccess = () => {
@@ -254,6 +261,12 @@ function TeamTasks() {
       fetchTasks();
     }
   }, [filters, teamMembers]);
+
+  const handlePageChange = (pageNumber) => {
+    if (pageNumber > 0 && pageNumber <= totalPages) {
+      setCurrentPage(pageNumber);
+    }
+  };
 
   const handleFilterChange = (key, value) => {
     setFilters((prev) => ({
@@ -654,7 +667,7 @@ function TeamTasks() {
                     <div className={styles.tableHeaderCell}>Criação</div>
                   </div>
 
-                  {filteredTasks.map((task) => {
+                  {currentTasks.map((task) => {
                     const responsible = teamMembers.find(
                       (member) => member.user_id === task.user_id
                     );
@@ -724,6 +737,45 @@ function TeamTasks() {
                       </div>
                     );
                   })}
+                  {totalPages > 1 && (
+                    <div className={styles.pagination}>
+                      <div className={styles.paginationInfo}>
+                        Página {currentPage} de {totalPages}
+                      </div>
+
+                      <div className={styles.paginationControls}>
+                        <button
+                          className={styles.paginationBtn}
+                          onClick={() => handlePageChange(currentPage - 1)}
+                          disabled={currentPage === 1}
+                        >
+                          ◀
+                        </button>
+
+                        <div className={styles.pageNumbers}>
+                          {[...Array(totalPages)].map((_, index) => (
+                            <button
+                              key={`page-${index}`}
+                              onClick={() => handlePageChange(index + 1)}
+                              className={`${styles.pageNumberBtn} ${
+                                currentPage === index + 1 ? styles.active : ""
+                              }`}
+                            >
+                              {index + 1}
+                            </button>
+                          ))}
+                        </div>
+
+                        <button
+                          className={styles.paginationBtn}
+                          onClick={() => handlePageChange(currentPage + 1)}
+                          disabled={currentPage === totalPages}
+                        >
+                          ▶
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
