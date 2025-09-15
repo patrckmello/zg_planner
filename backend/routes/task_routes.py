@@ -190,7 +190,7 @@ def get_tasks():
 
     # Query base
     if user.is_admin:
-        query = Task.query
+        query = Task.query.filter(Task.deleted_at.is_(None))
     else:
         # Filtros para usuários normais
         conditions = [
@@ -199,7 +199,7 @@ def get_tasks():
             text("tasks.assigned_users::jsonb @> :user_id_json").params(user_id_json=f'[{user_id}]'),
             text("tasks.collaborators::jsonb @> :user_id_json").params(user_id_json=f'[{user_id}]')
         ]
-        query = Task.query.filter(or_(*conditions))
+        query = Task.query.filter(Task.deleted_at.is_(None)).filter(or_(*conditions))
 
     # Filtro de status
     if status:
@@ -286,26 +286,28 @@ def get_task_counts():
 
     # MINHAS = somente tarefas pessoais (team_id IS NULL) atribuídas a mim
     my_tasks_count = Task.query.filter(
-        Task.team_id.is_(None),
-        or_(
-            Task.user_id == user_id,
-            text("tasks.assigned_users::jsonb @> :uid_json").params(uid_json=f'[{user_id}]')
-        )
+    Task.deleted_at.is_(None),  # << NOVO
+    Task.team_id.is_(None),
+    or_(
+        Task.user_id == user_id,
+        text("tasks.assigned_users::jsonb @> :uid_json").params(uid_json=f'[{user_id}]')
+    )
     ).count()
 
-    # EQUIPE = todas as tarefas dos times que participo (independente de serem atribuídas a mim)
     user_teams = [ut.team_id for ut in user.teams]
     if user_teams:
         team_tasks_count = Task.query.filter(
+            Task.deleted_at.is_(None),  # << NOVO
             Task.team_id.in_(user_teams)
         ).count()
     else:
         team_tasks_count = 0
 
-    # COLABORATIVAS (qualquer tarefa onde estou como collaborator)
     collaborative_tasks_count = Task.query.filter(
+        Task.deleted_at.is_(None),  # << NOVO
         text("tasks.collaborators::jsonb @> :uid_json").params(uid_json=f'[{user_id}]')
     ).count()
+
 
     return jsonify({
         "my_tasks": my_tasks_count,
@@ -503,6 +505,9 @@ def get_task(task_id):
 
     if task is None:
         return jsonify({"error": "Tarefa não encontrada"}), 404
+    
+    if task.is_deleted:
+        return jsonify({"error": "Tarefa está na lixeira"}), 410
 
     # Usar o método can_be_viewed_by do modelo
     if not task.can_be_viewed_by(user):
@@ -724,27 +729,12 @@ def update_task(task_id):
 @task_bp.route("/tasks/<int:task_id>", methods=["DELETE"])
 @jwt_required()
 def delete_task(task_id):
-    user_id = int(get_jwt_identity()) # Garante que user_id é um inteiro
+    user_id = int(get_jwt_identity())
     user = User.query.get(user_id)
     task = Task.query.get(task_id)
 
-    print(f"[DEBUG] User ID logado (int): {user_id}")
-    print(f"[DEBUG] Task ID: {task_id}")
-
-    
     if not task:
-        print(f"[DEBUG] Tarefa {task_id} não encontrada.")
         return jsonify({"error": "Tarefa não encontrada"}), 404
-
-    print(f"[DEBUG] Task user_id (type {type(task.user_id)}): {task.user_id}")
-    print(f"[DEBUG] Task assigned_by_user_id (type {type(task.assigned_by_user_id)}): {task.assigned_by_user_id}")
-    print(f"[DEBUG] User is_admin: {user.is_admin}")
-
-    # Logs detalhados para cada parte da condição can_delete
-    print(f"[DEBUG] Condição 1 (user.is_admin): {user.is_admin}")
-    print(f"[DEBUG] Condição 2 (task.user_id == user_id): {task.user_id == user_id}")
-    print(f"[DEBUG] Condição 3 (task.assigned_by_user_id == user_id): {task.assigned_by_user_id == user_id}")
-    print(f"[DEBUG] Condição 4 (task.user_id == user_id and task.assigned_by_user_id is None): {task.user_id == user_id and task.assigned_by_user_id is None}")
 
     can_delete = (
         user.is_admin or 
@@ -752,49 +742,33 @@ def delete_task(task_id):
         (task.assigned_by_user_id == user_id) or 
         (task.user_id == user_id and task.assigned_by_user_id is None)
     )
-    
-    print(f"[DEBUG] can_delete (final): {can_delete}")
-
     if not can_delete:
         is_collaborator = user_id in (task.collaborators or [])
-        print(f"[DEBUG] is_collaborator: {is_collaborator}")
         if is_collaborator:
-            print("[DEBUG] Acesso negado: Colaborador.")
             return jsonify({"error": "Colaboradores não podem excluir tarefas. Apenas o criador, responsável ou gestor podem fazer isso."}), 403
-        else:
-            print("[DEBUG] Acesso negado: Sem permissão geral.")
-            return jsonify({"error": "Você não tem permissão para excluir esta tarefa."}), 403
+        return jsonify({"error": "Você não tem permissão para excluir esta tarefa."}), 403
 
-    # Remover anexos físicos
-    if task.anexos:
-        for anexo in task.anexos:
-            if isinstance(anexo, dict) and "name" in anexo:
-                filename = anexo["name"]
-            else:
-                filename = str(anexo)
-            
-            filepath = os.path.join(current_app.config["UPLOAD_FOLDER"], filename)
-            if os.path.exists(filepath):
-                try:
-                    os.remove(filepath)
-                    print(f"[DEBUG] Arquivo removido: {filepath}")
-                except OSError as e:
-                    print(f"[DEBUG] Erro ao remover arquivo {filepath}: {e}")
+    # Se já está na lixeira, evita marcar de novo
+    if task.is_deleted:
+        return jsonify({"message": "Tarefa já está na lixeira"}), 200
 
+    # Soft delete: não removemos anexos do disco no soft delete
+    task.soft_delete(user_id=user_id)
+    task.updated_at = datetime.utcnow()
+    db.session.commit()
+
+    # Auditoria
     AuditLog.log_action(
         user_id=user_id,
-        action="DELETE",
+        action="DELETE",  # mantém ação DELETE como registro semântico
         resource_type="Task",
         resource_id=task.id,
-        description=f"Tarefa excluída: {task.title}. Atribuídos: {task.assigned_users}, Colaboradores: {task.collaborators}",
+        description=f"Tarefa movida para lixeira: {task.title}.",
         ip_address=request.remote_addr,
         user_agent=request.headers.get("User-Agent")
     )
 
-    db.session.delete(task)
-    db.session.commit()
-
-    return jsonify({"message": "Tarefa excluída com sucesso"})
+    return jsonify({"message": "Tarefa movida para a lixeira com sucesso", "id": task.id}), 200
 
 @task_bp.route("/uploads/<filename>")
 def uploaded_file(filename):
@@ -872,12 +846,15 @@ def get_task_reports():
     priority = request.args.get("priority")
     category = request.args.get("category")
 
-    query = Task.query.filter(or_(
-        Task.user_id == user_id,  # Tarefas atribuídas ao usuário
-        Task.assigned_by_user_id == user_id,  # Tarefas criadas pelo usuário
-        text("tasks.assigned_users::jsonb @> :user_id_json").params(user_id_json=f'[{user_id}]'), # Tarefas onde o usuário é um dos atribuídos
-        text("tasks.collaborators::jsonb @> :user_id_json").params(user_id_json=f'[{user_id}]') # Tarefas onde o usuário é colaborador
-    ))
+    query = Task.query.filter(
+        Task.deleted_at.is_(None),
+        or_(
+            Task.user_id == user_id,
+            Task.assigned_by_user_id == user_id,
+            text("tasks.assigned_users::jsonb @> :user_id_json").params(user_id_json=f'[{user_id}]'),
+            text("tasks.collaborators::jsonb @> :user_id_json").params(user_id_json=f'[{user_id}]')
+        )
+    )
 
     if start_date_str:
         try:
@@ -976,4 +953,67 @@ def get_task_reports():
 
     return jsonify(report_data)
 
+@task_bp.route("/tasks/<int:task_id>/restore", methods=["POST"])
+@jwt_required()
+def restore_task(task_id):
+    user_id = int(get_jwt_identity())
+    user = User.query.get(user_id)
+    task = Task.query.get(task_id)
+
+    if not task:
+        return jsonify({"error": "Tarefa não encontrada"}), 404
+
+    # Permissões: admin, responsável, quem atribuiu
+    can_restore = (
+        user.is_admin or 
+        task.user_id == user_id or 
+        (task.assigned_by_user_id == user_id)
+    )
+    if not can_restore:
+        return jsonify({"error": "Você não tem permissão para restaurar esta tarefa."}), 403
+
+    if not task.is_deleted:
+        return jsonify({"message": "Tarefa não está na lixeira"}), 200
+
+    task.restore()
+    task.updated_at = datetime.utcnow()
+    db.session.commit()
+
+    # Auditoria
+    AuditLog.log_action(
+        user_id=user_id,
+        action="RESTORE",
+        resource_type="Task",
+        resource_id=task.id,
+        description=f"Tarefa restaurada da lixeira: {task.title}.",
+        ip_address=request.remote_addr,
+        user_agent=request.headers.get("User-Agent")
+    )
+
+    return jsonify({"message": "Tarefa restaurada com sucesso", "id": task.id}), 200
+
+@task_bp.route("/tasks/trash", methods=["GET"])
+@jwt_required()
+def list_trash():
+    user_id = int(get_jwt_identity())
+    user = User.query.get(user_id)
+
+    # escopo de visibilidade igual ao GET /tasks, só que filtrando deleted_at != NULL
+    if user.is_admin:
+        query = Task.query.filter(Task.deleted_at.isnot(None))
+    else:
+        conditions = [
+            Task.user_id == user_id,
+            Task.assigned_by_user_id == user_id,
+            text("tasks.assigned_users::jsonb @> :uid_json").params(uid_json=f'[{user_id}]'),
+            text("tasks.collaborators::jsonb @> :uid_json").params(uid_json=f'[{user_id}]')
+        ]
+        query = Task.query.filter(Task.deleted_at.isnot(None)).filter(or_(*conditions))
+
+    search = request.args.get("search")
+    if search:
+        query = query.filter(Task.title.ilike(f"%{search}%"))
+
+    tasks = query.order_by(Task.deleted_at.desc()).all()
+    return jsonify([t.to_dict() for t in tasks]), 200
 
