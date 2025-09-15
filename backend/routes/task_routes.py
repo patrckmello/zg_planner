@@ -20,6 +20,158 @@ task_bp = Blueprint("tasks", __name__, url_prefix="/api")
 brazil_tz = timezone("America/Sao_Paulo")
 now_brazil = datetime.now(brazil_tz)
 
+# UTILS
+from copy import deepcopy
+import json
+
+def _truncate(v, maxlen=120):
+    if v is None:
+        return None
+    s = str(v)
+    return (s[:maxlen] + "…") if len(s) > maxlen else s
+
+def _coerce_item(x):
+    """
+    Transforma qualquer item em algo hashável/estável para comparação:
+    - dict -> id (se existir) ou JSON ordenado
+    - números -> int
+    - outros -> string
+    """
+    if isinstance(x, dict):
+        if "id" in x:
+            return x["id"]
+        return json.dumps(x, sort_keys=True, ensure_ascii=False)
+    if isinstance(x, (list, tuple, set)):
+        # representa listas de forma estável
+        return json.dumps(list(x), sort_keys=True, ensure_ascii=False)
+    # números em string que são dígitos -> int
+    s = str(x)
+    return int(s) if s.isdigit() else s
+
+def _normalize_list(values):
+    """
+    Normaliza qualquer lista heterogênea para uma lista ordenada de valores hasháveis.
+    Remove duplicatas de forma estável.
+    """
+    if not isinstance(values, list):
+        return []
+    coerced = [_coerce_item(v) for v in values]
+    # usando set para deduplicar (agora hashável), depois ordena por str para estabilidade
+    unique_sorted = sorted(set(coerced), key=lambda z: str(z))
+    return unique_sorted
+
+def _normalize_attachment_list(anexos):
+    """
+    Recebe lista de anexos (dicts ou strings) e retorna conjunto/lista estável de nomes.
+    """
+    names = []
+    for a in anexos or []:
+        if isinstance(a, dict):
+            name = a.get("name") or a.get("id") or ""
+        else:
+            name = str(a or "")
+        if name:
+            names.append(name)
+    return _normalize_list(names)
+
+def _normalize_user(obj):
+    if not isinstance(obj, dict):
+        return obj
+    base = {}
+    if "id" in obj: base["id"] = obj["id"]
+    if "name" in obj: base["name"] = obj["name"]
+    return base or obj
+
+def normalize_task_snapshot(d: dict) -> dict:
+    """
+    Reduz o snapshot da task para campos relevantes e comparáveis.
+    """
+    snap = deepcopy(d or {})
+
+    # Remover ruídos de data/derivados
+    snap.pop("created_at", None)
+    snap.pop("updated_at", None)
+
+    # Usuários aninhados -> id/name
+    if isinstance(snap.get("user"), dict):
+        snap["user"] = _normalize_user(snap["user"])
+    if isinstance(snap.get("assigned_by_user"), dict):
+        snap["assigned_by_user"] = _normalize_user(snap["assigned_by_user"])
+    if isinstance(snap.get("assigned_to_user"), dict):
+        snap["assigned_to_user"] = _normalize_user(snap["assigned_to_user"])
+
+    # Listas comuns normalizadas (podem vir como ints, strings ou dicts)
+    for key in ["tags", "lembretes", "assigned_users", "collaborators"]:
+        snap[key] = _normalize_list(snap.get(key) or [])
+
+    # Anexos -> nomes estáveis
+    if "anexos" in snap:
+        snap["anexos_names"] = _normalize_attachment_list(snap.get("anexos"))
+        snap.pop("anexos", None)
+
+    return snap
+
+def diff_snapshots(before: dict, after: dict) -> dict:
+    changes = {}
+
+    b = normalize_task_snapshot(before)
+    a = normalize_task_snapshot(after)
+
+    keys = set(b.keys()) | set(a.keys())
+
+    for k in sorted(keys):
+        bv = b.get(k)
+        av = a.get(k)
+
+        # Listas (tags, lembretes, assigned_users, collaborators, anexos_names, ou qualquer lista remanescente)
+        if isinstance(bv, list) or isinstance(av, list):
+            bnorm = _normalize_list(bv or [])
+            anorm = _normalize_list(av or [])
+            bset = set(bnorm)
+            aset = set(anorm)
+            added = sorted(list(aset - bset), key=lambda z: str(z))
+            removed = sorted(list(bset - aset), key=lambda z: str(z))
+            if added or removed:
+                changes[k] = {}
+                if added:   changes[k]["added"] = added
+                if removed: changes[k]["removed"] = removed
+            continue
+
+        # Iguais? segue
+        if bv == av:
+            continue
+
+        # Diferentes (valor simples)
+        changes[k] = {
+            "from": _truncate(bv),
+            "to": _truncate(av),
+        }
+
+    return changes
+
+
+def format_changes_for_description(changes: dict) -> str:
+    """
+    Formata mudanças em linhas legíveis.
+    """
+    if not changes:
+        return "Sem alterações relevantes."
+
+    lines = []
+    for k, v in changes.items():
+        if isinstance(v, dict) and ("added" in v or "removed" in v):
+            add = ", ".join(map(str, v.get("added", []))) if v.get("added") else ""
+            rem = ", ".join(map(str, v.get("removed", []))) if v.get("removed") else ""
+            parts = []
+            if add: parts.append(f"+ {add}")
+            if rem: parts.append(f"- {rem}")
+            lines.append(f"- {k}: " + "; ".join(parts))
+        else:
+            lines.append(f"- {k}: '{v.get('from')}' → '{v.get('to')}'")
+    return "\n".join(lines)
+
+# ROUTES
+
 @task_bp.route("/tasks", methods=["GET"])
 @jwt_required()
 def get_tasks():
@@ -132,17 +284,28 @@ def get_task_counts():
     if not user or not user.is_active:
         return jsonify({"msg": "Usuário inválido ou inativo"}), 401
 
-    # Contagem de Minhas Tarefas
-    my_tasks_count = Task.query.filter_by(user_id=user_id).count()
+    # MINHAS = somente tarefas pessoais (team_id IS NULL) atribuídas a mim
+    my_tasks_count = Task.query.filter(
+        Task.team_id.is_(None),
+        or_(
+            Task.user_id == user_id,
+            text("tasks.assigned_users::jsonb @> :uid_json").params(uid_json=f'[{user_id}]')
+        )
+    ).count()
 
-    # Contagem de Tarefas da Equipe
-    team_tasks_count = 0
+    # EQUIPE = todas as tarefas dos times que participo (independente de serem atribuídas a mim)
     user_teams = [ut.team_id for ut in user.teams]
     if user_teams:
-        team_tasks_count = Task.query.filter(Task.team_id.in_(user_teams)).count()
+        team_tasks_count = Task.query.filter(
+            Task.team_id.in_(user_teams)
+        ).count()
+    else:
+        team_tasks_count = 0
 
-    # Contagem de Tarefas Colaborativas
-    collaborative_tasks_count = Task.query.filter(text("tasks.collaborators::jsonb @> :user_id_json").params(user_id_json=f'[{user_id}]')).count()
+    # COLABORATIVAS (qualquer tarefa onde estou como collaborator)
+    collaborative_tasks_count = Task.query.filter(
+        text("tasks.collaborators::jsonb @> :uid_json").params(uid_json=f'[{user_id}]')
+    ).count()
 
     return jsonify({
         "my_tasks": my_tasks_count,
@@ -373,6 +536,11 @@ def get_task(task_id):
 @task_bp.route("/tasks/<int:task_id>", methods=["PUT"])
 @jwt_required()
 def update_task(task_id):
+    from models.audit_log_model import AuditLog
+    from sqlalchemy import desc
+
+    last = AuditLog.query.order_by(desc(AuditLog.id)).limit(5).all()
+    print([ (l.id, l.action, l.resource_type, l.resource_id, l.created_at) for l in last ])
     user_id = get_jwt_identity()
     user = User.query.get(user_id)
     task = Task.query.get(task_id)
@@ -380,14 +548,14 @@ def update_task(task_id):
     if not task:
         return jsonify({"error": "Tarefa não encontrada"}), 404
 
-    # Garantir que collaborators é uma lista de IDs
-    collaborators_ids = task.collaborators or []
+    before_state = task.to_dict()
 
-    # Permissão de edição: admin, gestor ou colaborador da task
-    if not (user.is_admin or task.can_be_assigned_by(user) or user.id in collaborators_ids):
+    can_reassign = bool(user and (user.is_admin or task.can_be_assigned_by(user)))
+    can_basic_edit = bool(user and (user.is_admin or task.user_id == user.id or task.assigned_by_user_id == user.id))
+    if not (can_basic_edit or can_reassign):
         return jsonify({"error": "Acesso negado"}), 403
 
-    # Diferenciar JSON de multipart/form-data
+    # Payload
     if request.is_json:
         data = request.get_json()
         files = []
@@ -397,7 +565,7 @@ def update_task(task_id):
     else:
         return jsonify({"error": "Content-Type inválido. Use application/json ou multipart/form-data."}), 400
 
-    # Validação de due_date
+    # due_date
     if data.get("due_date"):
         try:
             due_date = datetime.fromisoformat(data["due_date"])
@@ -409,28 +577,41 @@ def update_task(task_id):
         except ValueError:
             return jsonify({"error": "Formato inválido para due_date. Use ISO 8601."}), 400
 
-    # Atualizar campos básicos
-    if data.get("title"):
-        task.title = data["title"]
-    if data.get("description") is not None:
-        task.description = data["description"]
-    if data.get("status"):
-        task.status = data["status"]
-    if data.get("prioridade"):
-        task.prioridade = data["prioridade"]
-    if data.get("categoria"):
-        task.categoria = data["categoria"]
-    if data.get("status_inicial"):
-        task.status_inicial = data["status_inicial"]
-    if data.get("tempo_estimado"):
-        task.tempo_estimado = data["tempo_estimado"]
-    if data.get("tempo_unidade"):
-        task.tempo_unidade = data["tempo_unidade"]
-    if data.get("relacionado_a") is not None:
-        task.relacionado_a = data["relacionado_a"]
+    # Campos básicos
+    if data.get("title") is not None: task.title = data["title"]
+    if data.get("description") is not None: task.description = data["description"]
+    if data.get("status") is not None: task.status = data["status"]
+    if data.get("prioridade") is not None: task.prioridade = data["prioridade"]
+    if data.get("categoria") is not None: task.categoria = data["categoria"]
+    if data.get("status_inicial") is not None: task.status_inicial = data["status_inicial"]
+    if data.get("tempo_estimado") is not None: task.tempo_estimado = data["tempo_estimado"]
+    if data.get("tempo_unidade") is not None: task.tempo_unidade = data["tempo_unidade"]
+    if data.get("relacionado_a") is not None: task.relacionado_a = data["relacionado_a"]
 
-    # Atualizar colaboradores (apenas admin/gestor)
-    if data.get("collaborator_ids") is not None and (user.is_admin or task.can_be_assigned_by(user)):
+    # Reatribuição (só se pode e se mudou)
+    def _reassign_to(new_user_id: int):
+        nonlocal task, user_id
+        if new_user_id != task.user_id:
+            task.user_id = new_user_id
+            task.assigned_by_user_id = user_id
+
+    if can_reassign:
+        if data.get("assigned_to_user_ids") is not None:
+            try:
+                ids = json.loads(data["assigned_to_user_ids"])
+                if isinstance(ids, list) and len(ids) > 0:
+                    _reassign_to(int(ids[0]))
+            except (json.JSONDecodeError, ValueError):
+                return jsonify({"error": "assigned_to_user_ids inválido"}), 400
+        elif data.get("assigned_to_user_id") is not None:
+            try:
+                single_id = int(data["assigned_to_user_id"])
+                _reassign_to(single_id)
+            except ValueError:
+                return jsonify({"error": "assigned_to_user_id inválido"}), 400
+
+    # Colaboradores (só se pode reatribuir)
+    if data.get("collaborator_ids") is not None and can_reassign:
         try:
             collaborators = json.loads(data["collaborator_ids"])
             if isinstance(collaborators, list):
@@ -438,27 +619,8 @@ def update_task(task_id):
         except (json.JSONDecodeError, ValueError):
             return jsonify({"error": "Formato inválido para collaborator_ids."}), 400
 
-    # Atualizar atribuição (apenas admin/gestor)
-    if data.get("assigned_to_user_ids") is not None and (user.is_admin or task.can_be_assigned_by(user)):
-        try:
-            assigned_to_user_ids = json.loads(data["assigned_to_user_ids"])
-            if isinstance(assigned_to_user_ids, list) and len(assigned_to_user_ids) > 0:
-                task.user_id = assigned_to_user_ids[0]
-                task.assigned_by_user_id = user_id
-        except (json.JSONDecodeError, ValueError):
-            return jsonify({"error": "assigned_to_user_ids inválido"}), 400
-    elif data.get("assigned_to_user_id") is not None and (user.is_admin or task.can_be_assigned_by(user)):
-        try:
-            assigned_to_user_id = int(data["assigned_to_user_id"])
-            if assigned_to_user_id != task.user_id:
-                task.user_id = assigned_to_user_id
-                task.assigned_by_user_id = user_id
-        except ValueError:
-            return jsonify({"error": "assigned_to_user_id inválido"}), 400
-
-    # Processar anexos (multipart/form-data)
+    # Anexos (multipart)
     if request.content_type and request.content_type.startswith("multipart/form-data"):
-        # Arquivos existentes
         existing_files_data = data.get("existing_files")
         if existing_files_data:
             try:
@@ -467,7 +629,6 @@ def update_task(task_id):
             except (json.JSONDecodeError, ValueError):
                 pass
 
-        # Arquivos a remover
         files_to_remove_data = data.get("files_to_remove")
         if files_to_remove_data:
             try:
@@ -475,11 +636,13 @@ def update_task(task_id):
                 for filename in files_to_remove:
                     filepath = os.path.join(current_app.config["UPLOAD_FOLDER"], filename)
                     if os.path.exists(filepath):
-                        os.remove(filepath)
+                        try:
+                            os.remove(filepath)
+                        except OSError:
+                            pass
             except (json.JSONDecodeError, ValueError):
                 pass
 
-        # Adicionar novos arquivos
         if files:
             if task.anexos is None:
                 task.anexos = []
@@ -488,49 +651,74 @@ def update_task(task_id):
                     filename = secure_filename(file.filename)
                     filepath = os.path.join(current_app.config["UPLOAD_FOLDER"], filename)
                     file.save(filepath)
-                    anexo_obj = {
+                    task.anexos.append({
                         "id": filename,
                         "name": filename,
                         "size": os.path.getsize(filepath),
                         "type": file.content_type or "application/octet-stream",
                         "url": f"{request.scheme}://{request.host}/uploads/{filename}"
-                    }
-                    task.anexos.append(anexo_obj)
+                    })
 
-    # Tags e lembretes
+    # Tags/lembretes
     try:
         lembretes = json.loads(data.get("lembretes", "[]"))
-        if isinstance(lembretes, list):
-            task.lembretes = lembretes
-    except Exception:
-        pass
-
+        if isinstance(lembretes, list): task.lembretes = lembretes
+    except Exception: pass
     try:
         tags = json.loads(data.get("tags", "[]"))
-        if isinstance(tags, list):
-            task.tags = tags
-    except Exception:
-        pass
+        if isinstance(tags, list): task.tags = tags
+    except Exception: pass
 
+    # Salvar
     task.updated_at = datetime.utcnow()
-    old_task_data = task.to_dict()
-
     db.session.commit()
 
-    AuditLog.log_action(
-        user_id=user_id,
-        action="UPDATE",
-        resource_type="Task",
-        resource_id=task.id,
-        description=f"Tarefa atualizada. Antes: {old_task_data}, Depois: {task.to_dict()}",
-        ip_address=request.remote_addr,
-        user_agent=request.headers.get("User-Agent")
-    )    
+    # Auditoria (diff limpo)
+    try:
+        after_state = task.to_dict()
+        changes = diff_snapshots(before_state, after_state)
+        desc = f"Mudanças:\n{format_changes_for_description(changes)}"
 
+        created = None
+        try:
+            created = AuditLog.log_action(
+                user_id=user_id,
+                action="UPDATE",
+                resource_type="task",
+                resource_id=task.id,
+                description=desc,
+                ip_address=request.remote_addr,
+                user_agent=request.headers.get("User-Agent"),
+                before=before_state,
+                after=after_state,
+                changes=changes,
+            )
+        except TypeError:
+            created = AuditLog.log_action(
+                user_id=user_id,
+                action="UPDATE",
+                resource_type="task",
+                resource_id=task.id,
+                description=desc,
+                ip_address=request.remote_addr,
+                user_agent=request.headers.get("User-Agent"),
+            )
+
+        # Log no servidor pra confirmar criação
+        try:
+            current_app.logger.info(f"[AUDIT] UPDATE task={task.id} audit_id={getattr(created, 'id', None)}")
+        except Exception:
+            pass
+
+    except Exception:
+        current_app.logger.exception("Falha ao registrar auditoria (UPDATE)")
+
+    # Reagendar lembretes
     if task.lembretes and task.due_date:
         schedule_task_reminders_safe(task)
 
-    return jsonify(task.to_dict())
+    # (Opcional) incluir audit_log_id no retorno
+    return jsonify({**task.to_dict()})
 
 
 @task_bp.route("/tasks/<int:task_id>", methods=["DELETE"])

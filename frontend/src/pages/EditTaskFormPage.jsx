@@ -335,7 +335,7 @@ function EditTaskFormPage() {
     try {
       const formDataToSend = new FormData();
 
-      // Campos básicos
+      // —— Campos básicos
       formDataToSend.append("title", formData.title);
       formDataToSend.append("description", formData.description);
       formDataToSend.append("status", formData.status);
@@ -343,39 +343,75 @@ function EditTaskFormPage() {
       formDataToSend.append("categoria", formData.categoria);
       formDataToSend.append("relacionado_a", formData.relacionado_a);
 
-      // Data de vencimento
+      // —— Data de vencimento
       if (formData.due_date) {
         formDataToSend.append("due_date", formData.due_date);
       }
 
-      // Tempo estimado
+      // —— Tempo estimado
       if (formData.tempo_estimado) {
         formDataToSend.append("tempo_estimado", formData.tempo_estimado);
         formDataToSend.append("tempo_unidade", formData.tempo_unidade);
       }
 
-      // Arrays JSON
-      formDataToSend.append("lembretes", JSON.stringify(formData.lembretes));
-      formDataToSend.append("tags", JSON.stringify(formData.tags));
+      // —— Arrays JSON
+      formDataToSend.append(
+        "lembretes",
+        JSON.stringify(formData.lembretes || [])
+      );
+      formDataToSend.append("tags", JSON.stringify(formData.tags || []));
       formDataToSend.append(
         "collaborator_ids",
-        JSON.stringify(formData.collaborator_ids)
+        JSON.stringify(formData.collaborator_ids || [])
       );
 
-      // IDs opcionais
-      formDataToSend.append(
-        "assigned_to_user_ids",
-        JSON.stringify(formData.assigned_to_user_ids)
-      ); // Alterado para enviar array
+      // —— Só envia assigned_to_user_ids se:
+      // (a) usuário pode reatribuir (gestor/admin da equipe selecionada)
+      // (b) houve mudança real nos responsáveis
+      const canReassign = isManagerOfAnyTeam() && isManagerOfSelectedTeam();
+
+      const originalAssignees = Array.isArray(
+        originalTask?.assigned_to_user_ids
+      )
+        ? originalTask.assigned_to_user_ids.map(Number)
+        : originalTask?.user_id
+        ? [Number(originalTask.user_id)]
+        : [];
+
+      const currentAssignees = Array.isArray(formData.assigned_to_user_ids)
+        ? formData.assigned_to_user_ids.map(Number)
+        : [];
+
+      const sameArray = (a, b) => {
+        const sa = [...a].sort((x, y) => x - y);
+        const sb = [...b].sort((x, y) => x - y);
+        return JSON.stringify(sa) === JSON.stringify(sb);
+      };
+
+      const assigneesChanged = !sameArray(originalAssignees, currentAssignees);
+
+      if (canReassign && assigneesChanged) {
+        formDataToSend.append(
+          "assigned_to_user_ids",
+          JSON.stringify(currentAssignees)
+        );
+      }
+      // ⚠️ Caso NÃO possa reatribuir ou NÃO houve mudança,
+      // NÃO enviamos assigned_to_user_ids — evitando sobrescrever 'assigned_by_user_id' no backend.
+
+      // —— IDs opcionais
       if (formData.team_id) {
         formDataToSend.append("team_id", formData.team_id);
       }
 
-      // Arquivos removidos
-      formDataToSend.append("files_to_remove", JSON.stringify(removedFiles));
+      // —— Arquivos removidos
+      formDataToSend.append(
+        "files_to_remove",
+        JSON.stringify(removedFiles || [])
+      );
 
-      // Anexos existentes
-      const existingFiles = formData.anexos
+      // —— Anexos existentes
+      const existingFiles = (formData.anexos || [])
         .filter((f) => f.isExisting)
         .map((f) => ({
           id: f.id,
@@ -386,17 +422,15 @@ function EditTaskFormPage() {
         }));
       formDataToSend.append("existing_files", JSON.stringify(existingFiles));
 
-      // Anexos novos
-      formData.anexos.forEach((anexoObj) => {
+      // —— Anexos novos
+      (formData.anexos || []).forEach((anexoObj) => {
         if (anexoObj.file && !anexoObj.isExisting) {
           formDataToSend.append("new_files", anexoObj.file);
         }
       });
 
       const response = await api.put(`/tasks/${id}`, formDataToSend, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
+        headers: { "Content-Type": "multipart/form-data" },
       });
 
       console.log("Tarefa atualizada com sucesso:", response.data);

@@ -1,20 +1,20 @@
 from extensions import db
 from datetime import datetime
+import json
 
 class AuditLog(db.Model):
     __tablename__ = 'audit_logs'
 
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
-    action = db.Column(db.String(50), nullable=False)  # CREATE, UPDATE, DELETE, LOGIN, etc.
-    resource_type = db.Column(db.String(50), nullable=True)  # user, task, team, etc.
+    action = db.Column(db.String(50), nullable=False)
+    resource_type = db.Column(db.String(50), nullable=True)
     resource_id = db.Column(db.Integer, nullable=True)
     description = db.Column(db.Text, nullable=False)
-    ip_address = db.Column(db.String(45), nullable=True)  # Suporta IPv4 e IPv6
+    ip_address = db.Column(db.String(45), nullable=True)
     user_agent = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-    # Relacionamento com usuário
     user = db.relationship('User', backref='audit_logs')
 
     def to_dict(self):
@@ -32,8 +32,32 @@ class AuditLog(db.Model):
         }
 
     @staticmethod
-    def log_action(user_id, action, description, resource_type=None, resource_id=None, ip_address=None, user_agent=None):
-        """Método estático para facilitar o logging de ações"""
+    def log_action(
+        user_id,
+        action,
+        description,
+        resource_type=None,
+        resource_id=None,
+        ip_address=None,
+        user_agent=None,
+        **kwargs
+    ):
+        try:
+            before = kwargs.get('before')
+            after = kwargs.get('after')
+            changes = kwargs.get('changes')
+
+            # SE já temos 'changes' formatado no description, NÃO anexar snapshot JSON
+            if not changes and (before is not None or after is not None):
+                snapshot = {
+                    'before': before if isinstance(before, (dict, list)) else str(before),
+                    'after':  after  if isinstance(after,  (dict, list)) else str(after),
+                }
+                snap_str = json.dumps(snapshot, ensure_ascii=False)[:1000]
+                description = f"{description}\n\n[DIFF]\n{snap_str}"
+        except Exception:
+            pass
+
         log = AuditLog(
             user_id=user_id,
             action=action,
@@ -46,4 +70,3 @@ class AuditLog(db.Model):
         db.session.add(log)
         db.session.commit()
         return log
-

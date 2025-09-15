@@ -21,5 +21,6 @@ __pycache__/
 *.suo
 *.ntvs*
 *.njsproj
+.fds
 *.sln
 *.sw?
