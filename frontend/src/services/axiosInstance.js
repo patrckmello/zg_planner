@@ -115,7 +115,15 @@ function isAdminRoute(url) {
 
   // rotas que SÃO admin
   const adminRoutes = [
-    // adiciona outras rotas admin aqui
+    "/admin/backups",
+    "/admin/audit-logs",
+    "/admin/system-stats",
+    "/admin/create-backup",
+    "/admin/delete-backup",
+    "/admin/download-backup",
+    "/admin/export-audit-logs",
+    "/admin/tasks/purge-old",
+    "/admin/tasks", // cobre /admin/tasks/:id/purge
   ];
 
   // rotas que NÃO SÃO admin mesmo dentro de /users, /roles etc

@@ -50,6 +50,55 @@ function ConfigPage() {
     action: "",
     user_id: "",
   });
+  const [trashItems, setTrashItems] = useState([]);
+  const [loadingTrash, setLoadingTrash] = useState(false);
+  const [trashSearch, setTrashSearch] = useState("");
+  const [restoringId, setRestoringId] = useState(null);
+
+  const [purgingId, setPurgingId] = useState(null);
+  const [purgingAll, setPurgingAll] = useState(false);
+
+  // Purga individual
+  const purgeOne = async (id) => {
+    if (
+      !window.confirm(
+        "Excluir permanentemente esta tarefa? Esta ação não pode ser desfeita."
+      )
+    )
+      return;
+    setPurgingId(id);
+    try {
+      await api.delete(`/admin/tasks/${id}/purge`); // exige endpoint no backend
+      setTrashItems((prev) => prev.filter((t) => t.id !== id));
+      toast.success("Tarefa excluída permanentemente.");
+    } catch (err) {
+      console.error(err);
+      toast.error(
+        err.response?.data?.error || "Falha ao excluir permanentemente."
+      );
+    } finally {
+      setPurgingId(null);
+    }
+  };
+
+  // Purga em lote (+7 dias)
+  const purgeOld = async () => {
+    if (
+      !window.confirm("Esvaziar itens com mais de 7 dias? Ação irreversível.")
+    )
+      return;
+    setPurgingAll(true);
+    try {
+      const { data } = await api.post(`/admin/tasks/purge-old`, { days: 7 }); // exige endpoint no backend
+      toast.success(`Esvaziamento executado. Removidos: ${data.purged || 0}`);
+      await fetchTrash();
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.error || "Falha ao esvaziar lixeira.");
+    } finally {
+      setPurgingAll(false);
+    }
+  };
 
   useEffect(() => {
     fetchInitialData();
@@ -131,7 +180,10 @@ function ConfigPage() {
   };
 
   const handleLogout = () => {
+    localStorage.removeItem("access_token");
     localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    localStorage.removeItem("refresh_token");
     window.location.href = "/login";
   };
 
@@ -212,6 +264,35 @@ function ConfigPage() {
     } catch (error) {
       console.error("Erro ao exportar logs de auditoria:", error);
       toast.error("Erro ao exportar logs de auditoria");
+    }
+  };
+
+  const fetchTrash = async () => {
+    setLoadingTrash(true);
+    try {
+      const params = new URLSearchParams();
+      if (trashSearch) params.set("search", trashSearch);
+      const { data } = await api.get(`/tasks/trash?${params.toString()}`);
+      setTrashItems(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("Erro ao buscar lixeira:", error);
+      toast.error(error.response?.data?.error || "Erro ao carregar lixeira");
+    } finally {
+      setLoadingTrash(false);
+    }
+  };
+
+  const handleRestoreTask = async (id) => {
+    setRestoringId(id);
+    try {
+      await api.post(`/tasks/${id}/restore`);
+      setTrashItems((prev) => prev.filter((t) => t.id !== id));
+      toast.success("Tarefa restaurada!");
+    } catch (error) {
+      console.error("Erro ao restaurar tarefa:", error);
+      toast.error(error.response?.data?.error || "Não foi possível restaurar");
+    } finally {
+      setRestoringId(null);
     }
   };
 
@@ -395,6 +476,19 @@ function ConfigPage() {
                 >
                   <FileText size={18} />
                   Auditoria
+                </button>
+                <button
+                  className={`${styles.tab} ${
+                    activeTab === "trash" ? styles.active : ""
+                  }`}
+                  onClick={() => {
+                    setActiveTab("trash");
+                    // carrega a lixeira ao abrir a aba
+                    fetchTrash();
+                  }}
+                >
+                  <Trash2 size={18} />
+                  Lixeira
                 </button>
               </div>
             </div>
@@ -779,6 +873,173 @@ function ConfigPage() {
                           </div>
                         )}
                       </>
+                    )}
+                  </div>
+                </div>
+              )}
+              {activeTab === "trash" && (
+                <div className={styles.backupSection}>
+                  <div className={styles.sectionHeader}>
+                    <h2 className={styles.sectionTitle}>Lixeira</h2>
+                    <div
+                      style={{ display: "flex", gap: 8, alignItems: "center" }}
+                    >
+                      <input
+                        value={trashSearch}
+                        onChange={(e) => setTrashSearch(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && fetchTrash()}
+                        placeholder="Pesquisar na lixeira…"
+                        className={styles.filterSelect}
+                        style={{ minWidth: 240 }}
+                      />
+
+                      {/* Atualizar */}
+                      <button
+                        className={styles.refreshBtn}
+                        onClick={fetchTrash}
+                        disabled={loadingTrash}
+                        title="Atualizar"
+                      >
+                        <RefreshCw
+                          size={16}
+                          className={loadingTrash ? styles.spinning : ""}
+                        />
+                        <span className={styles.buttonText}>↻</span>
+                      </button>
+
+                      {/* Esvaziar (+7 dias) */}
+                      <button
+                        className={styles.trashActionBtn}
+                        onClick={purgeOld}
+                        disabled={
+                          purgingAll ||
+                          loadingTrash ||
+                          (trashItems?.length || 0) === 0
+                        }
+                        title="Excluir permanentemente itens com 7+ dias na lixeira"
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 6,
+                        }}
+                      >
+                        {purgingAll ? (
+                          <div className={styles.buttonSpinner}></div>
+                        ) : (
+                          <>
+                            <Trash2 size={16} />
+                            Esvaziar (+7 dias)
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className={styles.backupCard}>
+                    <div className={styles.cardHeader}>
+                      <h3 className={styles.cardTitle}>
+                        Tarefas removidas
+                        {trashItems?.length > 0 && (
+                          <span className={styles.totalCount}>
+                            {" "}
+                            ({trashItems.length})
+                          </span>
+                        )}
+                      </h3>
+                    </div>
+
+                    {loadingTrash ? (
+                      <div className={styles.loadingState}>
+                        <div className={styles.smallSpinner}></div>
+                        <span>Carregando lixeira...</span>
+                      </div>
+                    ) : (trashItems?.length || 0) === 0 ? (
+                      <div className={styles.emptyState}>
+                        <Trash2 size={48} />
+                        <h3>Nenhum item na lixeira</h3>
+                        <p>
+                          Itens excluídos aparecerão aqui para possível
+                          restauração
+                        </p>
+                      </div>
+                    ) : (
+                      <div className={styles.backupList}>
+                        {trashItems
+                          .filter((t) => {
+                            if (!trashSearch.trim()) return true;
+                            const q = trashSearch.toLowerCase();
+                            return [t.title, t.description]
+                              .filter(Boolean)
+                              .some((v) => String(v).toLowerCase().includes(q));
+                          })
+                          .map((t) => (
+                            <div key={t.id} className={styles.backupItem}>
+                              <div className={styles.backupInfo}>
+                                <div className={styles.backupName}>
+                                  <Trash2 size={18} />
+                                  <span>{t.title}</span>
+                                </div>
+                                <div className={styles.backupMeta}>
+                                  {t.deleted_at && (
+                                    <span className={styles.backupDate}>
+                                      <Clock size={14} />
+                                      {formatDate(t.deleted_at)}
+                                    </span>
+                                  )}
+                                  {t.categoria && (
+                                    <span className={styles.auditResource}>
+                                      {t.categoria}
+                                    </span>
+                                  )}
+                                  {t.prioridade && (
+                                    <span className={styles.auditResource}>
+                                      {t.prioridade}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <div className={styles.backupActions}>
+                                <button
+                                  className={styles.createBackupBtn}
+                                  onClick={() => handleRestoreTask(t.id)}
+                                  disabled={restoringId === t.id}
+                                  title="Restaurar tarefa"
+                                >
+                                  {restoringId === t.id ? (
+                                    <div className={styles.buttonSpinner}></div>
+                                  ) : (
+                                    <>
+                                      <RefreshCw size={16} />
+                                      Restaurar
+                                    </>
+                                  )}
+                                </button>
+
+                                {/* Excluir definitivamente */}
+                                <button
+                                  className={styles.trashActionBtn}
+                                  onClick={() => purgeOne(t.id)}
+                                  disabled={purgingId === t.id}
+                                  title="Excluir permanentemente"
+                                  style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: 6,
+                                  }}
+                                >
+                                  {purgingId === t.id ? (
+                                    <div className={styles.buttonSpinner}></div>
+                                  ) : (
+                                    <>
+                                      <Trash2 size={16} />
+                                      Excluir definitivamente
+                                    </>
+                                  )}
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                      </div>
                     )}
                   </div>
                 </div>

@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify, send_file
+from flask import Blueprint, request, jsonify, send_file, current_app
 from models.user_model import User
 from models.task_model import Task
 from models.backup_model import Backup
@@ -8,7 +8,7 @@ from decorators import admin_required
 from flask_jwt_extended import jwt_required, get_jwt_identity
 import os
 import subprocess
-import datetime
+from datetime import datetime, timedelta
 import csv
 import io
 from werkzeug.utils import secure_filename
@@ -287,5 +287,96 @@ def export_audit_logs():
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+    
+def _hard_delete_task(task: Task):
+    """Remove anexos do disco e apaga o registro da tarefa."""
+    try:
+        for a in task.anexos or []:
+            name = a.get("name") if isinstance(a, dict) else str(a)
+            if not name:
+                continue
+            path = os.path.join(current_app.config["UPLOAD_FOLDER"], name)
+            if os.path.exists(path):
+                try:
+                    os.remove(path)
+                except OSError:
+                    pass
+    except Exception:
+        # não aborta o purge se falhar remoção de arquivo
+        pass
+
+    db.session.delete(task)
+
+def _require_admin():
+    uid = int(get_jwt_identity())
+    user = User.query.get(uid)
+    if not user or not user.is_admin:
+        return None, (jsonify({"error": "Acesso negado (admin apenas)."}), 403)
+    return user, None
+
+@admin_bp.delete("/tasks/<int:task_id>/purge")
+@jwt_required()
+def purge_task(task_id):
+    # Apenas admin
+    user, err = _require_admin()
+    if err: return err
+
+    task = Task.query.get(task_id)
+    if not task:
+        return jsonify({"error": "Tarefa não encontrada"}), 404
+    if not task.is_deleted:
+        return jsonify({"error": "A tarefa precisa estar na lixeira (soft delete) para purge."}), 400
+
+    title = task.title
+    _hard_delete_task(task)
+    db.session.commit()
+
+    AuditLog.log_action(
+        user_id=user.id,
+        action="PURGE_TASK",
+        resource_type="Task",
+        resource_id=task_id,
+        description=f"Tarefa purgada (exclusão permanente): {title}",
+        ip_address=request.remote_addr,
+        user_agent=request.headers.get("User-Agent"),
+    )
+    return jsonify({"purged": 1, "id": task_id}), 200
+
+@admin_bp.post("/tasks/purge-old")
+@jwt_required()
+def purge_old_tasks():
+    # Apenas admin
+    user, err = _require_admin()
+    if err: return err
+
+    try:
+        body = request.get_json(silent=True) or {}
+        days = int(body.get("days", 7))
+    except (TypeError, ValueError):
+        days = 7
+
+    cutoff = datetime.utcnow() - timedelta(days=days)
+    to_purge = Task.query.filter(
+        Task.deleted_at.isnot(None),
+        Task.deleted_at < cutoff
+    ).all()
+
+    count = 0
+    for t in to_purge:
+        _hard_delete_task(t)
+        count += 1
+
+    db.session.commit()
+
+    AuditLog.log_action(
+        user_id=user.id,
+        action="PURGE_OLD_TRASH",
+        resource_type="Task",
+        resource_id=None,
+        description=f"Esvaziou lixeira > {days} dias. Removidos: {count}",
+        ip_address=request.remote_addr,
+        user_agent=request.headers.get("User-Agent"),
+    )
+    return jsonify({"purged": count, "days": days}), 200
 
 

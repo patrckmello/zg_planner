@@ -926,3 +926,28 @@
     height: 32px;
   }
 }
+
+.trashActionBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background-color: #e74c3c;
+  color: white;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 14px;
+  transition: all 0.2s ease;
+}
+
+.trashActionBtn:hover {
+  background-color: #c0392b;
+  transform: translateY(-1px);
+}
+
+.trashActionBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

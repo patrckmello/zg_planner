@@ -11,12 +11,12 @@ class Task(db.Model):
     status = db.Column(db.String(20), default='pending')
     due_date = db.Column(db.DateTime, nullable=True)
 
-    prioridade = db.Column(db.String(20))        # Alta, Média, Baixa
-    categoria = db.Column(db.String(50))         # Processo, Reunião, etc
-    status_inicial = db.Column(db.String(50))    # A fazer, Em andamento, etc
-    tempo_estimado = db.Column(db.Integer)       # número (ex: 2)
-    tempo_unidade = db.Column(db.String(10))     # 'horas' ou 'minutos'
-    relacionado_a = db.Column(db.String(200))    # texto livre
+    prioridade = db.Column(db.String(20))
+    categoria = db.Column(db.String(50))
+    status_inicial = db.Column(db.String(50))
+    tempo_estimado = db.Column(db.Integer)
+    tempo_unidade = db.Column(db.String(10))
+    relacionado_a = db.Column(db.String(200))
     lembretes = db.Column(JSON, default=list)
     tags = db.Column(JSON, default=list)
     anexos = db.Column(JSON, default=list)
@@ -28,26 +28,20 @@ class Task(db.Model):
     deleted_at = db.Column(db.DateTime, nullable=True, index=True)
     deleted_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
 
-    # Usuário responsável (executor principal)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     user = db.relationship('User', back_populates='tasks', foreign_keys=[user_id])
 
-    # Usuário que atribuiu (gestor)
     assigned_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     assigned_by_user = db.relationship('User', foreign_keys=[assigned_by_user_id])
 
-    # Usuário que moveu para lixeira
     deleted_by_user = db.relationship('User', foreign_keys=[deleted_by_user_id])
 
-    # Listas
     collaborators = db.Column(JSON, default=list)
     assigned_users = db.Column(JSON, default=list)
 
-    # Equipe relacionada
     team_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=True)
     team = db.relationship('Team', backref='tasks')
 
-    # -------- Soft delete helpers --------
     @property
     def is_deleted(self) -> bool:
         return self.deleted_at is not None
@@ -59,12 +53,10 @@ class Task(db.Model):
     def restore(self):
         self.deleted_at = None
         self.deleted_by_user_id = None
-    # -------------------------------------
 
     def to_dict(self):
         from models.user_model import User
 
-        # Buscar informações dos usuários atribuídos
         assigned_users_info = []
         if self.assigned_users:
             for uid in self.assigned_users:
@@ -77,7 +69,6 @@ class Task(db.Model):
                         "email": u.email
                     })
 
-        # Buscar informações dos colaboradores
         collaborators_info = []
         if self.collaborators:
             for uid in self.collaborators:
@@ -89,6 +80,16 @@ class Task(db.Model):
                         "username": u.username,
                         "email": u.email
                     })
+
+        # bloco compacto para o usuário que excluiu, se houver
+        deleted_by_user_info = None
+        if self.deleted_by_user:
+            deleted_by_user_info = {
+                "id": self.deleted_by_user.id,
+                "name": self.deleted_by_user.username,
+                "username": self.deleted_by_user.username,
+                "email": self.deleted_by_user.email,
+            }
 
         result = {
             "id": self.id,
@@ -102,9 +103,9 @@ class Task(db.Model):
             "tempo_estimado": self.tempo_estimado,
             "tempo_unidade": self.tempo_unidade,
             "relacionado_a": self.relacionado_a,
-            "lembretes": self.lembretes,
-            "tags": self.tags,
-            "anexos": self.anexos,
+            "lembretes": self.lembretes or [],
+            "tags": self.tags or [],
+            "anexos": self.anexos or [],
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
 
@@ -139,16 +140,15 @@ class Task(db.Model):
             "team_id": self.team_id,
             "team_name": self.team.name if self.team else None,
 
-            # Metadados da lixeira
-            "is_deleted": self.is_deleted,
+            # Metadados da lixeira (sempre presentes)
+            "is_deleted": bool(self.is_deleted),
             "deleted_at": self.deleted_at.isoformat() if self.deleted_at else None,
-            "deleted_by_user_id": self.deleted_by_user_id
+            "deleted_by_user_id": self.deleted_by_user_id,
+            "deleted_by_user": deleted_by_user_info,
         }
-
         return result
 
     def can_be_assigned_by(self, user):
-        """Verifica se um usuário pode atribuir esta tarefa."""
         if user.is_admin:
             return True
         if self.team_id:
@@ -156,7 +156,6 @@ class Task(db.Model):
         return self.user_id == user.id
 
     def can_be_viewed_by(self, user):
-        """Verifica se um usuário pode visualizar esta tarefa."""
         if user.is_admin:
             return True
         if self.user_id == user.id:
