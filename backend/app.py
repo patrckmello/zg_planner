@@ -100,5 +100,9 @@ if __name__ == '__main__':
         if os.environ.get("WERKZEUG_RUN_MAIN") == "true":
             init_reminder_scheduler(app)
             init_purge_scheduler(app)
+
+            backup_sched = init_backup_scheduler(app)
+            backup_sched.start()
+            app.logger.info("[BACKUP] Scheduler de backups iniciado.")
     app.run(debug=True, host='0.0.0.0', port=5555)
 

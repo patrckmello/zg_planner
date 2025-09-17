@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify, send_file
+from flask import Blueprint, request, jsonify, send_file, current_app  
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from decorators import admin_required
 from backup_service import BackupService
@@ -28,7 +28,7 @@ def create_backup_advanced():
             return jsonify({'error': 'Tipo de backup inválido'}), 400
         
         # Criar backup usando o serviço
-        backup_service = BackupService(app)
+        backup_service = BackupService(current_app)
         result = backup_service.create_full_backup(current_user_id, backup_type)
         
         if result['success']:
