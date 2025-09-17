@@ -28,6 +28,8 @@ from routes.admin_routes import admin_bp
 
 from purge_scheduler import init_purge_scheduler, purge_trash_once
 
+from archive_scheduler import init_archive_scheduler, stop_archive_scheduler
+
 from routes.backup_routes import backup_bp
 from backup_scheduler import init_backup_scheduler
 from reminder_scheduler import init_reminder_scheduler, stop_reminder_scheduler
@@ -79,6 +81,7 @@ import atexit
 atexit.register(stop_reminder_scheduler)
 from purge_scheduler import stop_purge_scheduler
 atexit.register(stop_purge_scheduler)
+atexit.register(stop_archive_scheduler)
 
 @app.route('/')
 def index():
@@ -100,6 +103,7 @@ if __name__ == '__main__':
         if os.environ.get("WERKZEUG_RUN_MAIN") == "true":
             init_reminder_scheduler(app)
             init_purge_scheduler(app)
+            init_archive_scheduler(app)
 
             backup_sched = init_backup_scheduler(app)
             backup_sched.start()

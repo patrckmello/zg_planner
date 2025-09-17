@@ -4,12 +4,21 @@ from sqlalchemy import JSON
 
 class Task(db.Model):
     __tablename__ = 'tasks'
-    
+
     id = db.Column(db.Integer, primary_key=True)
+
     title = db.Column(db.String(150), nullable=False)
     description = db.Column(db.Text, nullable=True)
-    status = db.Column(db.String(20), default='pending')
+
+    status = db.Column(db.String(20), default='pending', index=True)
     due_date = db.Column(db.DateTime, nullable=True)
+
+    completed_at = db.Column(db.DateTime, nullable=True, index=True)
+    archived_at  = db.Column(db.DateTime, nullable=True, index=True)
+
+    # quem arquivou (manual). Para auto-arquivo (scheduler), pode ficar None ou um "system user"
+    archived_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    archived_by_user = db.relationship('User', foreign_keys=[archived_by_user_id])
 
     prioridade = db.Column(db.String(20))
     categoria = db.Column(db.String(50))
@@ -54,6 +63,28 @@ class Task(db.Model):
         self.deleted_at = None
         self.deleted_by_user_id = None
 
+    # Helpers de status
+    def mark_done(self):
+        self.status = 'done'
+        if not self.completed_at:
+            self.completed_at = datetime.utcnow()
+        self.archived_at = None
+        self.archived_by_user_id = None
+
+    def mark_archived(self, archived_by_user_id=None):
+        self.status = 'archived'
+        now = datetime.utcnow()
+        if not self.archived_at:
+            self.archived_at = now
+        if not self.completed_at:
+            self.completed_at = now  # opcional: considerar concluída ao arquivar
+        self.archived_by_user_id = archived_by_user_id
+
+    def unarchive(self, new_status='pending'):
+        self.status = new_status
+        self.archived_at = None
+        self.archived_by_user_id = None
+
     def to_dict(self):
         from models.user_model import User
 
@@ -81,7 +112,6 @@ class Task(db.Model):
                         "email": u.email
                     })
 
-        # bloco compacto para o usuário que excluiu, se houver
         deleted_by_user_info = None
         if self.deleted_by_user:
             deleted_by_user_info = {
@@ -91,12 +121,27 @@ class Task(db.Model):
                 "email": self.deleted_by_user.email,
             }
 
-        result = {
+        archived_by_user_info = None
+        if self.archived_by_user:
+            archived_by_user_info = {
+                "id": self.archived_by_user.id,
+                "name": self.archived_by_user.username,
+                "username": self.archived_by_user.username,
+                "email": self.archived_by_user.email,
+            }
+
+        return {
             "id": self.id,
             "title": self.title,
             "description": self.description,
             "status": self.status,
             "due_date": self.due_date.isoformat() if self.due_date else None,
+
+            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "archived_at":  self.archived_at.isoformat() if self.archived_at else None,
+            "archived_by_user_id": self.archived_by_user_id,
+            "archived_by_user": archived_by_user_info,
+
             "prioridade": self.prioridade,
             "categoria": self.categoria,
             "status_inicial": self.status_inicial,
@@ -106,6 +151,7 @@ class Task(db.Model):
             "lembretes": self.lembretes or [],
             "tags": self.tags or [],
             "anexos": self.anexos or [],
+
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
 
@@ -140,13 +186,11 @@ class Task(db.Model):
             "team_id": self.team_id,
             "team_name": self.team.name if self.team else None,
 
-            # Metadados da lixeira (sempre presentes)
             "is_deleted": bool(self.is_deleted),
             "deleted_at": self.deleted_at.isoformat() if self.deleted_at else None,
             "deleted_by_user_id": self.deleted_by_user_id,
             "deleted_by_user": deleted_by_user_info,
         }
-        return result
 
     def can_be_assigned_by(self, user):
         if user.is_admin:

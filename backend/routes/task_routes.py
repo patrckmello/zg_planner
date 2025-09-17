@@ -202,8 +202,9 @@ def get_tasks():
         query = Task.query.filter(Task.deleted_at.is_(None)).filter(or_(*conditions))
 
     # Filtro de status
+    VALID_STATUSES = {"pending", "in_progress", "done", "cancelled", "archived"}
     if status:
-        if status not in ["pending", "done", "in_progress", "cancelled"]:
+        if status not in VALID_STATUSES:
             return jsonify({"error": "Status inválido para filtro."}), 400
         query = query.filter(Task.status == status)
 
@@ -284,30 +285,32 @@ def get_task_counts():
     if not user or not user.is_active:
         return jsonify({"msg": "Usuário inválido ou inativo"}), 401
 
-    # MINHAS = somente tarefas pessoais (team_id IS NULL) atribuídas a mim
     my_tasks_count = Task.query.filter(
-    Task.deleted_at.is_(None),  # << NOVO
-    Task.team_id.is_(None),
-    or_(
-        Task.user_id == user_id,
-        text("tasks.assigned_users::jsonb @> :uid_json").params(uid_json=f'[{user_id}]')
-    )
+        Task.deleted_at.is_(None),
+        Task.status != 'archived', 
+        Task.team_id.is_(None),
+        or_(
+            Task.user_id == user_id,
+            text("tasks.assigned_users::jsonb @> :uid_json").params(uid_json=f'[{user_id}]')
+        )
     ).count()
 
+    # Tarefas por equipes do usuário
     user_teams = [ut.team_id for ut in user.teams]
     if user_teams:
         team_tasks_count = Task.query.filter(
-            Task.deleted_at.is_(None),  # << NOVO
+            Task.deleted_at.is_(None),
+            Task.status != 'archived',  
             Task.team_id.in_(user_teams)
         ).count()
     else:
         team_tasks_count = 0
 
     collaborative_tasks_count = Task.query.filter(
-        Task.deleted_at.is_(None),  # << NOVO
+        Task.deleted_at.is_(None),
+        Task.status != 'archived',   
         text("tasks.collaborators::jsonb @> :uid_json").params(uid_json=f'[{user_id}]')
     ).count()
-
 
     return jsonify({
         "my_tasks": my_tasks_count,
@@ -541,11 +544,22 @@ def get_task(task_id):
 @task_bp.route("/tasks/<int:task_id>", methods=["PUT"])
 @jwt_required()
 def update_task(task_id):
+    """
+    Atualiza tarefa mantendo coerência entre status, completed_at e archived_at.
+    Observação: quaisquer valores enviados de completed_at/archived_at no payload são ignorados.
+    """
     from models.audit_log_model import AuditLog
     from sqlalchemy import desc
+    from werkzeug.utils import secure_filename
+    import os
 
+    # (debug) últimos logs
     last = AuditLog.query.order_by(desc(AuditLog.id)).limit(5).all()
-    print([ (l.id, l.action, l.resource_type, l.resource_id, l.created_at) for l in last ])
+    try:
+        print([(l.id, l.action, l.resource_type, l.resource_id, l.created_at) for l in last])
+    except Exception:
+        pass
+
     user_id = get_jwt_identity()
     user = User.query.get(user_id)
     task = Task.query.get(task_id)
@@ -583,15 +597,66 @@ def update_task(task_id):
             return jsonify({"error": "Formato inválido para due_date. Use ISO 8601."}), 400
 
     # Campos básicos
-    if data.get("title") is not None: task.title = data["title"]
-    if data.get("description") is not None: task.description = data["description"]
-    if data.get("status") is not None: task.status = data["status"]
-    if data.get("prioridade") is not None: task.prioridade = data["prioridade"]
-    if data.get("categoria") is not None: task.categoria = data["categoria"]
-    if data.get("status_inicial") is not None: task.status_inicial = data["status_inicial"]
-    if data.get("tempo_estimado") is not None: task.tempo_estimado = data["tempo_estimado"]
-    if data.get("tempo_unidade") is not None: task.tempo_unidade = data["tempo_unidade"]
-    if data.get("relacionado_a") is not None: task.relacionado_a = data["relacionado_a"]
+    if data.get("title") is not None:
+        task.title = data["title"]
+    if data.get("description") is not None:
+        task.description = data["description"]
+    if data.get("prioridade") is not None:
+        task.prioridade = data["prioridade"]
+    if data.get("categoria") is not None:
+        task.categoria = data["categoria"]
+    if data.get("status_inicial") is not None:
+        task.status_inicial = data["status_inicial"]
+    if data.get("tempo_estimado") is not None:
+        task.tempo_estimado = data["tempo_estimado"]
+    if data.get("tempo_unidade") is not None:
+        task.tempo_unidade = data["tempo_unidade"]
+    if data.get("relacionado_a") is not None:
+        task.relacionado_a = data["relacionado_a"]
+
+    # --- Status & timestamps coerentes ---
+    ALLOWED_STATUSES = {"pending", "in_progress", "done", "cancelled", "archived"}
+    prev_status = task.status
+    if "status" in data:
+        new_status = str(data["status"]).strip()
+
+        if new_status not in ALLOWED_STATUSES:
+            return jsonify({"error": "Status inválido."}), 400
+
+        # (Opcional) regra: só permitir arquivar se já estiver done
+        # if new_status == "archived" and prev_status != "done":
+        #     return jsonify({"error": "Só é possível arquivar tarefas concluídas."}), 400
+
+        task.status = new_status
+        now = datetime.utcnow()
+
+        # completed_at
+        if new_status == "done" and prev_status != "done":
+            if not getattr(task, "completed_at", None):
+                task.completed_at = now
+            # ao concluir, retirar eventual arquivamento
+            task.archived_at = None
+            task.archived_by_user_id = None
+
+        elif prev_status == "done" and new_status != "done":
+            # deixou de estar concluída -> limpa completed_at
+            task.completed_at = None
+            # se estava arquivada e saiu de done para outro status (não-arquivado), limpe arquivamento
+            if new_status != "archived":
+                task.archived_at = None
+                task.archived_by_user_id = None
+
+        # archived_at / archived_by_user_id
+        if new_status == "archived" and prev_status != "archived":
+            task.archived_at = now
+            task.archived_by_user_id = user_id  # marca quem arquivou manualmente
+            # Se não estava concluída, você pode decidir concluir automaticamente, ou não.
+            # Ex.: concluir automaticamente ao arquivar:
+            if not task.completed_at:
+                task.completed_at = now
+        elif prev_status == "archived" and new_status != "archived":
+            task.archived_at = None
+            task.archived_by_user_id = None
 
     # Reatribuição (só se pode e se mudou)
     def _reassign_to(new_user_id: int):
@@ -667,12 +732,16 @@ def update_task(task_id):
     # Tags/lembretes
     try:
         lembretes = json.loads(data.get("lembretes", "[]"))
-        if isinstance(lembretes, list): task.lembretes = lembretes
-    except Exception: pass
+        if isinstance(lembretes, list):
+            task.lembretes = lembretes
+    except Exception:
+        pass
     try:
         tags = json.loads(data.get("tags", "[]"))
-        if isinstance(tags, list): task.tags = tags
-    except Exception: pass
+        if isinstance(tags, list):
+            task.tags = tags
+    except Exception:
+        pass
 
     # Salvar
     task.updated_at = datetime.utcnow()
@@ -708,8 +777,6 @@ def update_task(task_id):
                 ip_address=request.remote_addr,
                 user_agent=request.headers.get("User-Agent"),
             )
-
-        # Log no servidor pra confirmar criação
         try:
             current_app.logger.info(f"[AUDIT] UPDATE task={task.id} audit_id={getattr(created, 'id', None)}")
         except Exception:
@@ -718,12 +785,11 @@ def update_task(task_id):
     except Exception:
         current_app.logger.exception("Falha ao registrar auditoria (UPDATE)")
 
-    # Reagendar lembretes
+    # Reagendar lembretes (apenas se ainda houver due_date)
     if task.lembretes and task.due_date:
         schedule_task_reminders_safe(task)
 
-    # (Opcional) incluir audit_log_id no retorno
-    return jsonify({**task.to_dict()})
+    return jsonify(task.to_dict())
 
 
 @task_bp.route("/tasks/<int:task_id>", methods=["DELETE"])
@@ -1017,3 +1083,32 @@ def list_trash():
     tasks = query.order_by(Task.deleted_at.desc()).all()
     return jsonify([t.to_dict() for t in tasks]), 200
 
+@task_bp.route("/tasks/<int:task_id>/unarchive", methods=["POST"])
+@jwt_required()
+def unarchive_task(task_id):
+    user_id = int(get_jwt_identity())
+    from models.user_model import User
+    user = User.query.get(user_id)
+    task = Task.query.get(task_id)
+
+    if not task:
+        return jsonify({"error": "Tarefa não encontrada"}), 404
+    if not task.can_be_viewed_by(user):
+        return jsonify({"error": "Acesso negado"}), 403
+
+    task.unarchive(new_status="pending")
+    task.updated_at = datetime.utcnow()
+    db.session.commit()
+
+    from models.audit_log_model import AuditLog
+    AuditLog.log_action(
+        user_id=user_id,
+        action="UNARCHIVE",
+        resource_type="Task",
+        resource_id=task.id,
+        description=f"Tarefa desarquivada: {task.title}.",
+        ip_address=request.remote_addr,
+        user_agent=request.headers.get("User-Agent")
+    )
+
+    return jsonify(task.to_dict()), 200

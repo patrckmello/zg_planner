@@ -36,7 +36,8 @@ const KanbanBoard = ({ tasks, onTaskUpdate, viewMode = 'status' }) => {
           pending: tasks.filter(task => task.status === 'pending'),
           in_progress: tasks.filter(task => task.status === 'in_progress'),
           done: tasks.filter(task => task.status === 'done'),
-          cancelled: tasks.filter(task => task.status === 'cancelled')
+          cancelled: tasks.filter(task => task.status === 'cancelled'),
+          archived: tasks.filter(t => t.status === 'archived'),
         };
       case 'priority':
         return {
@@ -80,7 +81,8 @@ const KanbanBoard = ({ tasks, onTaskUpdate, viewMode = 'status' }) => {
           pending: { title: 'Pendentes', icon: <FiClock />, color: '#95a5a6' },
           in_progress: { title: 'Em Andamento', icon: <FiRotateCw />, color: '#3498db' },
           done: { title: 'Concluídas', icon: <FiCheck />, color: '#27ae60' },
-          cancelled: { title: 'Canceladas', icon: <FiX />, color: '#e74c3c' }
+          cancelled: { title: 'Canceladas', icon: <FiX />, color: '#e74c3c' },
+          archived:   { title: 'Arquivadas',    icon: <FiClipboard />,color: '#6b7280' }
         };
       case 'priority':
         return {
