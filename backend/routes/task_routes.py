@@ -186,29 +186,33 @@ def get_tasks():
     due_after = request.args.get("due_after")
     search = request.args.get("search")
     assigned_by_user_id = request.args.get("assigned_by_user_id")
-    collaborator_id = request.args.get("collaborator_id")  # Para filtro de colaborador
+    collaborator_id = request.args.get("collaborator_id")
+    include_archived = str(request.args.get("include_archived", "false")).lower() in ("1", "true", "yes")
 
-    # Query base
+    # base scope
     if user.is_admin:
         query = Task.query.filter(Task.deleted_at.is_(None))
     else:
-        # Filtros para usuários normais
         conditions = [
-            Task.user_id == user_id,  # tarefas próprias
-            Task.assigned_by_user_id == user_id,  # tarefas que ele criou
-            text("tasks.assigned_users::jsonb @> :user_id_json").params(user_id_json=f'[{user_id}]'),
-            text("tasks.collaborators::jsonb @> :user_id_json").params(user_id_json=f'[{user_id}]')
+            Task.user_id == user_id,
+            Task.assigned_by_user_id == user_id,
+            text("tasks.assigned_users::jsonb @> :uid_json").params(uid_json=f'[{user_id}]'),
+            text("tasks.collaborators::jsonb @> :uid_json").params(uid_json=f'[{user_id}]')
         ]
         query = Task.query.filter(Task.deleted_at.is_(None)).filter(or_(*conditions))
 
-    # Filtro de status
+    # status filter
     VALID_STATUSES = {"pending", "in_progress", "done", "cancelled", "archived"}
     if status:
         if status not in VALID_STATUSES:
             return jsonify({"error": "Status inválido para filtro."}), 400
         query = query.filter(Task.status == status)
+    else:
+        # <- NOVO: por padrão NÃO trazer arquivadas
+        if not include_archived:
+            query = query.filter(Task.status != 'archived')
 
-    # Filtro de datas
+    # dates
     if due_before:
         try:
             due_before_date = datetime.fromisoformat(due_before)
@@ -223,11 +227,10 @@ def get_tasks():
         except ValueError:
             return jsonify({"error": "Formato inválido para due_after. Use ISO 8601."}), 400
 
-    # Filtro de busca
+    # search / assigned_by / collaborator
     if search:
         query = query.filter(Task.title.ilike(f"%{search}%"))
 
-    # Filtro de quem atribuiu
     if assigned_by_user_id:
         try:
             assigned_by_user_id = int(assigned_by_user_id)
@@ -235,22 +238,21 @@ def get_tasks():
         except ValueError:
             return jsonify({"error": "assigned_by_user_id inválido."}), 400
 
-    # Filtro de colaborador específico
     if collaborator_id:
         try:
             collaborator_id = int(collaborator_id)
-            query = query.filter(text("tasks.collaborators::jsonb @> :collab_id_json").params(collab_id_json=f'[{collaborator_id}]'))
+            query = query.filter(
+                text("tasks.collaborators::jsonb @> :collab_id_json").params(collab_id_json=f'[{collaborator_id}]')
+            )
         except ValueError:
             return jsonify({"error": "collaborator_id inválido."}), 400
 
     tasks = query.all()
 
-    # Enriquecer dados dos anexos com URLs completas
+    # enrich anexos
     tasks_data = []
     for task in tasks:
         task_dict = task.to_dict()
-
-        # Garantir que assigned_users e collaborators sejam sempre números
         task_dict["assigned_users"] = [int(uid) for uid in task_dict.get("assigned_users", [])]
         task_dict["collaborators"] = [int(uid) for uid in task_dict.get("collaborators", [])]
 
@@ -258,18 +260,18 @@ def get_tasks():
             anexos_enriched = []
             for anexo in task_dict["anexos"]:
                 if isinstance(anexo, str):
-                    anexo_obj = {
+                    anexos_enriched.append({
                         "id": anexo,
                         "name": anexo,
                         "url": f"{request.scheme}://{request.host}/uploads/{anexo}",
                         "size": 0,
                         "type": "application/octet-stream"
-                    }
+                    })
                 else:
-                    anexo_obj = anexo.copy()
-                    if "url" not in anexo_obj:
-                        anexo_obj["url"] = f"{request.scheme}://{request.host}/uploads/{anexo_obj.get('name', '')}"
-                anexos_enriched.append(anexo_obj)
+                    a = anexo.copy()
+                    if "url" not in a:
+                        a["url"] = f"{request.scheme}://{request.host}/uploads/{a.get('name', '')}"
+                    anexos_enriched.append(a)
             task_dict["anexos"] = anexos_enriched
 
         tasks_data.append(task_dict)
@@ -893,9 +895,6 @@ def get_available_collaborators():
     
     return jsonify(collaborators)
 
-
-
-
 @task_bp.route("/tasks/reports", methods=["GET"])
 @jwt_required()
 def get_task_reports():
@@ -905,12 +904,12 @@ def get_task_reports():
     if not user or not user.is_active:
         return jsonify({"msg": "Usuário inválido ou inativo"}), 401
 
-    # Parâmetros de filtro
     start_date_str = request.args.get("start_date")
     end_date_str = request.args.get("end_date")
     status = request.args.get("status")
     priority = request.args.get("priority")
     category = request.args.get("category")
+    active_only = str(request.args.get("active_only", "true")).lower() in ("1","true","yes")
 
     query = Task.query.filter(
         Task.deleted_at.is_(None),
@@ -921,6 +920,9 @@ def get_task_reports():
             text("tasks.collaborators::jsonb @> :user_id_json").params(user_id_json=f'[{user_id}]')
         )
     )
+
+    if active_only:
+        query = query.filter(Task.status != 'archived')
 
     if start_date_str:
         try:
@@ -938,15 +940,12 @@ def get_task_reports():
 
     if status:
         query = query.filter(Task.status == status)
-
     if priority:
         query = query.filter(Task.prioridade == priority)
-
     if category:
         query = query.filter(Task.categoria == category)
 
     tasks = query.all()
-
     # Agregação de dados para o relatório
     report_data = {
         "total_tasks": len(tasks),
@@ -1112,3 +1111,87 @@ def unarchive_task(task_id):
     )
 
     return jsonify(task.to_dict()), 200
+
+@task_bp.route("/tasks/archived", methods=["GET"])
+@jwt_required()
+def list_archived_tasks_paginated():
+    """
+    Retorna tarefas arquivadas com paginação, sem quebrar o /tasks atual.
+    Usar quando a coluna 'Arquivadas' for expandida.
+    """
+    user_id = int(get_jwt_identity())
+    user = User.query.get(user_id)
+    if not user or not user.is_active:
+        return jsonify({"msg": "Usuário inválido ou inativo"}), 401
+
+    # paginação
+    try:
+        page = int(request.args.get("page", 1))
+        page_size = int(request.args.get("page_size", 50))
+        page = 1 if page < 1 else page
+        page_size = max(1, min(page_size, 200))  # limite superior pra não pesar
+    except ValueError:
+        return jsonify({"error": "Parâmetros de paginação inválidos."}), 400
+
+    search = request.args.get("search")
+
+    # escopo de visibilidade (mesmo critério do /tasks)
+    if user.is_admin:
+        query = Task.query.filter(
+            Task.deleted_at.is_(None),
+            Task.status == 'archived'
+        )
+    else:
+        conditions = [
+            Task.user_id == user_id,
+            Task.assigned_by_user_id == user_id,
+            text("tasks.assigned_users::jsonb @> :uid_json").params(uid_json=f'[{user_id}]'),
+            text("tasks.collaborators::jsonb @> :uid_json").params(uid_json=f'[{user_id}]')
+        ]
+        query = Task.query.filter(
+            Task.deleted_at.is_(None),
+            Task.status == 'archived'
+        ).filter(or_(*conditions))
+
+    if search:
+        query = query.filter(Task.title.ilike(f"%{search}%"))
+
+    # total pra paginação
+    total = query.count()
+
+    # ordene por mais recente arquivada primeiro (ou o que fizer sentido pra você)
+    items = (query
+             .order_by(Task.archived_at.desc().nullslast(), Task.updated_at.desc())
+             .offset((page - 1) * page_size)
+             .limit(page_size)
+             .all())
+
+    # enriquecer anexos (igual ao /tasks)
+    payload = []
+    for task in items:
+        td = task.to_dict()
+        if td.get("anexos"):
+            anexos_enriched = []
+            for anexo in td["anexos"]:
+                if isinstance(anexo, str):
+                    anexos_enriched.append({
+                        "id": anexo,
+                        "name": anexo,
+                        "url": f"{request.scheme}://{request.host}/uploads/{anexo}",
+                        "size": 0,
+                        "type": "application/octet-stream"
+                    })
+                else:
+                    a = anexo.copy()
+                    if "url" not in a:
+                        a["url"] = f"{request.scheme}://{request.host}/uploads/{a.get('name','')}"
+                    anexos_enriched.append(a)
+            td["anexos"] = anexos_enriched
+        payload.append(td)
+
+    return jsonify({
+        "items": payload,
+        "page": page,
+        "page_size": page_size,
+        "total": total
+    }), 200

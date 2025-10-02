@@ -49,7 +49,7 @@ function Login() {
     }
 
     try {
-      const res = await axios.post('http://10.1.203.53:5555/api/login', { email, password });
+      const res = await axios.post('http://10.1.243.120:5555/api/login', { email, password });
 
       localStorage.setItem('access_token', res.data.access_token);
       localStorage.setItem('refresh_token', res.data.refresh_token);

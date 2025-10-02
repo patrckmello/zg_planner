@@ -30,7 +30,6 @@ function TasksPage() {
 
     switch (tab) {
       case "minhas":
-        // Tarefas onde o usuário é responsável E que ele mesmo criou (não foram atribuídas por outros)
         return allTasks.filter(
           (task) =>
             task.user_id === user.id &&
@@ -38,8 +37,6 @@ function TasksPage() {
               task.assigned_by_user_id === user.id)
         );
       case "equipe":
-        // Tarefas que têm team_id (tarefas de equipe) OU tarefas que o usuário atribuiu para outros
-        // EXCLUIR tarefas onde o usuário é apenas colaborador
         return allTasks.filter(
           (task) =>
             (task.team_id !== null ||
@@ -53,7 +50,6 @@ function TasksPage() {
             )
         );
       case "colaborativas":
-        // Tarefas onde o usuário está na lista de colaboradores
         return allTasks.filter(
           (task) => task.collaborators && task.collaborators.includes(user.id)
         );
@@ -67,16 +63,13 @@ function TasksPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Buscar dados do usuário atual
         const userResponse = await api.get("/users/me");
         setCurrentUser(userResponse.data);
 
-        // Buscar tarefas
+        // ⚠️ continua sem arquivadas para o primeiro load ficar leve
         const tasksResponse = await api.get("/tasks");
-        console.log("Tarefas recebidas:", tasksResponse.data);
         setTasks(tasksResponse.data);
 
-        // Buscar contadores de tarefas
         const countsResponse = await api.get("/tasks/counts");
         setTaskCounts(countsResponse.data);
       } catch (error) {
@@ -93,29 +86,19 @@ function TasksPage() {
     fetchData();
 
     const handleResize = () => {
-      if (window.innerWidth <= 768) {
-        setSidebarOpen(false);
-      }
+      if (window.innerWidth <= 768) setSidebarOpen(false);
     };
 
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  // Salvar preferências no localStorage
-  useEffect(() => {
-    localStorage.setItem("tasksActiveTab", activeTab);
-  }, [activeTab]);
-
-  useEffect(() => {
-    localStorage.setItem("tasksViewMode", viewMode);
-  }, [viewMode]);
-
-  // Carregar preferências do localStorage
+  // preferências
+  useEffect(() => localStorage.setItem("tasksActiveTab", activeTab), [activeTab]);
+  useEffect(() => localStorage.setItem("tasksViewMode", viewMode), [viewMode]);
   useEffect(() => {
     const savedTab = localStorage.getItem("tasksActiveTab");
     const savedViewMode = localStorage.getItem("tasksViewMode");
-
     if (savedTab) setActiveTab(savedTab);
     if (savedViewMode) setViewMode(savedViewMode);
   }, []);
@@ -131,33 +114,19 @@ function TasksPage() {
     }
   };
 
-  const toggleSidebar = () => {
-    setSidebarOpen(!sidebarOpen);
-  };
+  const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
 
   const handleTaskUpdate = (taskId, updateData) => {
-    // Se a tarefa foi excluída, removê-la da lista
     if (updateData.deleted) {
-      setTasks((prevTasks) => prevTasks.filter((task) => task.id !== taskId));
+      setTasks((prev) => prev.filter((t) => t.id !== taskId));
     } else {
-      // Caso contrário, atualizar a tarefa
-      setTasks((prevTasks) =>
-        prevTasks.map((task) =>
-          task.id === taskId ? { ...task, ...updateData } : task
-        )
-      );
+      setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, ...updateData } : t)));
     }
-    // Após qualquer atualização, re-fetch os contadores
-    api.get("/tasks/counts").then((response) => setTaskCounts(response.data));
+    api.get("/tasks/counts").then((res) => setTaskCounts(res.data));
   };
 
-  const handleTabChange = (newTab) => {
-    setActiveTab(newTab);
-  };
-
-  const handleViewModeChange = (newViewMode) => {
-    setViewMode(newViewMode);
-  };
+  const handleTabChange = (newTab) => setActiveTab(newTab);
+  const handleViewModeChange = (newViewMode) => setViewMode(newViewMode);
 
   if (loading) {
     return (
@@ -176,7 +145,6 @@ function TasksPage() {
 
         <main className={styles.contentArea}>
           <div className={styles.tasksWrapper}>
-            {/* Header da página */}
             <div className={styles.pageHeader}>
               <div className={styles.headerContent}>
                 <h1 className={styles.pageTitle}>Minhas Tarefas</h1>
@@ -196,36 +164,28 @@ function TasksPage() {
               </div>
             </div>
 
-            {/* Sistema de abas */}
             <TaskTabs
               activeTab={activeTab}
               onTabChange={handleTabChange}
               taskCounts={taskCounts}
             />
 
-            {/* Seletor de modo de visualização */}
             <ViewModeSelector
               viewMode={viewMode}
               onViewModeChange={handleViewModeChange}
             />
 
-            {/* Kanban Board */}
             <div className={styles.kanbanContainer}>
               {filteredTasks.length === 0 ? (
                 <div className={styles.emptyState}>
                   <div className={styles.emptyIcon}>
                     <FiClipboard />
                   </div>
-                  <h3 className={styles.emptyTitle}>
-                    Nenhuma tarefa encontrada
-                  </h3>{" "}
+                  <h3 className={styles.emptyTitle}>Nenhuma tarefa encontrada</h3>
                   <p className={styles.emptyDescription}>
-                    {activeTab === "minhas" &&
-                      "Você ainda não criou nenhuma tarefa."}
-                    {activeTab === "equipe" &&
-                      "Não há tarefas atribuídas à sua equipe."}
-                    {activeTab === "colaborativas" &&
-                      "Você não está colaborando em nenhuma tarefa."}
+                    {activeTab === "minhas" && "Você ainda não criou nenhuma tarefa."}
+                    {activeTab === "equipe" && "Não há tarefas atribuídas à sua equipe."}
+                    {activeTab === "colaborativas" && "Você não está colaborando em nenhuma tarefa."}
                   </p>
                   <button
                     className={styles.emptyAction}
@@ -241,6 +201,7 @@ function TasksPage() {
                   onTaskUpdate={handleTaskUpdate}
                   viewMode={viewMode}
                   activeTab={activeTab}
+                  currentUser={currentUser}
                 />
               )}
             </div>

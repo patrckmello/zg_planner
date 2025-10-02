@@ -721,3 +721,36 @@
     text-align: center;
   }
 }
+
+.toggleWrapper {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+/* Container dos botões */
+.toggleGroup {
+  display: flex;
+  gap: 10px; /* espaço entre os botões */
+}
+
+/* Estilo dos botões */
+.toggleBtn {
+  background-color: #f3f4f6;
+  color: #374151;
+  padding: 10px 16px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.toggleBtn:hover {
+  background-color: #e5e7eb;
+}
+
+.toggleBtn.active {
+  background-color: #10b981;
+  border-color: #059669;
+  color: white;
+}
