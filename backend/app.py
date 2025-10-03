@@ -19,7 +19,7 @@ from models.task_model import Task
 from models.comment_model import Comment
 from models.backup_model import Backup
 from models.audit_log_model import AuditLog
-from models.notification_outbox_model import NotificationOutbox
+from models.notification_outbox_model import NotificationOutbox  # ADD
 
 # Blueprints
 from routes.auth_routes import auth_bp
@@ -30,7 +30,8 @@ from routes.role_routes import role_bp
 from routes.comment_routes import comment_bp
 from routes.admin_routes import admin_bp
 from routes.backup_routes import backup_bp
-from routes.debug_routes import debug_bp
+from routes.debug_routes import debug_bp  # ADD
+from routes.archive_debug_routes import archive_debug_bp
 
 # Schedulers
 from mailer_scheduler import init_mailer_scheduler, stop_mailer_scheduler
@@ -97,6 +98,7 @@ app.register_blueprint(comment_bp)
 app.register_blueprint(admin_bp)
 app.register_blueprint(backup_bp)
 app.register_blueprint(debug_bp)
+app.register_blueprint(archive_debug_bp)
 
 from werkzeug.local import LocalProxy
 
@@ -122,6 +124,7 @@ def _start_schedulers_once():
     backup_sched.start()
     app.logger.info("[BACKUP] Scheduler de backups iniciado.")
 
+# ---- Encerrar schedulers no shutdown ----
 atexit.register(stop_reminder_scheduler)
 atexit.register(stop_purge_scheduler)
 atexit.register(stop_archive_scheduler)

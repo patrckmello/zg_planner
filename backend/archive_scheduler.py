@@ -1,39 +1,68 @@
-# archive_scheduler.py
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
 from flask import current_app
+from sqlalchemy import and_
 from extensions import db
 from models.task_model import Task
 from models.audit_log_model import AuditLog
 
 archive_scheduler = None
 
+ARCHIVE_STATUSES = {"done", "completed", "concluida", "concluded"}
+
+def _utcnow_naive():
+
+    return datetime.utcnow()
+
 def archive_done_tasks_once(app, days=7):
+
     with app.app_context():
-        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
-        candidates = Task.query.filter(
-            Task.deleted_at.is_(None),
-            Task.status == 'done',
-            Task.completed_at.isnot(None),
-            Task.completed_at < cutoff
-        ).all()
+        cutoff = _utcnow_naive() - timedelta(days=days)
+
+        try:
+            q = Task.query.filter(
+                Task.deleted_at.is_(None),
+                Task.completed_at.isnot(None),
+                Task.completed_at < cutoff,
+                Task.status.in_(list(ARCHIVE_STATUSES)),
+            )
+        except Exception:
+            q = Task.query.filter(
+                Task.deleted_at.is_(None),
+                Task.completed_at.isnot(None),
+                Task.completed_at < cutoff,
+                Task.status == "done",
+            )
+
+        candidates = q.all()
+        current_app.logger.info(
+            f"[ARCHIVE] Cutoff={cutoff.isoformat()} | candidatos={len(candidates)}"
+        )
 
         count = 0
         for t in candidates:
-            t.mark_archived()
+            if hasattr(t, "mark_archived") and callable(getattr(t, "mark_archived")):
+                t.mark_archived()
+            else:
+                # fallback: marca como arquivada diretamente
+                setattr(t, "archived_at", _utcnow_naive())
+                setattr(t, "archived_by_user_id", None)
+
             try:
                 AuditLog.log_action(
                     user_id=None,
                     action="ARCHIVE",
                     resource_type="Task",
                     resource_id=t.id,
-                    description=f"Arquivamento automático (>{days} dias concluída): {t.title}",
+                    description=f"Arquivamento automático (> {days} dias concluída): {t.title}",
                 )
             except Exception:
                 current_app.logger.exception("Falha ao registrar auditoria (ARCHIVE auto)")
             count += 1
+
         if count:
             db.session.commit()
+
         current_app.logger.info(f"[ARCHIVE] Arquivadas {count} tarefa(s).")
         return count
 
@@ -50,9 +79,11 @@ def init_archive_scheduler(app, hour=3, minute=45):
         minute=minute,
         id="archive_done_daily",
         replace_existing=True,
+        coalesce=True,
+        max_instances=1,
     )
     archive_scheduler.start()
-    app.logger.info("[ARCHIVE] Scheduler iniciado (diário).")
+    app.logger.info(f"[ARCHIVE] Scheduler iniciado (diário {hour:02d}:{minute:02d} America/Sao_Paulo).")
     return archive_scheduler
 
 def stop_archive_scheduler():
