@@ -176,6 +176,64 @@ const TaskModal = ({ task, isOpen, onClose, onTaskUpdate }) => {
     return labels[category] || category;
   };
 
+// --- APROVAÇÃO ---
+
+const canManageApproval = () => {
+  if (!currentUser || !task) return false;
+  // regra simples: admin OU quem atribuiu (tarefas pessoais) — e funciona bem porque no backend já valida time também
+  return currentUser.is_admin || task.assigned_by_user?.id === currentUser.id;
+};
+
+const canSubmitForApproval = () => {
+  if (!task?.requires_approval) return false;
+  // Pode enviar se nunca enviou ou se foi rejeitada
+  return !task.approval_status || task.approval_status === "rejected";
+};
+
+const canApproveReject = () => {
+  if (!task?.requires_approval) return false;
+  if (task.approval_status !== "pending") return false;
+  return canManageApproval();
+};
+
+// Chamadas à API
+const submitForApproval = async () => {
+  try {
+    await api.post(`/tasks/${task.id}/submit_for_approval`);
+    toast.success("Tarefa enviada para aprovação.");
+    onTaskUpdate?.(task.id, { approval_status: "pending" });
+    onClose();
+  } catch (err) {
+    console.error(err);
+    toast.error(err.response?.data?.error || "Falha ao enviar para aprovação.");
+  }
+};
+
+const approveTask = async () => {
+  try {
+    await api.post(`/tasks/${task.id}/approve`);
+    toast.success("Tarefa aprovada e concluída.");
+    onTaskUpdate?.(task.id, { approval_status: "approved", status: "done" });
+    onClose();
+  } catch (err) {
+    console.error(err);
+    toast.error(err.response?.data?.error || "Falha ao aprovar tarefa.");
+  }
+};
+
+const rejectTask = async () => {
+  try {
+    await api.post(`/tasks/${task.id}/reject`);
+    toast.info("Tarefa rejeitada.");
+    onTaskUpdate?.(task.id, { approval_status: "rejected" });
+    onClose();
+  } catch (err) {
+    console.error(err);
+    toast.error(err.response?.data?.error || "Falha ao rejeitar tarefa.");
+  }
+};
+
+
   // Função para renderizar usuário individual
   const renderUserCard = (user, role, icon) => (
     <div key={user.id || user.name} className={styles.userCard}>
@@ -250,6 +308,23 @@ const TaskModal = ({ task, isOpen, onClose, onTaskUpdate }) => {
                     {getCategoryLabel(task.categoria)}
                   </span>
                 </div>
+                
+                {task.requires_approval && (
+                  <div className={styles.infoItem}>
+                    <FiUsers className={styles.infoIcon} />
+                    <span className={styles.infoLabel}>Aprovação:</span>
+                    <span className={styles.infoValue}>
+                      {task.approval_status
+                        ? (task.approval_status === "pending" && "Pendente")
+                          || (task.approval_status === "approved" && "Aprovada")
+                          || (task.approval_status === "rejected" && "Rejeitada")
+                        : "Necessária"}
+                      {task.approved_by_user && (
+                        <> • por {task.approved_by_user.name} em {formatDate(task.approved_at)}</>
+                      )}
+                    </span>
+                  </div>
+                )}
 
                 <div className={styles.infoItem}>
                   <FiCalendar className={styles.infoIcon} />
@@ -484,20 +559,58 @@ const TaskModal = ({ task, isOpen, onClose, onTaskUpdate }) => {
 
         {/* Footer do Modal */}
         <div className={styles.modalFooter}>
-          <button
-            className={`${styles.actionButton} ${styles.editButton}`}
-            onClick={handleEdit}
-          >
-            <FiEdit />
-            Editar
-          </button>
-          <button
-            className={`${styles.actionButton} ${styles.deleteButton}`}
-            onClick={handleDeleteClick}
-          >
-            <FiTrash2 />
-            Excluir
-          </button>
+
+          {/* Colaborador: enviar para aprovação */}
+          {canSubmitForApproval() && (
+            <button
+              className={`${styles.actionButton} ${styles.warningButton}`}
+              onClick={submitForApproval}
+              title="Enviar para aprovação do gestor"
+            >
+              <FiSend />
+              Enviar para aprovação
+            </button>
+          )}
+
+          {/* Gestor/Admin: aprovar / rejeitar quando pendente */}
+          {canApproveReject() && (
+            <>
+              <button
+                className={`${styles.actionButton} ${styles.successButton}`}
+                onClick={approveTask}
+                title="Aprovar e concluir tarefa"
+              >
+                <FiUser />
+                Aprovar
+              </button>
+              <button
+                className={`${styles.actionButton} ${styles.dangerButton}`}
+                onClick={rejectTask}
+                title="Rejeitar solicitação"
+              >
+                <FiX />
+                Rejeitar
+              </button>
+            </>
+          )}
+
+          {/* Ações padrão */}
+          <div className={styles.footerRight}>
+            <button
+              className={`${styles.actionButton} ${styles.editButton}`}
+              onClick={handleEdit}
+            >
+              <FiEdit />
+              Editar
+            </button>
+            <button
+              className={`${styles.actionButton} ${styles.deleteButton}`}
+              onClick={handleDeleteClick}
+            >
+              <FiTrash2 />
+              Excluir
+            </button>
+          </div>
         </div>
       </div>
 

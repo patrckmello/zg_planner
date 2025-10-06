@@ -14,6 +14,7 @@ from sqlalchemy import text, or_, and_
 from reminder_scheduler import schedule_task_reminders_safe
 from pytz import timezone
 from models.audit_log_model import AuditLog
+from models.notification_outbox_model import NotificationOutbox
 
 task_bp = Blueprint("tasks", __name__, url_prefix="/api")
 
@@ -47,6 +48,26 @@ def _coerce_item(x):
     # números em string que são dígitos -> int
     s = str(x)
     return int(s) if s.isdigit() else s
+
+def _is_manager_for_task(user: User, task: Task) -> bool:
+    """
+    Regra de quem pode APROVAR/REJEITAR:
+    - Admin sempre pode.
+    - Gestor da equipe da tarefa pode (task.team_id).
+    - Quem atribuiu (assigned_by_user_id) também pode aprovar tarefas pessoais.
+    """
+    if not user or not user.is_active:
+        return False
+    if user.is_admin:
+        return True
+    # gestor de time
+    if task.team_id:
+        return any(assoc.is_manager and assoc.team_id == task.team_id for assoc in user.teams)
+    # tarefa pessoal: quem atribuiu pode aprovar
+    if task.assigned_by_user_id and task.assigned_by_user_id == user.id:
+        return True
+    return False
+
 
 def _normalize_list(values):
     """
@@ -170,6 +191,105 @@ def format_changes_for_description(changes: dict) -> str:
             lines.append(f"- {k}: '{v.get('from')}' → '{v.get('to')}'")
     return "\n".join(lines)
 
+def _collect_team_managers(team_id: int):
+    """Retorna lista de usuários gestores ativos da equipe."""
+    if not team_id:
+        return []
+    managers = UserTeam.query.filter_by(team_id=team_id, is_manager=True).all()
+    return [m.user for m in managers if m.user and m.user.is_active]
+
+def _collect_assignees(task: Task):
+    """Retorna lista de usuários responsáveis (principal + assigned_users) ativos, sem duplicar."""
+    ids = set()
+    users = []
+
+    if task.user and task.user.is_active:
+        ids.add(task.user.id)
+        users.append(task.user)
+
+    for uid in (task.assigned_users or []):
+        try:
+            uid = int(uid)
+        except Exception:
+            continue
+        if uid in ids:
+            continue
+        u = User.query.get(uid)
+        if u and u.is_active:
+            ids.add(uid)
+            users.append(u)
+    return users
+
+def _safe_enqueue_email(to_email: str, subject: str, body: str):
+    """Coloca e-mail na outbox; loga e segue se falhar."""
+    if not to_email:
+        return
+    try:
+        NotificationOutbox.enqueue_email(
+            to_email=to_email,
+            subject=subject,
+            body=body,
+        )
+    except Exception:
+        current_app.logger.exception("Falha ao enfileirar e-mail (%s)", subject)
+
+def _notify_approval_submitted(task: Task):
+    """Notifica os gestores quando uma tarefa é enviada para aprovação."""
+    recipients = []
+    if task.team_id:
+        recipients = _collect_team_managers(task.team_id)
+    elif task.assigned_by_user_id:
+        ab = User.query.get(task.assigned_by_user_id)
+        if ab and ab.is_active:
+            recipients = [ab]
+
+    if not recipients:
+        return
+
+    for r in recipients:
+        _safe_enqueue_email(
+            to_email=r.email,
+            subject=f"[ZG Planner] Aprovação pendente: {task.title}",
+            body=(
+                f"Olá {r.username},\n\n"
+                f"A tarefa '{task.title}' (ID {task.id}) foi enviada para aprovação.\n"
+                f"Acesse o Planner para aprovar ou rejeitar.\n\n"
+                f"- Data limite: {task.due_date.isoformat() if task.due_date else '—'}\n"
+                f"- Responsável: {task.user.username if task.user else '—'}\n"
+            ),
+        )
+
+def _notify_approved(task: Task):
+    """Notifica os responsáveis quando a tarefa é aprovada (e, pela regra, concluída)."""
+    assignees = _collect_assignees(task)
+    for u in assignees:
+        _safe_enqueue_email(
+            to_email=u.email,
+            subject=f"[ZG Planner] Tarefa aprovada: {task.title}",
+            body=(
+                f"Olá {u.username},\n\n"
+                f"Sua tarefa '{task.title}' (ID {task.id}) foi aprovada pelo gestor.\n"
+                f"O status foi atualizado para CONCLUÍDA.\n\n"
+                f"- Aprovada em: {task.approved_at.isoformat() if task.approved_at else '—'}\n"
+            ),
+        )
+
+def _notify_rejected(task: Task, reason: str | None = None):
+    """Notifica os responsáveis quando a tarefa é rejeitada."""
+    assignees = _collect_assignees(task)
+    for u in assignees:
+        _safe_enqueue_email(
+            to_email=u.email,
+            subject=f"[ZG Planner] Tarefa rejeitada: {task.title}",
+            body=(
+                f"Olá {u.username},\n\n"
+                f"Sua tarefa '{task.title}' (ID {task.id}) foi rejeitada pelo gestor.\n"
+                f"{('Motivo: ' + reason + '\\n') if reason else ''}"
+                f"Ela retornou para EM ANDAMENTO.\n"
+            ),
+        )
+
+
 # ROUTES
 
 @task_bp.route("/tasks", methods=["GET"])
@@ -188,6 +308,9 @@ def get_tasks():
     assigned_by_user_id = request.args.get("assigned_by_user_id")
     collaborator_id = request.args.get("collaborator_id")
     include_archived = str(request.args.get("include_archived", "false")).lower() in ("1", "true", "yes")
+    approval_status = request.args.get("approval_status")  # "pending" | "approved" | "rejected"
+    requires_approval_param = request.args.get("requires_approval")  # "true"/"false"
+    managed_only = str(request.args.get("managed_only", "false")).lower() in ("1","true","yes")
 
     # base scope
     if user.is_admin:
@@ -226,6 +349,36 @@ def get_tasks():
             query = query.filter(Task.due_date != None, Task.due_date >= due_after_date)
         except ValueError:
             return jsonify({"error": "Formato inválido para due_after. Use ISO 8601."}), 400
+
+        # --- filtros de aprovação ---
+    if approval_status:
+        if approval_status not in ("pending", "approved", "rejected"):
+            return jsonify({"error": "approval_status inválido."}), 400
+        query = query.filter(Task.approval_status == approval_status)
+
+    if requires_approval_param is not None:
+        wants = str(requires_approval_param).lower() in ("1", "true", "yes")
+        query = query.filter(Task.requires_approval == wants)
+
+    # Se o gestor quer ver apenas tarefas que ele pode aprovar
+    if managed_only:
+        if user.is_admin:
+            # admin vê todas que requerem aprovação e estão pendentes
+            query = query.filter(Task.requires_approval == True, Task.approval_status == "pending")
+        else:
+            # gestor do time OU quem atribuiu (tarefas pessoais)
+            team_ids_managed = [ut.team_id for ut in user.teams if ut.is_manager]
+            query = query.filter(
+                Task.requires_approval == True,
+                Task.approval_status == "pending",
+                or_(
+                    # gestor da equipe da task
+                    and_(Task.team_id.isnot(None), Task.team_id.in_(team_ids_managed) if team_ids_managed else False),
+                    # tarefas pessoais atribuídas por mim
+                    Task.assigned_by_user_id == user_id
+                )
+            )
+
 
     # search / assigned_by / collaborator
     if search:
@@ -471,7 +624,8 @@ def add_task():
             relacionado_a=data.get("relacionado_a"),
             lembretes=lembretes,
             tags=tags,
-            anexos=anexos_data
+            anexos=anexos_data,
+            requires_approval=str(data.get("requires_approval", "false")).lower() in ("1", "true", "yes")
         )
 
         db.session.add(new_task)
@@ -615,7 +769,17 @@ def update_task(task_id):
         task.tempo_unidade = data["tempo_unidade"]
     if data.get("relacionado_a") is not None:
         task.relacionado_a = data["relacionado_a"]
-
+    # Aprovação - pode ligar/desligar (cuidado com implicações)
+    if data.get("requires_approval") is not None:
+        ra_flag = str(data.get("requires_approval")).lower() in ("1","true","yes")
+        task.requires_approval = ra_flag
+        # Se passou a exigir aprovação e já está 'done', força pendência até aprovar (opcional)
+        if ra_flag and task.status == 'done' and not task.is_approved():
+            task.status = 'in_progress'
+            task.completed_at = None
+            task.approval_status = 'pending'
+            task.approved_by_user_id = None
+            task.approved_at = None
     # --- Status & timestamps coerentes ---
     ALLOWED_STATUSES = {"pending", "in_progress", "done", "cancelled", "archived"}
     prev_status = task.status
@@ -625,40 +789,35 @@ def update_task(task_id):
         if new_status not in ALLOWED_STATUSES:
             return jsonify({"error": "Status inválido."}), 400
 
-        # (Opcional) regra: só permitir arquivar se já estiver done
-        # if new_status == "archived" and prev_status != "done":
-        #     return jsonify({"error": "Só é possível arquivar tarefas concluídas."}), 400
-
-        task.status = new_status
         now = datetime.utcnow()
 
-        # completed_at
-        if new_status == "done" and prev_status != "done":
-            if not getattr(task, "completed_at", None):
-                task.completed_at = now
-            # ao concluir, retirar eventual arquivamento
-            task.archived_at = None
-            task.archived_by_user_id = None
+        # Bloqueia conclusão se faltar aprovação
+        if new_status == "done":
+            try:
+                task.mark_done()  # aplica regra de aprovação internamente
+            except ValueError as ve:
+                return jsonify({"error": str(ve)}), 409
+        else:
+            # transições normais
+            task.status = new_status
 
-        elif prev_status == "done" and new_status != "done":
-            # deixou de estar concluída -> limpa completed_at
-            task.completed_at = None
-            # se estava arquivada e saiu de done para outro status (não-arquivado), limpe arquivamento
-            if new_status != "archived":
+            # saiu de done?
+            if prev_status == "done" and new_status != "done":
+                task.completed_at = None
+                if new_status != "archived":
+                    task.archived_at = None
+                    task.archived_by_user_id = None
+
+            # indo para arquivado?
+            if new_status == "archived" and prev_status != "archived":
+                task.archived_at = now
+                task.archived_by_user_id = user_id
+                if not task.completed_at:
+                    task.completed_at = now
+            elif prev_status == "archived" and new_status != "archived":
                 task.archived_at = None
                 task.archived_by_user_id = None
 
-        # archived_at / archived_by_user_id
-        if new_status == "archived" and prev_status != "archived":
-            task.archived_at = now
-            task.archived_by_user_id = user_id  # marca quem arquivou manualmente
-            # Se não estava concluída, você pode decidir concluir automaticamente, ou não.
-            # Ex.: concluir automaticamente ao arquivar:
-            if not task.completed_at:
-                task.completed_at = now
-        elif prev_status == "archived" and new_status != "archived":
-            task.archived_at = None
-            task.archived_by_user_id = None
 
     # Reatribuição (só se pode e se mudou)
     def _reassign_to(new_user_id: int):
@@ -946,7 +1105,7 @@ def get_task_reports():
         query = query.filter(Task.categoria == category)
 
     tasks = query.all()
-    # Agregação de dados para o relatório
+
     report_data = {
         "total_tasks": len(tasks),
         "tasks_by_status": {},
@@ -961,20 +1120,9 @@ def get_task_reports():
     }
 
     completed_tasks_times = []
-    now = datetime.utcnow()
 
     for task in tasks:
         task_dict = task.to_dict()
-
-        # converter due_date para timezone de Brasil
-        due_date_local = task.due_date.replace(tzinfo=timezone("UTC")).astimezone(brazil_tz) if task.due_date else None
-        
-        if due_date_local:
-            if due_date_local < now_brazil and task.status != 'done':
-                report_data["overdue_tasks"] += 1
-            elif due_date_local > now_brazil and task.status != 'done':
-                report_data["upcoming_tasks"] += 1
-
         report_data["detailed_tasks"].append(task_dict)
 
         # Contagem por status
@@ -988,29 +1136,43 @@ def get_task_reports():
         if task.categoria:
             report_data["tasks_by_category"][task.categoria] = report_data["tasks_by_category"].get(task.categoria, 0) + 1
 
-        # Tarefas concluídas no prazo ou atrasadas
-        if task.status == 'done' and task.due_date:
+        # Normalizar due_date para o fuso do Brasil (se existir)
+        due_date_local = None
+        if task.due_date:
+            try:
+                # assumindo timestamps UTC no banco
+                due_date_local = task.due_date.replace(tzinfo=timezone("UTC")).astimezone(brazil_tz)
+            except Exception:
+                # se já for naive/local, usa direto
+                due_date_local = task.due_date
+
+        # Critério único de "concluída" válida
+        is_completed_valid = (
+            task.status == 'done' and
+            (not getattr(task, "requires_approval", False) or getattr(task, "approval_status", None) == 'approved')
+        )
+
+        # Concluídas no prazo/atrasadas
+        if is_completed_valid and task.due_date:
             if task.updated_at and task.updated_at <= task.due_date:
                 report_data["tasks_completed_on_time"] += 1
             else:
                 report_data["tasks_completed_late"] += 1
-            
-            # Calcular tempo de conclusão se houver created_at e updated_at
+
             if task.created_at and task.updated_at:
                 time_taken = (task.updated_at - task.created_at).total_seconds()
                 completed_tasks_times.append(time_taken)
 
-        # Tarefas atrasadas e próximas
-        if task.due_date:
-            if task.due_date < now and task.status != 'done':
+        # Overdue / Upcoming (apenas uma vez, sem contar duas vezes)
+        if due_date_local and task.status != 'done':
+            if due_date_local < now_brazil:
                 report_data["overdue_tasks"] += 1
-            elif task.due_date > now and task.status != 'done':
+            elif due_date_local > now_brazil:
                 report_data["upcoming_tasks"] += 1
 
-    # Calcular tempo médio de conclusão
+    # Tempo médio de conclusão
     if completed_tasks_times:
         avg_seconds = sum(completed_tasks_times) / len(completed_tasks_times)
-        # Converter segundos para um formato mais legível (ex: dias, horas, minutos)
         days = int(avg_seconds // (24 * 3600))
         hours = int((avg_seconds % (24 * 3600)) // 3600)
         minutes = int((avg_seconds % 3600) // 60)
@@ -1195,3 +1357,164 @@ def list_archived_tasks_paginated():
         "page_size": page_size,
         "total": total
     }), 200
+
+@task_bp.route("/tasks/<int:task_id>/submit_for_approval", methods=["POST"])
+@jwt_required()
+def submit_task_for_approval(task_id):
+    user_id = int(get_jwt_identity())
+    user = User.query.get(user_id)
+    task = Task.query.get(task_id)
+
+    if not task:
+        return jsonify({"error": "Tarefa não encontrada"}), 404
+    if task.is_deleted:
+        return jsonify({"error": "Tarefa está na lixeira"}), 410
+    if not task.can_be_viewed_by(user):
+        return jsonify({"error": "Acesso negado"}), 403
+
+    if not task.requires_manager_approval():
+        return jsonify({"message": "Esta tarefa não requer aprovação."}), 200
+
+    task.submit_for_approval()
+    task.updated_at = datetime.utcnow()
+    db.session.commit()
+
+        # Notifica gestor(es)
+    try:
+        recipients = []
+        if task.team_id:
+            # todos gestores do time
+            managers = UserTeam.query.filter_by(team_id=task.team_id, is_manager=True).all()
+            recipients = [m.user for m in managers if m.user and m.user.is_active]
+        elif task.assigned_by_user_id:
+            # tarefa pessoal: quem atribuiu
+            ab = User.query.get(task.assigned_by_user_id)
+            if ab and ab.is_active:
+                recipients = [ab]
+
+        for r in recipients:
+            NotificationOutbox.enqueue_email(
+                to_email=r.email,
+                subject=f"[ZG Planner] Aprovação pendente: {task.title}",
+                body=f"Olá {r.username},\n\nA tarefa '{task.title}' foi enviada para aprovação.\n\nAbra o Planner e aprove/rejeite.\nID: {task.id}"
+            )
+    except Exception:
+        current_app.logger.exception("Falha ao enfileirar e-mail de aprovação pendente")
+
+    AuditLog.log_action(
+        user_id=user_id,
+        action="SUBMIT_FOR_APPROVAL",
+        resource_type="Task",
+        resource_id=task.id,
+        description=f"Tarefa enviada para aprovação: {task.title}.",
+        ip_address=request.remote_addr,
+        user_agent=request.headers.get("User-Agent")
+    )
+
+    return jsonify(task.to_dict()), 200
+
+@task_bp.route("/tasks/<int:task_id>/approve", methods=["POST"])
+@jwt_required()
+def approve_task(task_id):
+    user_id = int(get_jwt_identity())
+    user = User.query.get(user_id)
+    task = Task.query.get(task_id)
+
+    if not task:
+        return jsonify({"error": "Tarefa não encontrada"}), 404
+    if task.is_deleted:
+        return jsonify({"error": "Tarefa está na lixeira"}), 410
+    if not _is_manager_for_task(user, task):
+        return jsonify({"error": "Apenas gestores/admin podem aprovar."}), 403
+
+    if not task.requires_manager_approval():
+        return jsonify({"message": "Esta tarefa não requer aprovação."}), 200
+
+    # Se já aprovado, retorna idempotente
+    if task.is_approved():
+        return jsonify({"message": "Tarefa já está aprovada.", "task": task.to_dict()}), 200
+
+    task.set_approved(approver_user_id=user_id)
+    try:
+        task.mark_done()  # já seta status=done + completed_at
+    except Exception:
+        # em teoria não lança, mas deixo safe
+        pass
+    task.updated_at = datetime.utcnow()
+    db.session.commit()
+
+        # Notifica responsável (owner principal)
+    try:
+        owner = task.user
+        if owner and owner.is_active:
+            status_txt = "aprovada"  # na reject trocar por "rejeitada"
+            NotificationOutbox.enqueue_email(
+                to_email=owner.email,
+                subject=f"[ZG Planner] Sua tarefa foi {status_txt}: {task.title}",
+                body=f"Olá {owner.username},\n\nA tarefa '{task.title}' foi {status_txt} pelo gestor.\nID: {task.id}"
+            )
+    except Exception:
+        current_app.logger.exception("Falha ao enfileirar e-mail de decisão de aprovação")
+
+    AuditLog.log_action(
+        user_id=user_id,
+        action="APPROVE",
+        resource_type="Task",
+        resource_id=task.id,
+        description=f"Tarefa aprovada: {task.title}.",
+        ip_address=request.remote_addr,
+        user_agent=request.headers.get("User-Agent")
+    )
+
+    return jsonify(task.to_dict()), 200
+
+@task_bp.route("/tasks/<int:task_id>/reject", methods=["POST"])
+@jwt_required()
+def reject_task(task_id):
+    user_id = int(get_jwt_identity())
+    user = User.query.get(user_id)
+    task = Task.query.get(task_id)
+
+    if not task:
+        return jsonify({"error": "Tarefa não encontrada"}), 404
+    if task.is_deleted:
+        return jsonify({"error": "Tarefa está na lixeira"}), 410
+    if not _is_manager_for_task(user, task):
+        return jsonify({"error": "Apenas gestores/admin podem rejeitar."}), 403
+
+    if not task.requires_manager_approval():
+        return jsonify({"message": "Esta tarefa não requer aprovação."}), 200
+
+    task.set_rejected(approver_user_id=user_id)
+    # Se estava em done por alguma inconsistência, volta para in_progress
+    if task.status == 'done':
+        task.status = 'in_progress'
+        task.completed_at = None
+
+    task.updated_at = datetime.utcnow()
+    db.session.commit()
+
+        # Notifica responsável (owner principal)
+    try:
+        owner = task.user
+        if owner and owner.is_active:
+            status_txt = "aprovada"  # na reject trocar por "rejeitada"
+            NotificationOutbox.enqueue_email(
+                to_email=owner.email,
+                subject=f"[ZG Planner] Sua tarefa foi {status_txt}: {task.title}",
+                body=f"Olá {owner.username},\n\nA tarefa '{task.title}' foi {status_txt} pelo gestor.\nID: {task.id}"
+            )
+    except Exception:
+        current_app.logger.exception("Falha ao enfileirar e-mail de decisão de aprovação")
+
+    AuditLog.log_action(
+        user_id=user_id,
+        action="REJECT",
+        resource_type="Task",
+        resource_id=task.id,
+        description=f"Tarefa rejeitada: {task.title}.",
+        ip_address=request.remote_addr,
+        user_agent=request.headers.get("User-Agent")
+    )
+
+    return jsonify(task.to_dict()), 200

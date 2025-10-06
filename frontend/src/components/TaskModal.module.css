@@ -584,3 +584,171 @@
   }
 }
 
+/* ====== Footer layout ====== */
+.modalFooter {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 12px;
+  border-top: 1px solid rgba(0,0,0,0.06);
+}
+
+.footerRight {
+  display: flex;
+  gap: 10px;
+}
+
+/* Empilha no mobile */
+@media (max-width: 640px) {
+  .modalFooter {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  .footerRight {
+    width: 100%;
+    justify-content: stretch;
+  }
+  .footerRight .actionButton {
+    flex: 1;
+  }
+}
+
+/* ====== Botões base ====== */
+.actionButton {
+  --btn-bg: #f3f4f6;
+  --btn-fg: #111827;
+  --btn-bd: #e5e7eb;
+
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--btn-bd);
+  background: var(--btn-bg);
+  color: var(--btn-fg);
+  font-weight: 600;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform 120ms ease, box-shadow 120ms ease, background 120ms ease, border-color 120ms ease, color 120ms ease;
+  user-select: none;
+}
+
+.actionButton svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* Hover/active/focus acessíveis */
+.actionButton:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 14px rgba(17, 24, 39, 0.08);
+}
+
+.actionButton:active {
+  transform: translateY(0);
+  box-shadow: 0 3px 8px rgba(17, 24, 39, 0.10);
+}
+
+.actionButton:focus-visible {
+  outline: 3px solid #93c5fd; /* azul claro */
+  outline-offset: 2px;
+  border-color: #60a5fa;
+}
+
+/* Estado desabilitado */
+.actionButton[disabled],
+.actionButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* ====== Variações de cor ====== */
+/* Aprovar (verde) */
+.successButton {
+  --btn-bg: #10b981;     /* emerald-500 */
+  --btn-fg: #ffffff;
+  --btn-bd: #10b981;
+  background: var(--btn-bg);
+  color: var(--btn-fg);
+  border-color: var(--btn-bd);
+}
+.successButton:hover {
+  background: #0ea371;   /* levemente mais escuro */
+  border-color: #0ea371;
+}
+
+/* Enviar p/ aprovação (âmbar) */
+.warningButton {
+  --btn-bg: #f59e0b;     /* amber-500 */
+  --btn-fg: #111827;
+  --btn-bd: #d97706;
+  background: linear-gradient(180deg, #fbbf24 0%, #f59e0b 100%);
+  color: var(--btn-fg);
+  border-color: var(--btn-bd);
+}
+.warningButton:hover {
+  background: linear-gradient(180deg, #f59e0b 0%, #d97706 100%);
+  border-color: #b45309;
+  color: #111827;
+}
+
+/* Rejeitar (vermelho) */
+.dangerButton {
+  --btn-bg: #ef4444;     /* red-500 */
+  --btn-fg: #ffffff;
+  --btn-bd: #ef4444;
+  background: var(--btn-bg);
+  color: var(--btn-fg);
+  border-color: var(--btn-bd);
+}
+.dangerButton:hover {
+  background: #dc2626;   /* red-600 */
+  border-color: #dc2626;
+}
+
+/* Editar / Excluir (mantém tua semântica, mas com polimento) */
+.editButton {
+  --btn-bg: #eef2ff;     /* indigo-50 */
+  --btn-fg: #3730a3;     /* indigo-700 */
+  --btn-bd: #c7d2fe;     /* indigo-200 */
+  background: var(--btn-bg);
+  color: var(--btn-fg);
+  border-color: var(--btn-bd);
+}
+.editButton:hover {
+  background: #e0e7ff;   /* indigo-100 */
+  border-color: #a5b4fc; /* indigo-300 */
+  color: #312e81;        /* indigo-800 */
+}
+
+.deleteButton {
+  --btn-bg: #fee2e2;     /* red-100 */
+  --btn-fg: #991b1b;     /* red-800 */
+  --btn-bd: #fecaca;     /* red-200 */
+  background: var(--btn-bg);
+  color: var(--btn-fg);
+  border-color: var(--btn-bd);
+}
+.deleteButton:hover {
+  background: #fecaca;   /* red-200 */
+  border-color: #fca5a5; /* red-300 */
+  color: #7f1d1d;        /* red-900 */
+}
+
+/* Espaçamento consistente entre botões quando estão lado a lado */
+.modalFooter .actionButton + .actionButton {
+  margin-left: 6px;
+}
+
+/* Preferência de usuário (reduz anim.) */
+@media (prefers-reduced-motion: reduce) {
+  .actionButton {
+    transition: none;
+  }
+}

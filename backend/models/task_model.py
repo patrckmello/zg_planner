@@ -1,6 +1,7 @@
 from extensions import db
 from datetime import datetime
 from sqlalchemy import JSON
+from sqlalchemy.orm import validates
 
 class Task(db.Model):
     __tablename__ = 'tasks'
@@ -19,6 +20,11 @@ class Task(db.Model):
     # quem arquivou (manual). Para auto-arquivo (scheduler), pode ficar None ou um "system user"
     archived_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     archived_by_user = db.relationship('User', foreign_keys=[archived_by_user_id])
+    requires_approval = db.Column(db.Boolean, nullable=False, default=False, index=True)
+    approval_status = db.Column(db.String(20), nullable=True, index=True)  # None | "pending" | "approved" | "rejected"
+    approved_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    approved_by_user = db.relationship('User', foreign_keys=[approved_by_user_id])
+    approved_at = db.Column(db.DateTime, nullable=True, index=True)
 
     prioridade = db.Column(db.String(20))
     categoria = db.Column(db.String(50))
@@ -51,6 +57,15 @@ class Task(db.Model):
     team_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=True)
     team = db.relationship('Team', backref='tasks')
 
+    @validates('approval_status')
+    def _validate_approval_status(self, key, value):
+        if value is None:
+            return None
+        allowed = {'pending', 'approved', 'rejected'}
+        if value not in allowed:
+            raise ValueError(f"approval_status inválido: {value}")
+        return value
+
     @property
     def is_deleted(self) -> bool:
         return self.deleted_at is not None
@@ -64,7 +79,39 @@ class Task(db.Model):
         self.deleted_by_user_id = None
 
     # Helpers de status
+    def requires_manager_approval(self) -> bool:
+        return bool(self.requires_approval)
+
+    def is_approval_pending(self) -> bool:
+        return self.requires_manager_approval() and self.approval_status == 'pending'
+
+    def is_approved(self) -> bool:
+        return self.requires_manager_approval() and self.approval_status == 'approved'
+
+    def is_rejected(self) -> bool:
+        return self.requires_manager_approval() and self.approval_status == 'rejected'
+
+    def submit_for_approval(self):
+        if not self.requires_manager_approval():
+            # se não precisa de aprovação, não muda nada
+            return
+        self.approval_status = 'pending'
+        self.approved_by_user_id = None
+        self.approved_at = None
+
+    def set_approved(self, approver_user_id: int):
+        self.approval_status = 'approved'
+        self.approved_by_user_id = approver_user_id
+        self.approved_at = datetime.utcnow()
+
+    def set_rejected(self, approver_user_id: int):
+        self.approval_status = 'rejected'
+        self.approved_by_user_id = approver_user_id
+        self.approved_at = datetime.utcnow()
+
     def mark_done(self):
+        if self.requires_manager_approval() and not self.is_approved():
+            raise ValueError("Tarefa requer aprovação do gestor antes de ser concluída.")
         self.status = 'done'
         if not self.completed_at:
             self.completed_at = datetime.utcnow()
@@ -182,6 +229,18 @@ class Task(db.Model):
             "collaborators_info": collaborators_info,
             "assigned_users": self.assigned_users or [],
             "assigned_users_info": assigned_users_info,
+
+            # --- aprovação ---
+            "requires_approval": bool(self.requires_approval),
+            "approval_status": self.approval_status,
+            "approved_by_user_id": self.approved_by_user_id,
+            "approved_by_user": {
+                "id": self.approved_by_user.id,
+                "name": self.approved_by_user.username,
+                "username": self.approved_by_user.username,
+                "email": self.approved_by_user.email
+            } if self.approved_by_user else None,
+            "approved_at": self.approved_at.isoformat() if self.approved_at else None,
 
             "team_id": self.team_id,
             "team_name": self.team.name if self.team else None,

@@ -46,6 +46,7 @@ function EditTaskFormPage() {
   const [removedFiles, setRemovedFiles] = useState([]);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [requiresApproval, setRequiresApproval] = useState(false);
 
   // Refs para campos obrigatórios
   const titleRef = useRef(null);
@@ -69,6 +70,7 @@ function EditTaskFormPage() {
     assigned_to_user_ids: [], // Alterado para array
     collaborator_ids: [],
     team_id: "",
+    
   });
 
   const [originalTask, setOriginalTask] = useState(null);
@@ -203,7 +205,9 @@ function EditTaskFormPage() {
             : [], // Garante que seja um array de números
           collaborator_ids: task.collaborator_ids || [],
           team_id: task.team_id || "",
+          
         });
+        setRequiresApproval(!!task.requires_approval);
       } catch (error) {
         console.error("Erro ao carregar dados:", error);
         toast.error("Erro ao carregar tarefa. Redirecionando...");
@@ -421,7 +425,8 @@ function EditTaskFormPage() {
           url: f.url,
         }));
       formDataToSend.append("existing_files", JSON.stringify(existingFiles));
-
+      // Aprovação
+      formDataToSend.append("requires_approval", requiresApproval ? "true" : "false");
       // —— Anexos novos
       (formData.anexos || []).forEach((anexoObj) => {
         if (anexoObj.file && !anexoObj.isExisting) {
@@ -615,6 +620,13 @@ function EditTaskFormPage() {
                         }
                         placeholder="Nº do processo, cliente..."
                       />
+                      <div className={styles.fullWidth}>
+                        <Checkbox
+                          label="Requer aprovação do gestor"
+                          checked={requiresApproval}
+                          onCheckedChange={(checked) => setRequiresApproval(!!checked)}
+                        />
+                      </div>
                       <div className={styles.fullWidth} ref={dueDateRef}>
                         <CustomDateTimePicker
                           label="Data de Vencimento"

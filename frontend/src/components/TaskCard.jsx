@@ -120,9 +120,25 @@ const TaskCard = ({ task, isDragging = false, onTaskUpdate }) => {
           </div>
         </div>
 
-        {/* Título */}
+        {/* Título + Badge de aprovação */}
         <h4 className={styles.taskTitle}>{task.title}</h4>
 
+        {task.requires_approval && (
+          <div
+            className={styles.approvalBadge}
+            data-status={task.approval_status || "none"}
+            title={
+              task.approval_status
+                ? `Aprovação: ${task.approval_status}`
+                : "Aprovação necessária"
+            }
+          >
+            {task.approval_status === "pending" && "Pendente de aprovação"}
+            {task.approval_status === "approved" && "Aprovada"}
+            {task.approval_status === "rejected" && "Rejeitada"}
+            {!task.approval_status && "Aprovação necessária"}
+          </div>
+        )}
         {/* Descrição resumida */}
         {task.description && (
           <p className={styles.taskDescription}>

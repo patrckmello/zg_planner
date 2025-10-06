@@ -36,6 +36,7 @@ function TaskFormPage() {
   const [teams, setTeams] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
   const [errors, setErrors] = useState({});
+  const [requiresApproval, setRequiresApproval] = useState(false);
 
   // Refs para campos obrigatórios
   const titleRef = useRef(null);
@@ -264,7 +265,8 @@ function TaskFormPage() {
       if (formData.team_id) {
         formDataToSend.append("team_id", formData.team_id);
       }
-
+      // Aprovação
+      formDataToSend.append("requires_approval", requiresApproval ? "true" : "false");
       // Anexos
       formData.anexos.forEach((anexoObj) => {
         if (anexoObj.file) {
@@ -415,6 +417,14 @@ function TaskFormPage() {
                         }
                         placeholder="Nº do processo, cliente..."
                       />
+                      <div className={styles.fullWidth}>
+                        <Checkbox
+                          label="Requer aprovação do gestor"
+                          checked={requiresApproval}
+                          onCheckedChange={(checked) => setRequiresApproval(!!checked)}
+                        />
+                      </div>
+
                       <div className={styles.fullWidth} ref={dueDateRef}>
                         <CustomDateTimePicker
                           label="Data de Vencimento"

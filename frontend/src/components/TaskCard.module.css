@@ -204,3 +204,15 @@
   }
 }
 
+.approvalBadge {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  margin-top: 6px;
+}
+.approvalBadge[data-status="pending"]  { background: #fff3cd; color:#8a6d3b; }
+.approvalBadge[data-status="approved"] { background: #d1e7dd; color:#0f5132; }
+.approvalBadge[data-status="rejected"] { background: #f8d7da; color:#842029; }
+.approvalBadge[data-status="none"]     { background: #e7f1ff; color:#084298; }
