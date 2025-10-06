@@ -5,6 +5,8 @@ import DeleteConfirmModal from "../components/DeleteConfirmModal";
 import UserRoleManager from "../components/UserRoleManager";
 import styles from "./AdminUsers.module.css";
 import api from "../services/axiosInstance";
+import UserModal from "../components/UserCreateModal";
+
 import { useNavigate } from "react-router-dom";
 import {
   FiFilter,
@@ -36,8 +38,6 @@ function AdminUsers() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [showUserForm, setShowUserForm] = useState(false);
-  const [editingUser, setEditingUser] = useState(null);
   const [filterRole, setFilterRole] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
   const [sortBy, setSortBy] = useState("username");
@@ -46,6 +46,9 @@ function AdminUsers() {
   const [showDropdown, setShowDropdown] = useState(null);
   const [showRoleManager, setShowRoleManager] = useState(false);
   const [userToManageRoles, setUserToManageRoles] = useState(null);
+  const [showUserForm, setShowUserForm] = useState(false);
+  const [editingUser, setEditingUser] = useState(null);
+  const [savingUser, setSavingUser] = useState(false);
 
   // Estados para paginação e busca
   const [searchTerm, setSearchTerm] = useState("");
@@ -219,49 +222,31 @@ function AdminUsers() {
     setSidebarOpen(!sidebarOpen);
   };
 
-  const resetForm = () => {
-    setNewUser({ username: "", email: "", is_admin: false, password: "" });
-  };
-
-  const handleCreateUser = async () => {
-    if (!newUser.username || !newUser.email || !newUser.password) {
-      toast.error("Todos os campos são obrigatórios!", { autoClose: 3000 });
-      return;
-    }
-
+  const handleCreateUser = async (payload) => {
+    setSavingUser(true);
     try {
-      const response = await api.post("/users/", newUser);
-      // Recarregar a lista de usuários após criar
-      fetchUsers(pagination.current_page, pagination.per_page, searchTerm);
-      resetForm();
-      setShowUserForm(false);
+      await api.post("/users/", payload);
+      await fetchUsers(pagination.current_page, pagination.per_page, searchTerm);
       toast.success("Usuário criado com sucesso!", { autoClose: 3000 });
-      console.log("Usuário criado com sucesso:", response.data);
     } catch (error) {
-      console.error("Erro ao criar usuário:", error);
-      toast.error(
-        error.response?.data?.error ||
-          "Erro ao criar usuário. Tente novamente.",
-        { autoClose: 5000 }
-      );
+      toast.error(error.response?.data?.error || "Erro ao criar usuário.", { autoClose: 5000 });
+      throw error;
+    } finally {
+      setSavingUser(false);
     }
   };
 
-  const handleUpdateUser = async (userId, userData) => {
+  const handleUpdateUser = async (id, payload) => {
+    setSavingUser(true);
     try {
-      const response = await api.put(`/users/${userId}`, userData);
-      // Recarregar a lista de usuários após atualizar
-      fetchUsers(pagination.current_page, pagination.per_page, searchTerm);
-      setEditingUser(null);
-      toast.success("Usuário atualizado com sucesso!", { autoClose: 3000 });
-      console.log("Usuário atualizado com sucesso:", response.data);
+      await api.put(`/users/${id}`, payload);
+      await fetchUsers(pagination.current_page, pagination.per_page, searchTerm);
+      toast.success("Usuário atualizado!", { autoClose: 3000 });
     } catch (error) {
-      console.error("Erro ao atualizar usuário:", error);
-      toast.error(
-        error.response?.data?.error ||
-          "Erro ao atualizar usuário. Tente novamente.",
-        { autoClose: 5000 }
-      );
+      toast.error(error.response?.data?.error || "Erro ao atualizar usuário.", { autoClose: 5000 });
+      throw error;
+    } finally {
+      setSavingUser(false);
     }
   };
 
@@ -753,132 +738,23 @@ function AdminUsers() {
             )}
           </div>
 
-          {/* Modal de criação/edição de usuário */}
-          {(showUserForm || editingUser) && (
-            <div className={styles.modal}>
-              <div className={styles.modalContent}>
-                <h3>{editingUser ? "Editar Usuário" : "Novo Usuário"}</h3>
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    if (editingUser) {
-                      handleUpdateUser(editingUser.id, {
-                        username: editingUser.username,
-                        email: editingUser.email,
-                        is_admin: editingUser.is_admin,
-                        is_active: editingUser.is_active,
-                      });
-                    } else {
-                      handleCreateUser();
-                    }
-                  }}
-                >
-                  <div className={styles.formGroup}>
-                    <label>Nome de usuário:</label>
-                    <input
-                      type="text"
-                      value={
-                        editingUser ? editingUser.username : newUser.username
-                      }
-                      onChange={(e) =>
-                        editingUser
-                          ? setEditingUser({
-                              ...editingUser,
-                              username: e.target.value,
-                            })
-                          : setNewUser({ ...newUser, username: e.target.value })
-                      }
-                      required
-                    />
-                  </div>
-                  <div className={styles.formGroup}>
-                    <label>Email:</label>
-                    <input
-                      type="email"
-                      value={editingUser ? editingUser.email : newUser.email}
-                      onChange={(e) =>
-                        editingUser
-                          ? setEditingUser({
-                              ...editingUser,
-                              email: e.target.value,
-                            })
-                          : setNewUser({ ...newUser, email: e.target.value })
-                      }
-                      required
-                    />
-                  </div>
-                  {!editingUser && (
-                    <div className={styles.formGroup}>
-                      <label>Senha:</label>
-                      <input
-                        type="password"
-                        value={newUser.password}
-                        onChange={(e) =>
-                          setNewUser({ ...newUser, password: e.target.value })
-                        }
-                        required
-                      />
-                    </div>
-                  )}
-                  <div className={styles.formGroup}>
-                    <label>
-                      <input
-                        type="checkbox"
-                        checked={
-                          editingUser ? editingUser.is_admin : newUser.is_admin
-                        }
-                        onChange={(e) =>
-                          editingUser
-                            ? setEditingUser({
-                                ...editingUser,
-                                is_admin: e.target.checked,
-                              })
-                            : setNewUser({
-                                ...newUser,
-                                is_admin: e.target.checked,
-                              })
-                        }
-                      />
-                      Administrador
-                    </label>
-                  </div>
-                  {editingUser && (
-                    <div className={styles.formGroup}>
-                      <label>
-                        <input
-                          type="checkbox"
-                          checked={editingUser.is_active !== false}
-                          onChange={(e) =>
-                            setEditingUser({
-                              ...editingUser,
-                              is_active: e.target.checked,
-                            })
-                          }
-                        />
-                        Ativo
-                      </label>
-                    </div>
-                  )}
-                  <div className={styles.formActions}>
-                    <button type="submit" className={styles.saveBtn}>
-                      {editingUser ? "Salvar" : "Criar"}
-                    </button>
-                    <button
-                      type="button"
-                      className={styles.cancelBtn}
-                      onClick={() => {
-                        setShowUserForm(false);
-                        setEditingUser(null);
-                        resetForm();
-                      }}
-                    >
-                      Cancelar
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </div>
-          )}
+          {/* Modal: Criar Usuário */}
+          <UserModal
+            isOpen={!!showUserForm}
+            mode="create"
+            onClose={() => setShowUserForm(false)}
+            onCreate={handleCreateUser}
+            busy={savingUser}
+          />
+
+          <UserModal
+            isOpen={!!editingUser}
+            mode="edit"
+            initial={editingUser}
+            onClose={() => setEditingUser(null)}
+            onUpdate={handleUpdateUser}
+            busy={savingUser}
+          />
 
           {/* Modal de confirmação de exclusão */}
           {showDeleteModal && (

@@ -10,3 +10,7 @@ requirements_backup.txt
 seeds.py
 sent_reminders.txt
 __pycache__/
+.pyc
+versions/
+migrations/
+__pycache__/

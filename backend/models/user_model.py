@@ -2,9 +2,10 @@ from extensions import db
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
 
-user_roles = db.Table('user_roles',
-    db.Column('user_username', db.String, db.ForeignKey('users.username')),
-    db.Column('role_id', db.Integer, db.ForeignKey('roles.id'))
+user_roles = db.Table(
+    'user_roles',
+    db.Column('user_id', db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), primary_key=True),
+    db.Column('role_id', db.Integer, db.ForeignKey('roles.id', ondelete='CASCADE'), primary_key=True),
 )
 
 class User(db.Model):

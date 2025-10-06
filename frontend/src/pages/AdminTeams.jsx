@@ -4,6 +4,7 @@ import Sidebar from "../components/Sidebar";
 import DeleteConfirmModal from "../components/DeleteConfirmModal";
 import styles from "./AdminTeams.module.css";
 import api from "../services/axiosInstance";
+import TeamCreateModal from "../components/TeamCreateModal";
 import { useNavigate } from "react-router-dom";
 import {
   FiFilter,
@@ -401,124 +402,20 @@ function AdminTeams() {
         </main>
 
         {/* Modal para criar nova equipe */}
-        {showTeamForm && (
-          <div className={styles.modalOverlay}>
-            <div className={styles.modalContent}>
-              <div className={styles.modalHeader}>
-                <h3 className={styles.modalTitle}>Nova Equipe</h3>
-                <button
-                  className={styles.closeButton}
-                  onClick={() => {
-                    setShowTeamForm(false);
-                    resetForm();
-                  }}
-                >
-                  ×
-                </button>
-              </div>
-              <div className={styles.modalBody}>
-                <div className={styles.formGroup}>
-                  <label className={styles.label}>Nome da equipe</label>
-                  <input
-                    type="text"
-                    className={styles.input}
-                    value={newTeam.name}
-                    onChange={(e) =>
-                      setNewTeam({ ...newTeam, name: e.target.value })
-                    }
-                    placeholder="Digite o nome da equipe"
-                  />
-                </div>
-                <div className={styles.formGroup}>
-                  <label className={styles.label}>Descrição</label>
-                  <textarea
-                    className={styles.textarea}
-                    value={newTeam.description}
-                    onChange={(e) =>
-                      setNewTeam({ ...newTeam, description: e.target.value })
-                    }
-                    placeholder="Digite uma descrição para a equipe (opcional)"
-                    rows="3"
-                  />
-                </div>
-              </div>
-              <div className={styles.modalFooter}>
-                <button
-                  className={styles.cancelBtn}
-                  onClick={() => {
-                    setShowTeamForm(false);
-                    resetForm();
-                  }}
-                >
-                  Cancelar
-                </button>
-                <button className={styles.saveBtn} onClick={handleCreateTeam}>
-                  Criar Equipe
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        <TeamCreateModal
+          isOpen={!!showTeamForm}
+          mode="create"
+          onClose={() => { setShowTeamForm(false); resetForm(); }}
+          onCreate={handleCreateTeam}
+        />
 
-        {/* Modal para editar equipe */}
-        {editingTeam && (
-          <div className={styles.modalOverlay}>
-            <div className={styles.modalContent}>
-              <div className={styles.modalHeader}>
-                <h3 className={styles.modalTitle}>Editar Equipe</h3>
-                <button
-                  className={styles.closeButton}
-                  onClick={() => setEditingTeam(null)}
-                >
-                  ×
-                </button>
-              </div>
-              <div className={styles.modalBody}>
-                <div className={styles.formGroup}>
-                  <label className={styles.label}>Nome da equipe</label>
-                  <input
-                    type="text"
-                    className={styles.input}
-                    value={editingTeam.name}
-                    onChange={(e) =>
-                      setEditingTeam({ ...editingTeam, name: e.target.value })
-                    }
-                    placeholder="Digite o nome da equipe"
-                  />
-                </div>
-                <div className={styles.formGroup}>
-                  <label className={styles.label}>Descrição</label>
-                  <textarea
-                    className={styles.textarea}
-                    value={editingTeam.description || ""}
-                    onChange={(e) =>
-                      setEditingTeam({
-                        ...editingTeam,
-                        description: e.target.value,
-                      })
-                    }
-                    placeholder="Digite uma descrição para a equipe (opcional)"
-                    rows="3"
-                  />
-                </div>
-              </div>
-              <div className={styles.modalFooter}>
-                <button
-                  className={styles.cancelBtn}
-                  onClick={() => setEditingTeam(null)}
-                >
-                  Cancelar
-                </button>
-                <button
-                  className={styles.saveBtn}
-                  onClick={() => handleUpdateTeam(editingTeam.id, editingTeam)}
-                >
-                  Salvar Alterações
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        <TeamCreateModal
+          isOpen={!!editingTeam}
+          mode="edit"
+          initial={editingTeam}
+          onClose={() => setEditingTeam(null)}
+          onUpdate={handleUpdateTeam}
+        />
 
         {/* Modal para gerenciar membros */}
         {showMembersModal && selectedTeam && (

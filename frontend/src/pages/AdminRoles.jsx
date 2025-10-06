@@ -4,6 +4,7 @@ import Sidebar from "../components/Sidebar";
 import DeleteConfirmModal from "../components/DeleteConfirmModal";
 import RoleUserManager from "../components/RoleUserManager";
 import styles from "./AdminRoles.module.css";
+import RoleCreateModal from "../components/RoleCreateModal";
 import api from "../services/axiosInstance";
 import { useNavigate } from "react-router-dom";
 import {
@@ -327,124 +328,20 @@ function AdminRoles() {
         </main>
 
         {/* Modal para criar novo cargo */}
-        {showRoleForm && (
-          <div className={styles.modalOverlay}>
-            <div className={styles.modalContent}>
-              <div className={styles.modalHeader}>
-                <h3 className={styles.modalTitle}>Novo Cargo</h3>
-                <button
-                  className={styles.closeButton}
-                  onClick={() => {
-                    setShowRoleForm(false);
-                    resetForm();
-                  }}
-                >
-                  ×
-                </button>
-              </div>
-              <div className={styles.modalBody}>
-                <div className={styles.formGroup}>
-                  <label className={styles.label}>Nome do cargo</label>
-                  <input
-                    type="text"
-                    className={styles.input}
-                    value={newRole.name}
-                    onChange={(e) =>
-                      setNewRole({ ...newRole, name: e.target.value })
-                    }
-                    placeholder="Digite o nome do cargo"
-                  />
-                </div>
-                <div className={styles.formGroup}>
-                  <label className={styles.label}>Descrição</label>
-                  <textarea
-                    className={styles.textarea}
-                    value={newRole.description}
-                    onChange={(e) =>
-                      setNewRole({ ...newRole, description: e.target.value })
-                    }
-                    placeholder="Digite uma descrição para o cargo (opcional)"
-                    rows="3"
-                  />
-                </div>
-              </div>
-              <div className={styles.modalFooter}>
-                <button
-                  className={styles.cancelBtn}
-                  onClick={() => {
-                    setShowRoleForm(false);
-                    resetForm();
-                  }}
-                >
-                  Cancelar
-                </button>
-                <button className={styles.saveBtn} onClick={handleCreateRole}>
-                  Criar Cargo
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        <RoleCreateModal
+          isOpen={!!showRoleForm}
+          mode="create"
+          onClose={() => setShowRoleForm(false)}
+          onCreate={handleCreateRole}
+        />
 
-        {/* Modal para editar cargo */}
-        {editingRole && (
-          <div className={styles.modalOverlay}>
-            <div className={styles.modalContent}>
-              <div className={styles.modalHeader}>
-                <h3 className={styles.modalTitle}>Editar Cargo</h3>
-                <button
-                  className={styles.closeButton}
-                  onClick={() => setEditingRole(null)}
-                >
-                  ×
-                </button>
-              </div>
-              <div className={styles.modalBody}>
-                <div className={styles.formGroup}>
-                  <label className={styles.label}>Nome do cargo</label>
-                  <input
-                    type="text"
-                    className={styles.input}
-                    value={editingRole.name}
-                    onChange={(e) =>
-                      setEditingRole({ ...editingRole, name: e.target.value })
-                    }
-                    placeholder="Digite o nome do cargo"
-                  />
-                </div>
-                <div className={styles.formGroup}>
-                  <label className={styles.label}>Descrição</label>
-                  <textarea
-                    className={styles.textarea}
-                    value={editingRole.description || ""}
-                    onChange={(e) =>
-                      setEditingRole({
-                        ...editingRole,
-                        description: e.target.value,
-                      })
-                    }
-                    placeholder="Digite uma descrição para o cargo (opcional)"
-                    rows="3"
-                  />
-                </div>
-              </div>
-              <div className={styles.modalFooter}>
-                <button
-                  className={styles.cancelBtn}
-                  onClick={() => setEditingRole(null)}
-                >
-                  Cancelar
-                </button>
-                <button
-                  className={styles.saveBtn}
-                  onClick={() => handleUpdateRole(editingRole.id, editingRole)}
-                >
-                  Salvar Alterações
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        <RoleCreateModal
+          isOpen={!!editingRole}
+          mode="edit"
+          initial={editingRole}
+          onClose={() => setEditingRole(null)}
+          onUpdate={handleUpdateRole}
+        />
 
         <DeleteConfirmModal
           isOpen={showDeleteModal}

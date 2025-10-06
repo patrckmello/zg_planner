@@ -99,13 +99,8 @@ def delete_role(role_id):
 @role_bp.route("/<int:role_id>/users", methods=["GET"])
 @admin_required
 def get_role_users(role_id):
-    """Busca todos os usuários que possuem um cargo específico"""
     role = Role.query.get_or_404(role_id)
-    users = [user.to_dict() for user in role.users]
-    return jsonify({
-        "role": role.to_dict(),
-        "users": users
-    })
+    return jsonify([u.to_dict() for u in role.users])
 
 @role_bp.route("/<int:role_id>/users/<int:user_id>", methods=["POST"])
 @admin_required
