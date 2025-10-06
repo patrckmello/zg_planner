@@ -220,21 +220,32 @@ def _collect_assignees(task: Task):
             users.append(u)
     return users
 
-def _safe_enqueue_email(to_email: str, subject: str, body: str):
-    """Coloca e-mail na outbox; loga e segue se falhar."""
-    if not to_email:
+def _safe_enqueue_email_for_task(task: Task, to_email: str, subject: str, body_html: str, kind: str):
+    """
+    Enfileira um e-mail no NotificationOutbox vinculado à task.
+    kind: 'approval_submitted' | 'task_approved' | 'task_rejected' | 'plain_email'
+    """
+    if not (task and to_email and subject):
         return
     try:
-        NotificationOutbox.enqueue_email(
-            to_email=to_email,
-            subject=subject,
-            body=body,
+        item = NotificationOutbox(
+            kind=kind,
+            task_id=task.id,
+            recipients=[{"user_id": None, "email": to_email}],
+            payload={
+                "subject": subject,
+                "body_html": body_html,         # corpo já em HTML (ou texto simples, se preferir)
+                "task_title": task.title or f"Tarefa #{task.id}",
+                "task_url": "http://10.1.2.2:5174/tasks",  # mesmo link que você usa no mailer
+            },
+            status="pending",
         )
+        db.session.add(item)
+        db.session.commit()
     except Exception:
         current_app.logger.exception("Falha ao enfileirar e-mail (%s)", subject)
 
 def _notify_approval_submitted(task: Task):
-    """Notifica os gestores quando uma tarefa é enviada para aprovação."""
     recipients = []
     if task.team_id:
         recipients = _collect_team_managers(task.team_id)
@@ -247,48 +258,42 @@ def _notify_approval_submitted(task: Task):
         return
 
     for r in recipients:
-        _safe_enqueue_email(
-            to_email=r.email,
-            subject=f"[ZG Planner] Aprovação pendente: {task.title}",
-            body=(
-                f"Olá {r.username},\n\n"
-                f"A tarefa '{task.title}' (ID {task.id}) foi enviada para aprovação.\n"
-                f"Acesse o Planner para aprovar ou rejeitar.\n\n"
-                f"- Data limite: {task.due_date.isoformat() if task.due_date else '—'}\n"
-                f"- Responsável: {task.user.username if task.user else '—'}\n"
-            ),
+        subject = f"🔔 Aprovação pendente: {task.title}"
+        # pode ser texto simples; o worker vai aceitar HTML também:
+        body = (
+            f"Olá {r.username},<br><br>"
+            f"A tarefa <strong>'{task.title}'</strong> foi enviada para aprovação.<br>"
+            f"Acesse o Planner para aprovar ou rejeitar.<br><br>"
+            f"- Data limite: {task.due_date.isoformat() if task.due_date else '—'}<br>"
+            f"- Responsável: {task.user.username if task.user else '—'}<br>"
         )
+        _safe_enqueue_email_for_task(task, r.email, subject, body, kind="approval_submitted")
+
 
 def _notify_approved(task: Task):
-    """Notifica os responsáveis quando a tarefa é aprovada (e, pela regra, concluída)."""
     assignees = _collect_assignees(task)
     for u in assignees:
-        _safe_enqueue_email(
-            to_email=u.email,
-            subject=f"[ZG Planner] Tarefa aprovada: {task.title}",
-            body=(
-                f"Olá {u.username},\n\n"
-                f"Sua tarefa '{task.title}' (ID {task.id}) foi aprovada pelo gestor.\n"
-                f"O status foi atualizado para CONCLUÍDA.\n\n"
-                f"- Aprovada em: {task.approved_at.isoformat() if task.approved_at else '—'}\n"
-            ),
+        subject = f"🎉 Tarefa aprovada: {task.title}"
+        body = (
+            f"Olá {u.username},<br><br>"
+            f"Sua tarefa <strong>'{task.title}'</strong> foi aprovada pelo gestor.<br>"
+            f"O status foi atualizado para <strong>CONCLUÍDA</strong>.<br><br>"
+            f"- Aprovada em: {task.approved_at.isoformat() if task.approved_at else '—'}<br>"
         )
+        _safe_enqueue_email_for_task(task, u.email, subject, body, kind="task_approved")
+
 
 def _notify_rejected(task: Task, reason: str | None = None):
-    """Notifica os responsáveis quando a tarefa é rejeitada."""
     assignees = _collect_assignees(task)
     for u in assignees:
-        _safe_enqueue_email(
-            to_email=u.email,
-            subject=f"[ZG Planner] Tarefa rejeitada: {task.title}",
-            body=(
-                f"Olá {u.username},\n\n"
-                f"Sua tarefa '{task.title}' (ID {task.id}) foi rejeitada pelo gestor.\n"
-                f"{('Motivo: ' + reason + '\\n') if reason else ''}"
-                f"Ela retornou para EM ANDAMENTO.\n"
-            ),
+        subject = f"⛔ Tarefa rejeitada: {task.title}"
+        body = (
+            f"Olá {u.username},<br><br>"
+            f"Sua tarefa <strong>'{task.title}'</strong>) foi rejeitada pelo gestor.<br>"
+            f"{('Motivo: <em>' + reason + '</em><br>' ) if reason else ''}"
+            f"Ela retornou para <strong>EM ANDAMENTO</strong>.<br>"
         )
-
+        _safe_enqueue_email_for_task(task, u.email, subject, body, kind="task_rejected")
 
 # ROUTES
 
@@ -1277,10 +1282,7 @@ def unarchive_task(task_id):
 @task_bp.route("/tasks/archived", methods=["GET"])
 @jwt_required()
 def list_archived_tasks_paginated():
-    """
-    Retorna tarefas arquivadas com paginação, sem quebrar o /tasks atual.
-    Usar quando a coluna 'Arquivadas' for expandida.
-    """
+
     user_id = int(get_jwt_identity())
     user = User.query.get(user_id)
     if not user or not user.is_active:
@@ -1291,13 +1293,12 @@ def list_archived_tasks_paginated():
         page = int(request.args.get("page", 1))
         page_size = int(request.args.get("page_size", 50))
         page = 1 if page < 1 else page
-        page_size = max(1, min(page_size, 200))  # limite superior pra não pesar
+        page_size = max(1, min(page_size, 200))
     except ValueError:
         return jsonify({"error": "Parâmetros de paginação inválidos."}), 400
 
     search = request.args.get("search")
 
-    # escopo de visibilidade (mesmo critério do /tasks)
     if user.is_admin:
         query = Task.query.filter(
             Task.deleted_at.is_(None),
@@ -1317,18 +1318,14 @@ def list_archived_tasks_paginated():
 
     if search:
         query = query.filter(Task.title.ilike(f"%{search}%"))
-
-    # total pra paginação
     total = query.count()
 
-    # ordene por mais recente arquivada primeiro (ou o que fizer sentido pra você)
     items = (query
              .order_by(Task.archived_at.desc().nullslast(), Task.updated_at.desc())
              .offset((page - 1) * page_size)
              .limit(page_size)
              .all())
 
-    # enriquecer anexos (igual ao /tasks)
     payload = []
     for task in items:
         td = task.to_dict()
@@ -1379,27 +1376,12 @@ def submit_task_for_approval(task_id):
     task.updated_at = datetime.utcnow()
     db.session.commit()
 
-        # Notifica gestor(es)
+    # Notifica gestor(es)
     try:
-        recipients = []
-        if task.team_id:
-            # todos gestores do time
-            managers = UserTeam.query.filter_by(team_id=task.team_id, is_manager=True).all()
-            recipients = [m.user for m in managers if m.user and m.user.is_active]
-        elif task.assigned_by_user_id:
-            # tarefa pessoal: quem atribuiu
-            ab = User.query.get(task.assigned_by_user_id)
-            if ab and ab.is_active:
-                recipients = [ab]
-
-        for r in recipients:
-            NotificationOutbox.enqueue_email(
-                to_email=r.email,
-                subject=f"[ZG Planner] Aprovação pendente: {task.title}",
-                body=f"Olá {r.username},\n\nA tarefa '{task.title}' foi enviada para aprovação.\n\nAbra o Planner e aprove/rejeite.\nID: {task.id}"
-            )
+        _notify_approval_submitted(task)
     except Exception:
         current_app.logger.exception("Falha ao enfileirar e-mail de aprovação pendente")
+
 
     AuditLog.log_action(
         user_id=user_id,
@@ -1436,25 +1418,17 @@ def approve_task(task_id):
 
     task.set_approved(approver_user_id=user_id)
     try:
-        task.mark_done()  # já seta status=done + completed_at
+        task.mark_done()
     except Exception:
-        # em teoria não lança, mas deixo safe
         pass
     task.updated_at = datetime.utcnow()
     db.session.commit()
 
-        # Notifica responsável (owner principal)
+    # Notifica todos os responsáveis
     try:
-        owner = task.user
-        if owner and owner.is_active:
-            status_txt = "aprovada"  # na reject trocar por "rejeitada"
-            NotificationOutbox.enqueue_email(
-                to_email=owner.email,
-                subject=f"[ZG Planner] Sua tarefa foi {status_txt}: {task.title}",
-                body=f"Olá {owner.username},\n\nA tarefa '{task.title}' foi {status_txt} pelo gestor.\nID: {task.id}"
-            )
+        _notify_approved(task)
     except Exception:
-        current_app.logger.exception("Falha ao enfileirar e-mail de decisão de aprovação")
+        current_app.logger.exception("Falha ao enfileirar e-mail de decisão (aprovado)")
 
     AuditLog.log_action(
         user_id=user_id,
@@ -1475,6 +1449,9 @@ def reject_task(task_id):
     user = User.query.get(user_id)
     task = Task.query.get(task_id)
 
+    data = request.get_json(silent=True) or {}
+    reason = data.get("reason")
+
     if not task:
         return jsonify({"error": "Tarefa não encontrada"}), 404
     if task.is_deleted:
@@ -1494,18 +1471,11 @@ def reject_task(task_id):
     task.updated_at = datetime.utcnow()
     db.session.commit()
 
-        # Notifica responsável (owner principal)
+    # Notifica todos os responsáveis
     try:
-        owner = task.user
-        if owner and owner.is_active:
-            status_txt = "aprovada"  # na reject trocar por "rejeitada"
-            NotificationOutbox.enqueue_email(
-                to_email=owner.email,
-                subject=f"[ZG Planner] Sua tarefa foi {status_txt}: {task.title}",
-                body=f"Olá {owner.username},\n\nA tarefa '{task.title}' foi {status_txt} pelo gestor.\nID: {task.id}"
-            )
+        _notify_rejected(task, reason=reason)
     except Exception:
-        current_app.logger.exception("Falha ao enfileirar e-mail de decisão de aprovação")
+        current_app.logger.exception("Falha ao enfileirar e-mail de decisão (rejeitado)")
 
     AuditLog.log_action(
         user_id=user_id,

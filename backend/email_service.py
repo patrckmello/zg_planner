@@ -17,23 +17,9 @@ class EmailService:
         self.password = os.getenv('MAIL_PASSWORD')
         self.default_sender_name = os.getenv('MAIL_DEFAULT_SENDER_NAME', 'ZG Planner')
         self.default_sender_email = os.getenv('MAIL_DEFAULT_SENDER_EMAIL')
-        
-        # Configurar timezone do Brasil (GMT-3)
         self.brazil_tz = pytz.timezone('America/Sao_Paulo')
     
     def send_email(self, to_email, subject, body, is_html=False):
-        """
-        Envia um e-mail
-        
-        Args:
-            to_email (str): E-mail do destinatário
-            subject (str): Assunto do e-mail
-            body (str): Corpo do e-mail
-            is_html (bool): Se o corpo é HTML ou texto simples
-        
-        Returns:
-            bool: True se enviado com sucesso, False caso contrário
-        """
         try:
             # Criar mensagem
             msg = MIMEMultipart()
@@ -68,32 +54,14 @@ class EmailService:
             return False
     
     def send_task_reminder(self, user_email, user_name, task_title, task_description, due_date, reminder_type):
-        """
-        Envia lembrete de tarefa
-        
-        Args:
-            user_email (str): E-mail do usuário
-            user_name (str): Nome do usuário
-            task_title (str): Título da tarefa
-            task_description (str): Descrição da tarefa
-            due_date (datetime): Data de vencimento da tarefa
-            reminder_type (str): Tipo do lembrete (ex: "1 hora antes")
-        
-        Returns:
-            bool: True se enviado com sucesso, False caso contrário
-        """
-        # Converter data para timezone do Brasil
         if due_date.tzinfo is None:
             due_date = pytz.utc.localize(due_date)
         
         due_date_brazil = due_date.astimezone(self.brazil_tz)
-        
-        # Formatar data
         formatted_date = due_date_brazil.strftime("%d/%m/%Y às %H:%M")
         
         subject = f"🔔 Lembrete: {task_title}"
         
-        # Corpo do e-mail em HTML
         body = f"""
         <html>
         <head>
@@ -174,20 +142,13 @@ class EmailService:
         return self.send_email(user_email, subject, body, is_html=True)
     
     def get_brazil_time(self):
-        """
-        Retorna o horário atual no Brasil (GMT-3)
-        """
         return datetime.now(self.brazil_tz)
     
     def convert_to_brazil_time(self, utc_datetime):
-        """
-        Converte datetime UTC para horário do Brasil
-        """
         if utc_datetime.tzinfo is None:
             utc_datetime = pytz.utc.localize(utc_datetime)
         
         return utc_datetime.astimezone(self.brazil_tz)
 
-# Instância global do serviço de e-mail
 email_service = EmailService()
 
