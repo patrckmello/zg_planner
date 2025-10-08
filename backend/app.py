@@ -9,6 +9,7 @@ import os, atexit, logging
 from flask_jwt_extended import jwt_required, JWTManager
 from datetime import timedelta
 from flasgger import Swagger
+from flask_jwt_extended import get_jwt
 
 # Models (ordem importa)
 from models.user_model import User
@@ -19,7 +20,7 @@ from models.task_model import Task
 from models.comment_model import Comment
 from models.backup_model import Backup
 from models.audit_log_model import AuditLog
-from models.notification_outbox_model import NotificationOutbox  # ADD
+from models.notification_outbox_model import NotificationOutbox
 
 # Blueprints
 from routes.auth_routes import auth_bp
@@ -30,8 +31,9 @@ from routes.role_routes import role_bp
 from routes.comment_routes import comment_bp
 from routes.admin_routes import admin_bp
 from routes.backup_routes import backup_bp
-from routes.debug_routes import debug_bp  # ADD
+from routes.debug_routes import debug_bp
 from routes.archive_debug_routes import archive_debug_bp
+from routes.ms_oauth_routes import bp as ms_oauth_bp
 
 # Schedulers
 from mailer_scheduler import init_mailer_scheduler, stop_mailer_scheduler
@@ -50,7 +52,7 @@ logging.basicConfig(level=logging.INFO,
 
 # ---- JWT / Flask ----
 app.config['JWT_SECRET_KEY'] = 'sua_chave_secreta'
-app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(minutes=15)
+app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(minutes=1)
 app.config['JWT_REFRESH_TOKEN_EXPIRES'] = timedelta(days=7)
 app.config['JWT_TOKEN_LOCATION'] = ['headers']
 app.config['JWT_COOKIE_SECURE'] = False
@@ -81,6 +83,25 @@ migrate = Migrate(app, db)
 CORS(app, supports_credentials=True)
 jwt = JWTManager(app)
 
+@jwt.expired_token_loader
+def expired_token_callback(jwt_header, jwt_payload):
+    return jsonify({
+        "msg": "token_expired",
+        "token_type": jwt_payload.get("type", "unknown")
+    }), 401
+
+@jwt.invalid_token_loader
+def invalid_token_callback(err_msg):
+    return jsonify({"msg": "invalid_token", "detail": err_msg}), 401
+
+@jwt.unauthorized_loader
+def missing_token_callback(err_msg):
+    return jsonify({"msg": "missing_token", "detail": err_msg}), 401
+
+@jwt.needs_fresh_token_loader
+def needs_fresh_token_callback(jwt_header, jwt_payload):
+    return jsonify({"msg": "fresh_token_required"}), 401
+
 @app.route("/uploads/<filename>")
 def uploaded_file(filename):
     try:
@@ -99,6 +120,7 @@ app.register_blueprint(admin_bp)
 app.register_blueprint(backup_bp)
 app.register_blueprint(debug_bp)
 app.register_blueprint(archive_debug_bp)
+app.register_blueprint(ms_oauth_bp)
 
 from werkzeug.local import LocalProxy
 
@@ -135,7 +157,7 @@ def index():
     if 'user_id' in session:
         return redirect(url_for('dashboard'))
     else:
-        return redirect(url_for('login'))
+        return redirect(url_for('auth.login'))
 
 @app.route('/api/dashboard')
 @jwt_required()

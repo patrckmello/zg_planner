@@ -7,15 +7,12 @@ import api from "../services/axiosInstance";
 import TeamCreateModal from "../components/TeamCreateModal";
 import { useNavigate } from "react-router-dom";
 import {
-  FiFilter,
   FiArrowDownCircle,
   FiPlus,
   FiEdit,
   FiUsers,
   FiMoreHorizontal,
   FiTrash2,
-  FiUserPlus,
-  FiUserMinus,
   FiShield,
   FiUser,
 } from "react-icons/fi";
@@ -24,23 +21,14 @@ import { toast } from "react-toastify";
 function AdminTeams() {
   const navigate = useNavigate();
   const [teams, setTeams] = useState([]);
-  const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [showTeamForm, setShowTeamForm] = useState(false);
   const [editingTeam, setEditingTeam] = useState(null);
-  const [showMembersModal, setShowMembersModal] = useState(false);
-  const [selectedTeam, setSelectedTeam] = useState(null);
+  const [showTeamForm, setShowTeamForm] = useState(false);
   const [sortBy, setSortBy] = useState("name");
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [teamToDelete, setTeamToDelete] = useState(null);
   const [showDropdown, setShowDropdown] = useState(null);
-
-  // Estado para nova equipe
-  const [newTeam, setNewTeam] = useState({
-    name: "",
-    description: "",
-  });
 
   // Manteremos a sidebar aberta por padrão em telas maiores
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 768);
@@ -57,18 +45,8 @@ function AdminTeams() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [teamsResponse, usersResponse] = await Promise.all([
-          api.get("/teams"),
-          api.get("/users"),
-        ]);
-        console.log("Teams data:", teamsResponse.data); // veja se members aparece aqui
+        const teamsResponse = await api.get("/teams");
         setTeams(teamsResponse.data);
-        setUsers(
-          Array.isArray(usersResponse.data)
-            ? usersResponse.data
-            : usersResponse.data.items || []
-        );
-        console.log("Users data raw:", usersResponse.data);
       } catch (error) {
         console.error(error);
         setError("Erro ao buscar dados.");
@@ -122,31 +100,16 @@ function AdminTeams() {
     setSidebarOpen(!sidebarOpen);
   };
 
-  const resetForm = () => {
-    setNewTeam({ name: "", description: "" });
-  };
-
-  const handleCreateTeam = async () => {
-    if (!newTeam.name) {
-      toast.error("O nome da equipe é obrigatório!");
-      return;
-    }
-
+   const handleCreateTeam = async (payload) => {
+    if (!payload?.name) { toast.error("O nome da equipe é obrigatório!"); return; }
     try {
-      const response = await api.post("/teams", newTeam);
-      setTeams([...teams, response.data]);
-      resetForm();
+      const response = await api.post("/teams", payload);
+      setTeams((prev) => [...prev, response.data]);
       setShowTeamForm(false);
-      console.log("Equipe criada com sucesso:", response.data);
+      toast.success("Equipe criada com sucesso!");
     } catch (error) {
-      console.error("Erro ao criar equipe:", error);
-
-      // Se o backend retornou erro e mensagem, mostra ela
-      if (error.response && error.response.data && error.response.data.error) {
-        toast.error(error.response.data.error);
-      } else {
-        toast.error("Erro ao criar equipe. Tente novamente.");
-      }
+      if (error.response?.data?.error) toast.error(error.response.data.error);
+      else toast.error("Erro ao criar equipe. Tente novamente.");
     }
   };
 
@@ -177,8 +140,8 @@ function AdminTeams() {
       setTeams((prev) =>
         prev.map((t) => (t.id === teamId ? response.data : t))
       );
-      setSelectedTeam(response.data); // <---- ATUALIZA O TIME ABERTO NO MODAL
-      console.log("Membro adicionado com sucesso");
+      setEditingTeam(response.data);
+        return response.data;
     } catch (error) {
       console.error("Mensagem de erro:", error);
 
@@ -196,8 +159,8 @@ function AdminTeams() {
       setTeams((prev) =>
         prev.map((t) => (t.id === teamId ? response.data : t))
       );
-      setSelectedTeam(response.data); // atualiza também o modal aberto
-      console.log("Membro removido com sucesso");
+      setEditingTeam(response.data);
+        return response.data;
     } catch (error) {
       console.error("Mensagem de erro:", error);
 
@@ -217,8 +180,8 @@ function AdminTeams() {
       setTeams((prev) =>
         prev.map((t) => (t.id === teamId ? response.data : t))
       );
-      setSelectedTeam(response.data); // atualiza também o modal aberto
-      console.log("Status de gestor alterado com sucesso");
+      setEditingTeam(response.data);
+        return response.data;
     } catch (error) {
       console.error("Mensagem de erro:", error);
 
@@ -250,38 +213,6 @@ function AdminTeams() {
       setShowDropdown(null);
     }
   };
-
-  const openMembersModal = (team) => {
-    setSelectedTeam(team);
-    setShowMembersModal(true);
-  };
-
-  const getAvailableUsers = () => {
-    if (!selectedTeam || !Array.isArray(users)) return [];
-    const teamMemberIds = selectedTeam.members?.map((m) => m.user_id) || [];
-    return users.filter((user) => !teamMemberIds.includes(user.id));
-  };
-  if (loading) {
-    return (
-      <div className={styles.spinnerContainer}>
-        <div className={styles.spinner}></div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className={styles.errorContainer}>
-        <div className={styles.errorMessage}>
-          <h2>Erro</h2>
-          <p>{error}</p>
-          <button onClick={() => window.location.reload()}>
-            Tentar Novamente
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className={styles.adminTeamsPage}>
@@ -352,13 +283,6 @@ function AdminTeams() {
                     </div>
                     <div className={styles.teamActions}>
                       <button
-                        className={styles.membersBtn}
-                        onClick={() => openMembersModal(team)}
-                        title="Gerenciar membros"
-                      >
-                        <FiUserPlus />
-                      </button>
-                      <button
                         className={styles.editBtn}
                         onClick={() => setEditingTeam(team)}
                         title="Editar equipe"
@@ -403,152 +327,25 @@ function AdminTeams() {
 
         {/* Modal para criar nova equipe */}
         <TeamCreateModal
-          isOpen={!!showTeamForm}
+          isOpen={showTeamForm}
           mode="create"
-          onClose={() => { setShowTeamForm(false); resetForm(); }}
+          onClose={() => setShowTeamForm(false)}
           onCreate={handleCreateTeam}
+          initialTab="detalhes"
         />
 
-        <TeamCreateModal
+       <TeamCreateModal
           isOpen={!!editingTeam}
           mode="edit"
           initial={editingTeam}
           onClose={() => setEditingTeam(null)}
           onUpdate={handleUpdateTeam}
+          initialTab="detalhes"
+          onAddMember={handleAddMember}
+          onRemoveMember={handleRemoveMember}
+          onToggleManager={handleToggleManager}
         />
-
-        {/* Modal para gerenciar membros */}
-        {showMembersModal && selectedTeam && (
-          <div className={styles.modalOverlay}>
-            <div className={styles.modalContent}>
-              <div className={styles.modalHeader}>
-                <h3 className={styles.modalTitle}>
-                  Gerenciar Membros - {selectedTeam.name}
-                </h3>
-                <button
-                  className={styles.closeButton}
-                  onClick={() => {
-                    setShowMembersModal(false);
-                    setSelectedTeam(null);
-                  }}
-                >
-                  ×
-                </button>
-              </div>
-              <div className={styles.modalBody}>
-                {/* Membros atuais */}
-                <div className={styles.section}>
-                  <h4 className={styles.sectionTitle}>Membros Atuais</h4>
-                  {selectedTeam.members && selectedTeam.members.length > 0 ? (
-                    <div className={styles.membersList}>
-                      {selectedTeam.members.map((member) => (
-                        <div key={member.id} className={styles.memberItem}>
-                          <div className={styles.memberInfo}>
-                            <span className={styles.memberName}>
-                              {member.username}
-                            </span>
-                            <span className={styles.memberEmail}>
-                              {member.email}
-                            </span>
-                            {member.is_manager && (
-                              <span className={styles.managerBadge}>
-                                <FiShield className={styles.badgeIcon} />
-                                Gestor
-                              </span>
-                            )}
-                          </div>
-                          <div className={styles.memberActions}>
-                            <button
-                              className={`${styles.toggleBtn} ${
-                                member.is_manager ? styles.active : ""
-                              }`}
-                              onClick={() =>
-                                handleToggleManager(
-                                  selectedTeam.id,
-                                  member.user_id,
-                                  member.is_manager
-                                )
-                              }
-                              title={
-                                member.is_manager
-                                  ? "Remover como gestor"
-                                  : "Tornar gestor"
-                              }
-                            >
-                              <FiShield />
-                            </button>
-                            <button
-                              className={styles.removeBtn}
-                              onClick={() =>
-                                handleRemoveMember(
-                                  selectedTeam.id,
-                                  member.user_id
-                                )
-                              }
-                              title="Remover da equipe"
-                            >
-                              <FiUserMinus />
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className={styles.emptyMessage}>
-                      Nenhum membro na equipe.
-                    </p>
-                  )}
-                </div>
-
-                {/* Adicionar novos membros */}
-                <div className={styles.section}>
-                  <h4 className={styles.sectionTitle}>Adicionar Membros</h4>
-                  {getAvailableUsers().length > 0 ? (
-                    <div className={styles.availableUsersList}>
-                      {getAvailableUsers().map((user) => (
-                        <div key={user.id} className={styles.availableUserItem}>
-                          <div className={styles.userInfo}>
-                            <span className={styles.userName}>
-                              {user.username}
-                            </span>
-                            <span className={styles.userEmail}>
-                              {user.email}
-                            </span>
-                          </div>
-                          <button
-                            className={styles.addBtn}
-                            onClick={() =>
-                              handleAddMember(selectedTeam.id, user.id)
-                            }
-                            title="Adicionar à equipe"
-                          >
-                            <FiUserPlus />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className={styles.emptyMessage}>
-                      Todos os usuários já estão na equipe.
-                    </p>
-                  )}
-                </div>
-              </div>
-              <div className={styles.modalFooter}>
-                <button
-                  className={styles.cancelBtn}
-                  onClick={() => {
-                    setShowMembersModal(false);
-                    setSelectedTeam(null);
-                  }}
-                >
-                  Fechar
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
+        
         <DeleteConfirmModal
           isOpen={showDeleteModal}
           onCancel={cancelDelete}

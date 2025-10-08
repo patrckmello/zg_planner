@@ -24,6 +24,83 @@ function TasksPage() {
     collaborative_tasks: 0,
   });
 
+  // -------- helpers usados na aba "equipe" e nos counters --------
+  const isManager = (user) => {
+    if (!user) return false;
+    const byAdminFlag = !!user.is_admin;
+
+    const byRole =
+      Array.isArray(user.roles) &&
+      user.roles.some((r) =>
+        ["manager", "gestor", "admin", "administrador"].includes(
+          (r?.name ?? r)?.toString()?.toLowerCase()
+        )
+      );
+
+    const byTeamMgr =
+      Array.isArray(user.user_teams) &&
+      user.user_teams.some((ut) => ut?.is_manager);
+
+    return byAdminFlag || byRole || byTeamMgr;
+  };
+
+  const getUserTeamIds = (user) => {
+    const raw = user?.teams ?? user?.user_teams ?? [];
+    // suporta payloads [{id,...}] ou [{team_id,...}]
+    return new Set(raw.map((t) => t.team_id ?? t.id));
+  };
+
+  const computeCounts = (allTasks, user) => {
+    if (!user) return { my_tasks: 0, team_tasks: 0, collaborative_tasks: 0 };
+
+    const userTeamIds = getUserTeamIds(user);
+    const mgr = isManager(user);
+
+    const isMyTask = (t) =>
+      t.user_id === user.id &&
+      (t.assigned_by_user_id === null || t.assigned_by_user_id === user.id);
+
+    const assignedToMeByOthers = (t) =>
+      t.user_id === user.id &&
+      t.assigned_by_user_id != null &&
+      t.assigned_by_user_id !== user.id;
+
+    const multiAssignedIncludesMe = (t) =>
+      Array.isArray(t.collaborators) &&
+      t.collaborators.includes(user.id) &&
+      (t.collaborators.length > 1 || t.user_id !== user.id);
+
+    const iAssignedToOthers = (t) =>
+      mgr && t.assigned_by_user_id === user.id && t.user_id !== user.id;
+
+    const inMyTeam = (t) =>
+      t.team_id == null || userTeamIds.size === 0 || userTeamIds.has(t.team_id);
+
+    let myTasks = 0;
+    let teamTasks = 0;
+    let collabTasks = 0;
+
+    for (const t of allTasks) {
+      if (isMyTask(t)) myTasks += 1;
+
+      if (
+        inMyTeam(t) &&
+        (assignedToMeByOthers(t) || multiAssignedIncludesMe(t) || iAssignedToOthers(t))
+      ) {
+        teamTasks += 1;
+      }
+
+      if (multiAssignedIncludesMe(t)) collabTasks += 1;
+    }
+
+    return {
+      my_tasks: myTasks,
+      team_tasks: teamTasks,
+      collaborative_tasks: collabTasks,
+    };
+  };
+  // ---------------------------------------------------------------
+
   // Filtrar tarefas baseado na aba ativa
   const getFilteredTasks = (allTasks, tab, user) => {
     if (!user) return allTasks;
@@ -36,23 +113,43 @@ function TasksPage() {
             (task.assigned_by_user_id === null ||
               task.assigned_by_user_id === user.id)
         );
-      case "equipe":
-        return allTasks.filter(
-          (task) =>
-            (task.team_id !== null ||
-              (task.assigned_by_user_id === user.id &&
-                task.user_id !== user.id)) &&
-            !(
-              task.collaborators &&
-              task.collaborators.includes(user.id) &&
-              task.user_id !== user.id &&
-              task.assigned_by_user_id !== user.id
-            )
-        );
+
+      case "equipe": {
+        const mgr = isManager(user);
+        const userTeamIds = getUserTeamIds(user);
+
+        return allTasks.filter((task) => {
+          // 1) atribuíram PARA MIM (por outra pessoa)
+          const assignedToMeByOthers =
+            task.user_id === user.id &&
+            task.assigned_by_user_id != null &&
+            task.assigned_by_user_id !== user.id;
+
+          // 2) multi-atribuídas que me incluem
+          const multiAssignedIncludesMe =
+            Array.isArray(task.collaborators) &&
+            task.collaborators.includes(user.id) &&
+            (task.collaborators.length > 1 || task.user_id !== user.id);
+
+          // 3) (somente gestor) tarefas QUE EU ATRIBUÍ para outra pessoa, p/ acompanhamento
+          const iAssignedToOthers =
+            mgr && task.assigned_by_user_id === user.id && task.user_id !== user.id;
+
+          // (opcional): restringe à(s) minha(s) equipe(s) quando houver team_id
+          const inMyTeam =
+            task.team_id == null ||
+            userTeamIds.size === 0 ||
+            userTeamIds.has(task.team_id);
+
+          return inMyTeam && (assignedToMeByOthers || multiAssignedIncludesMe || iAssignedToOthers);
+        });
+      }
+
       case "colaborativas":
         return allTasks.filter(
           (task) => task.collaborators && task.collaborators.includes(user.id)
         );
+
       default:
         return allTasks;
     }
@@ -64,14 +161,16 @@ function TasksPage() {
     const fetchData = async () => {
       try {
         const userResponse = await api.get("/users/me");
-        setCurrentUser(userResponse.data);
+        const me = userResponse.data;
+        setCurrentUser(me);
 
-        // ⚠️ continua sem arquivadas para o primeiro load ficar leve
+        // ⚠️ sem arquivadas para o primeiro load ficar leve
         const tasksResponse = await api.get("/tasks");
-        setTasks(tasksResponse.data);
+        const all = tasksResponse.data;
+        setTasks(all);
 
-        const countsResponse = await api.get("/tasks/counts");
-        setTaskCounts(countsResponse.data);
+        // Counter garantido com a mesma regra da UI:
+        setTaskCounts(computeCounts(all, me));
       } catch (error) {
         console.error("Erro ao buscar dados:", error);
         toast.error("Erro ao buscar dados. Faça login novamente.", {
@@ -117,12 +216,18 @@ function TasksPage() {
   const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
 
   const handleTaskUpdate = (taskId, updateData) => {
-    if (updateData.deleted) {
-      setTasks((prev) => prev.filter((t) => t.id !== taskId));
-    } else {
-      setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, ...updateData } : t)));
-    }
-    api.get("/tasks/counts").then((res) => setTaskCounts(res.data));
+    setTasks((prev) => {
+      let next;
+      if (updateData.deleted) {
+        next = prev.filter((t) => t.id !== taskId);
+      } else {
+        next = prev.map((t) => (t.id === taskId ? { ...t, ...updateData } : t));
+      }
+      if (currentUser) {
+        setTaskCounts(computeCounts(next, currentUser));
+      }
+      return next;
+    });
   };
 
   const handleTabChange = (newTab) => setActiveTab(newTab);

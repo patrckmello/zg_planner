@@ -26,6 +26,10 @@ export default function TeamCreateModal({
   onCreate,                // (payload)=>Promise
   onUpdate,                // (id, payload)=>Promise
   busy = false,
+  onAddMember,
+  onRemoveMember,
+  onToggleManager,
+  initialTab = "detalhes", 
 }) {
   const isEdit = mode === "edit";
 
@@ -42,14 +46,15 @@ export default function TeamCreateModal({
 
   React.useEffect(() => {
     if (!isOpen) return;
-    setTab("detalhes");
+    setTab(mode === "edit" && initialTab === "membros" ? "membros" : "detalhes");
     setName(initial?.name || "");
     setDescription(initial?.description || "");
     setErrors({});
     setMembers(initial?.members || []);
     setAvailable([]);
     setUsersQuery("");
-  }, [isOpen, initial]);
+  }, [isOpen, mode, initial, initialTab]);
+
 
   // Busca usuários disponíveis (não-membros)
   React.useEffect(() => {
@@ -61,7 +66,7 @@ export default function TeamCreateModal({
         // pega todos usuários e filtra aqui (ou adapte para endpoint com search/paginação)
         const res = await api.get("/users", { params: usersQuery ? { search: usersQuery } : {} });
         const list = Array.isArray(res.data) ? res.data : res.data?.items || [];
-        const memberIds = new Set((initial?.members || []).map(m => m.user_id));
+        const memberIds = new Set((members || []).map(m => m.user_id));
         const filtered = list.filter(u => !memberIds.has(u.id));
         if (active) setAvailable(filtered);
       } catch {
@@ -89,24 +94,22 @@ export default function TeamCreateModal({
     onClose?.();
   };
 
-  // Membros: add / remove / toggle gestor
   const addMember = async (userId) => {
     if (!initial?.id) return;
-    const res = await api.post(`/teams/${initial.id}/users`, { user_id: userId });
-    // backend retorna o team atualizado; sincroniza estado
-    setMembers(res.data.members || []);
+    const updated = await onAddMember?.(initial.id, userId);
+    if (updated?.members) setMembers(updated.members);
   };
 
   const removeMember = async (userId) => {
     if (!initial?.id) return;
-    const res = await api.delete(`/teams/${initial.id}/users/${userId}`);
-    setMembers(res.data.members || []);
+    const updated = await onRemoveMember?.(initial.id, userId);
+    if (updated?.members) setMembers(updated.members);
   };
 
   const toggleManager = async (userId, isManager) => {
     if (!initial?.id) return;
-    const res = await api.put(`/teams/${initial.id}/users/${userId}`, { is_manager: !isManager });
-    setMembers(res.data.members || []);
+    const updated = await onToggleManager?.(initial.id, userId, isManager);
+    if (updated?.members) setMembers(updated.members);
   };
 
   return (

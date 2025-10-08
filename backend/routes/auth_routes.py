@@ -64,8 +64,13 @@ def login():
 @jwt_required(refresh=True)
 def refresh():
     current_user_id = get_jwt_identity()
-    new_access_token = create_access_token(identity=current_user_id)
-    return jsonify({'access_token': new_access_token})
+    # emite novo access e novo refresh (rotação)
+    new_access = create_access_token(identity=current_user_id)
+    new_refresh = create_refresh_token(identity=current_user_id)
+    return jsonify({
+        'access_token': new_access,
+        'refresh_token': new_refresh
+    }), 200
 
 @auth_bp.route('/logout', methods=['POST'])
 def logout():
