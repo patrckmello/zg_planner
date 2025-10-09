@@ -134,3 +134,60 @@
   display:flex; align-items:center; gap:10px; min-width:0;
 }
 
+/* Alturas responsivas para as listas dentro da aba Membros */
+.membersPanel .list {
+  max-height: min(56vh, 520px);
+  overflow: auto;               /* importante para a barra aparecer */
+  overscroll-behavior: contain; /* evita “puxar” o fundo ao rolar no celular */
+  scroll-behavior: smooth;
+}
+
+/* Caso você tenha outras áreas que rolam, pode reaproveitar esta classe utilitária */
+.scrollY {
+  overflow: auto;
+  max-height: min(56vh, 520px);
+}
+
+:root{
+  /* ...suas variáveis existentes... */
+  --scroll-track: var(--bgSoft, #f8fafc);
+  --scroll-thumb: rgba(96,159,223,.8);      /* baseia no --brand */
+  --scroll-thumb-hover: rgba(96,159,223,1);
+}
+
+/* Firefox */
+.membersPanel .list {
+  scrollbar-width: thin; /* auto | thin | none */
+  scrollbar-color: var(--scroll-thumb) var(--scroll-track);
+}
+
+/* WebKit (Chrome/Edge/Opera/Safari) */
+.membersPanel .list::-webkit-scrollbar {
+  width: 10px;      /* espessura vertical */
+  height: 10px;     /* espessura horizontal (se houver) */
+}
+
+.membersPanel .list::-webkit-scrollbar-track {
+  background: var(--scroll-track);
+  border-radius: 12px;
+}
+
+.membersPanel .list::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--brand), var(--brand2));
+  border-radius: 12px;
+  border: 2px solid var(--scroll-track); /* cria espaço entre polegar e trilho */
+}
+
+.membersPanel .list::-webkit-scrollbar-thumb:hover {
+  background: var(--scroll-thumb-hover);
+}
+
+/* Opcional: deixa a quina arredondada quando existem barras X e Y */
+.membersPanel .list::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+.membersPanel .list {
+  padding-right: 4px;           /* evita que o thumb esconda conteúdo */
+  padding-bottom: 8px;          /* respiro ao final */
+}

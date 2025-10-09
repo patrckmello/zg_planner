@@ -1,12 +1,8 @@
+# models/user_model.py
 from extensions import db
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
-
-user_roles = db.Table(
-    'user_roles',
-    db.Column('user_id', db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), primary_key=True),
-    db.Column('role_id', db.Integer, db.ForeignKey('roles.id', ondelete='CASCADE'), primary_key=True),
-)
+from sqlalchemy.ext.associationproxy import association_proxy
 
 class User(db.Model):
     __tablename__ = 'users'
@@ -17,9 +13,16 @@ class User(db.Model):
     password_hash = db.Column(db.Text, nullable=False)
     is_admin = db.Column(db.Boolean, default=False)
     is_active = db.Column(db.Boolean, default=True)
-    icon_color = db.Column(db.String(7), default='#3498db')  # Cor do ícone do usuário
+    icon_color = db.Column(db.String(7), default='#3498db')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    roles = db.relationship('Role', secondary=user_roles, back_populates='users')
+
+    roles_link = db.relationship(
+        'UserRole',
+        back_populates='user',
+        cascade='all, delete-orphan',
+        passive_deletes=True
+    )
+    roles = association_proxy('roles_link', 'role')
 
     tasks = db.relationship(
         'Task',
@@ -27,15 +30,14 @@ class User(db.Model):
         foreign_keys='Task.user_id',
         lazy=True
     )
-    teams = db.relationship('UserTeam', back_populates='user') 
+    teams = db.relationship('UserTeam', back_populates='user')
 
     @property
     def managed_teams(self):
-        # retorna só os times que esse usuário gerencia
         return [assoc.team for assoc in self.teams if assoc.is_manager]
 
     def has_permission(self, permission):
-        if self.is_admin:  # admin geralmente tem tudo
+        if self.is_admin:
             return True
 
     def set_password(self, password):
@@ -53,7 +55,6 @@ class User(db.Model):
             'is_active': self.is_active,
             'icon_color': self.icon_color,
             'created_at': self.created_at.isoformat() if self.created_at else None,
-            # Lista das equipes desse usuário com info se ele é manager
             'equipes': [
                 {
                     'id': assoc.team.id,
@@ -62,7 +63,7 @@ class User(db.Model):
                 }
                 for assoc in self.teams
             ],
-            # Para facilitar, um boolean que indica se o user é manager de alguma equipe
             'is_manager': any(assoc.is_manager for assoc in self.teams),
-            'roles': [role.to_dict() for role in self.roles]
+            # Agora roles vem do association_proxy (objetos Role); se quiser enviar simplificado:
+            'roles': [ {'id': r.id, 'name': r.name, 'description': r.description} for r in self.roles ]
         }

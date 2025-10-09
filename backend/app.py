@@ -51,11 +51,13 @@ logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s | %(levelname)s | %(name)s | %(message)s")
 
 # ---- JWT / Flask ----
-app.config['JWT_SECRET_KEY'] = 'sua_chave_secreta'
-app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(minutes=1)
-app.config['JWT_REFRESH_TOKEN_EXPIRES'] = timedelta(days=7)
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
+app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY')
+app.config['JWT_ALGORITHM'] = 'HS256'
+app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(minutes=int(os.getenv('JWT_ACCESS_MINUTES', '15')))
+app.config['JWT_REFRESH_TOKEN_EXPIRES'] = timedelta(days=int(os.getenv('JWT_REFRESH_DAYS', '7')))
 app.config['JWT_TOKEN_LOCATION'] = ['headers']
-app.config['JWT_COOKIE_SECURE'] = False
+app.config['MAX_CONTENT_LENGTH'] = 25 * 1024 * 1024
 
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -80,7 +82,16 @@ swagger = Swagger(app, template=swagger_template)
 # ---- Extensões ----
 db.init_app(app)
 migrate = Migrate(app, db)
-CORS(app, supports_credentials=True)
+ALLOWED_ORIGINS = [
+    os.getenv('FRONTEND_BASE_URL', 'http://10.1.243.120:5174'),
+    os.getenv('FRONTEND_ALT_URL', 'http://10.1.243.120:5174'),
+]
+CORS(app,
+     origins=ALLOWED_ORIGINS,
+     supports_credentials=True,
+     methods=["GET","POST","PUT","PATCH","DELETE","OPTIONS"],
+     allow_headers=["Authorization","Content-Type","X-Requested-With","X-Admin-Request"])
+
 jwt = JWTManager(app)
 
 @jwt.expired_token_loader

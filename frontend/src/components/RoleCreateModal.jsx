@@ -12,13 +12,13 @@ const initialsFromName = (name = "") => {
   const last = parts.length > 1 ? parts[parts.length - 1] : null;
 
   const a = first?.[0] ?? "";
-  const b = last ? (last?.[0] ?? "") : (first?.[1] ?? ""); // se não tiver sobrenome, usa 2ª letra do primeiro nome
+  const b = last ? (last?.[0] ?? "") : (first?.[1] ?? "");
   return (a + b).toUpperCase();
 };
 
 const parseUsers = (data) => {
   if (Array.isArray(data)) return data;
-  if (Array.isArray(data?.users)) return data.users;  // <— seu backend atual
+  if (Array.isArray(data?.users)) return data.users;  // backend pode devolver { users: [...] }
   if (Array.isArray(data?.items)) return data.items;
   return [];
 };
@@ -31,6 +31,8 @@ export default function RoleCreateModal({
   onCreate,                 // (payload)=>Promise
   onUpdate,                 // (id, payload)=>Promise
   busy = false,
+  initialTab = "detalhes",
+  onMembersChanged,
 }) {
   const isEdit = mode === "edit";
 
@@ -39,57 +41,77 @@ export default function RoleCreateModal({
   const [description, setDescription] = React.useState("");
   const [errors, setErrors] = React.useState({});
 
-  // Membros (relacionados a esse cargo)
+  // Membros
   const [tab, setTab] = React.useState("detalhes"); // detalhes | membros
   const [roleUsers, setRoleUsers] = React.useState([]); // [{id, username, email}]
   const [usersQuery, setUsersQuery] = React.useState("");
   const [available, setAvailable] = React.useState([]);
   const [loadingAvail, setLoadingAvail] = React.useState(false);
 
+  // --------- LOADERS ---------
+  const loadRoleUsers = React.useCallback(async () => {
+    if (!isOpen || !isEdit || !initial?.id) return;
+    try {
+      const { data } = await api.get(`/roles/${initial.id}/users`);
+      setRoleUsers(parseUsers(data));
+    } catch {
+      setRoleUsers([]);
+    }
+  }, [isOpen, isEdit, initial?.id]);
+
+  const loadAvailableUsers = React.useCallback(async (signal) => {
+    if (!isOpen || !isEdit) return;
+    setLoadingAvail(true);
+    try {
+      const res = await api.get("/users", { params: usersQuery ? { search: usersQuery } : {} });
+      const list = Array.isArray(res.data) ? res.data : res.data?.items || [];
+      const roleIds = new Set((roleUsers || []).map(u => u.id));
+      const filtered = list.filter(u => !roleIds.has(u.id));
+      if (!signal?.aborted) setAvailable(filtered);
+    } catch {
+      if (!signal?.aborted) setAvailable([]);
+    } finally {
+      if (!signal?.aborted) setLoadingAvail(false);
+    }
+  }, [isOpen, isEdit, usersQuery, roleUsers]);
+
+  // --------- EFFECTS DE CONTROLE ---------
+
+  // Define a aba ao abrir o modal, respeitando initialTab no edit
   React.useEffect(() => {
     if (!isOpen) return;
-    setTab("detalhes");
+    const start = isEdit && initialTab === "membros" ? "membros" : "detalhes";
+    setTab(start);
+    setErrors({});
+    setUsersQuery("");
+  }, [isOpen, isEdit, initialTab]);
+
+  // Sincroniza dados básicos quando initial mudar
+  React.useEffect(() => {
+    if (!isOpen) return;
     setName(initial?.name || "");
     setDescription(initial?.description || "");
-    setErrors({});
-    setRoleUsers([]);
+    setRoleUsers([]); // zera e recarrega quando necessário
     setAvailable([]);
-    setUsersQuery("");
+  }, [isOpen, initial]);
 
-    // Carregar membros do cargo ao abrir em modo edição
-    (async () => {
-      if (!isEdit || !initial?.id) return;
-      try {
-        const res = await api.get(`/roles/${initial.id}/users`);
-        setRoleUsers(parseUsers(res.data));
-      } catch {
-        setRoleUsers([]);
-      }
-    })();
-  }, [isOpen, isEdit, initial]);
-
-  // Carregar usuários disponíveis (não pertencentes ao cargo) com busca
+  // Quando abrir em "membros" (ou trocar para "membros"), carrega os membros do cargo
   React.useEffect(() => {
     if (!isOpen || !isEdit) return;
-    let active = true;
-    const load = async () => {
-      setLoadingAvail(true);
-      try {
-        const res = await api.get("/users", { params: usersQuery ? { search: usersQuery } : {} });
-        const list = Array.isArray(res.data) ? res.data : res.data?.items || [];
-        const roleIds = new Set((roleUsers || []).map(u => u.id));
-        const filtered = list.filter(u => !roleIds.has(u.id));
-        if (active) setAvailable(filtered);
-      } catch {
-        if (active) setAvailable([]);
-      } finally {
-        if (active) setLoadingAvail(false);
-      }
-    };
-    const t = setTimeout(load, 250);
-    return () => { active = false; clearTimeout(t); };
-  }, [usersQuery, isOpen, isEdit, roleUsers]);
+    if (tab === "membros") {
+      loadRoleUsers();
+    }
+  }, [tab, isOpen, isEdit, loadRoleUsers]);
 
+  // Busca usuários disponíveis com debounce e sempre que roleUsers mudar (para manter lista coerente)
+  React.useEffect(() => {
+    if (!isOpen || !isEdit) return;
+    const ctrl = new AbortController();
+    const t = setTimeout(() => loadAvailableUsers(ctrl.signal), 250);
+    return () => { ctrl.abort(); clearTimeout(t); };
+  }, [usersQuery, roleUsers, isOpen, isEdit, loadAvailableUsers]);
+
+  // --------- VALIDAÇÃO / SUBMIT ---------
   const validate = () => {
     const e = {};
     if (!name.trim()) e.name = "O nome do cargo é obrigatório.";
@@ -100,27 +122,31 @@ export default function RoleCreateModal({
   const submit = async () => {
     if (!validate()) return;
     const payload = { name: name.trim(), description: description.trim() || null };
-
     if (isEdit) await onUpdate?.(initial.id, payload);
     else await onCreate?.(payload);
     onClose?.();
   };
 
-  // membros do cargo
+  // --------- AÇÕES MEMBROS ---------
   const addUser = async (userId) => {
     if (!initial?.id) return;
     await api.post(`/roles/${initial.id}/users/${userId}`);
-    const refetch = await api.get(`/roles/${initial.id}/users`);
-    setRoleUsers(parseUsers(refetch.data));
+    // Recarrega lista de membros e disponíveis
+    await loadRoleUsers();
+    onMembersChanged?.(); 
   };
 
   const removeUser = async (userId) => {
     if (!initial?.id) return;
-    await api.delete(`/roles/${initial.id}/users/${userId}`); // ajuste se necessário
-    const refetch = await api.get(`/roles/${initial.id}/users`);
-    setRoleUsers(parseUsers(refetch.data));
+    await api.delete(`/roles/${initial.id}/users/${userId}`);
+    // Recarrega lista de membros e disponíveis
+    await loadRoleUsers();
+    onMembersChanged?.(); 
   };
 
+  const switchTab = (next) => setTab(next);
+
+  // --------- RENDER ---------
   return (
     <Modal
       isOpen={isOpen}
@@ -129,11 +155,17 @@ export default function RoleCreateModal({
       title={isEdit ? "Editar Cargo" : "Novo Cargo"}
     >
       <div className={styles.tabs}>
-        <button className={`${styles.tab} ${tab==="detalhes" ? styles.active : ""}`} onClick={()=>setTab("detalhes")}>
+        <button
+          className={`${styles.tab} ${tab === "detalhes" ? styles.active : ""}`}
+          onClick={() => switchTab("detalhes")}
+        >
           Detalhes
         </button>
         {isEdit && (
-          <button className={`${styles.tab} ${tab==="membros" ? styles.active : ""}`} onClick={()=>setTab("membros")}>
+          <button
+            className={`${styles.tab} ${tab === "membros" ? styles.active : ""}`}
+            onClick={() => switchTab("membros")}
+          >
             Membros
           </button>
         )}
@@ -148,7 +180,7 @@ export default function RoleCreateModal({
               <input
                 type="text"
                 value={name}
-                onChange={(e)=>setName(e.target.value)}
+                onChange={(e) => setName(e.target.value)}
                 placeholder="Ex: Coordenador Jurídico"
               />
             </div>
@@ -161,7 +193,7 @@ export default function RoleCreateModal({
               <FiFileText className={styles.icon} />
               <textarea
                 value={description}
-                onChange={(e)=>setDescription(e.target.value)}
+                onChange={(e) => setDescription(e.target.value)}
                 placeholder="Descreva o papel deste cargo..."
                 rows={4}
               />
@@ -179,26 +211,26 @@ export default function RoleCreateModal({
 
             {roleUsers?.length ? (
               <div className={styles.list}>
-                {roleUsers.map((u)=>(
-                    <div key={u.id} className={styles.row}>
-                        <div className={`${styles.userCol} ${styles.userColRow}`}>
-                        <div className={styles.avatarSm}>{initialsFromName(u.username)}</div>
-                        <div className={styles.userText}>
-                            <div className={styles.userName}>{u.username}</div>
-                            <div className={styles.userEmail}>{u.email}</div>
-                        </div>
-                        </div>
-                        <div className={styles.actionsCol}>
-                        <button
-                            className={styles.iconBtnDanger}
-                            title="Remover do cargo"
-                            onClick={()=>removeUser(u.id)}
-                        >
-                            <FiUserMinus/>
-                        </button>
-                        </div>
+                {roleUsers.map((u) => (
+                  <div key={u.id} className={styles.row}>
+                    <div className={`${styles.userCol} ${styles.userColRow}`}>
+                      <div className={styles.avatarSm}>{initialsFromName(u.username)}</div>
+                      <div className={styles.userText}>
+                        <div className={styles.userName}>{u.username}</div>
+                        <div className={styles.userEmail}>{u.email}</div>
+                      </div>
                     </div>
-                    ))}
+                    <div className={styles.actionsCol}>
+                      <button
+                        className={styles.iconBtnDanger}
+                        title="Remover do cargo"
+                        onClick={() => removeUser(u.id)}
+                      >
+                        <FiUserMinus />
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : (
               <div className={styles.empty}>Nenhum usuário com este cargo.</div>
@@ -209,12 +241,12 @@ export default function RoleCreateModal({
             <div className={styles.sectionHeader}>
               <h4>Adicionar usuários</h4>
               <div className={styles.search}>
-                <FiSearch/>
+                <FiSearch />
                 <input
                   type="text"
                   placeholder="Buscar usuário..."
                   value={usersQuery}
-                  onChange={(e)=>setUsersQuery(e.target.value)}
+                  onChange={(e) => setUsersQuery(e.target.value)}
                 />
               </div>
             </div>
@@ -223,25 +255,25 @@ export default function RoleCreateModal({
               <div className={styles.empty}>Carregando...</div>
             ) : available?.length ? (
               <div className={styles.list}>
-                {available.map((u)=>(
-                    <div key={u.id} className={styles.row}>
-                        <div className={`${styles.userCol} ${styles.userColRow}`}>
-                        <div className={styles.avatarSm}>{initialsFromName(u.username)}</div>
-                        <div className={styles.userText}>
-                            <div className={styles.userName}>{u.username}</div>
-                            <div className={styles.userEmail}>{u.email}</div>
-                        </div>
-                        </div>
-                        <div className={styles.actionsCol}>
-                        <button
-                            className={styles.iconBtn}
-                            title="Adicionar ao cargo"
-                            onClick={()=>addUser(u.id)}
-                        >
-                            <FiUserPlus/>
-                        </button>
-                        </div>
+                {available.map((u) => (
+                  <div key={u.id} className={styles.row}>
+                    <div className={`${styles.userCol} ${styles.userColRow}`}>
+                      <div className={styles.avatarSm}>{initialsFromName(u.username)}</div>
+                      <div className={styles.userText}>
+                        <div className={styles.userName}>{u.username}</div>
+                        <div className={styles.userEmail}>{u.email}</div>
+                      </div>
                     </div>
+                    <div className={styles.actionsCol}>
+                      <button
+                        className={styles.iconBtn}
+                        title="Adicionar ao cargo"
+                        onClick={() => addUser(u.id)}
+                      >
+                        <FiUserPlus />
+                      </button>
+                    </div>
+                  </div>
                 ))}
               </div>
             ) : (

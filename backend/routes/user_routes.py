@@ -8,7 +8,96 @@ import re
 
 from models.task_model import Task
 
+# ADD: imports necessários para roles e equipes
+from models.role_model import Role
+from models.user_role_model import UserRole
+from models.team_model import Team
+from models.user_team_model import UserTeam
+from sqlalchemy.exc import IntegrityError
+
 user_bp = Blueprint('user_bp', __name__, url_prefix='/api/users')
+
+# ----------------- Helpers -----------------
+
+def _sync_user_roles(user: User, incoming_role_ids):
+    """
+    Sincroniza a lista de roles do usuário com uma lista de IDs (inteiros).
+    Usa a relação roles_link explicitamente para evitar depender de creator no association_proxy.
+    """
+    if incoming_role_ids is None:
+        return  # nada a fazer
+
+    # Normaliza e calcula diffs
+    desired_ids = {int(x) for x in incoming_role_ids}
+    current_ids = {r.id for r in user.roles}
+
+    add_ids = desired_ids - current_ids
+    remove_ids = current_ids - desired_ids
+
+    # Adições via UserRole (roles_link), evitando o .roles.append(...)
+    if add_ids:
+        roles_to_add = Role.query.filter(Role.id.in_(add_ids)).all()
+        existing = { (link.role_id) for link in user.roles_link }
+        for r in roles_to_add:
+            if r.id not in existing:
+                user.roles_link.append(UserRole(user_id=user.id, role_id=r.id))
+
+    # Remoções em massa
+    if remove_ids:
+        UserRole.query.filter(
+            UserRole.user_id == user.id,
+            UserRole.role_id.in_(remove_ids)
+        ).delete(synchronize_session=False)
+
+
+def _sync_user_teams(user: User, incoming_teams):
+    """
+    Sincroniza equipes do usuário com base em uma lista de dicts: [{ id, is_manager }]
+    """
+    if incoming_teams is None:
+        return  # nada a fazer
+
+    # Mapeia atuais por team_id
+    current_by_team = {assoc.team_id: assoc for assoc in user.teams}
+
+    # Mapeia desejados por team_id
+    desired_map = {}
+    for item in incoming_teams:
+        try:
+            tid = int(item.get("id"))
+        except Exception:
+            continue
+        desired_map[tid] = bool(item.get("is_manager", False))
+
+    desired_ids = set(desired_map.keys())
+    current_ids = set(current_by_team.keys())
+
+    # Adições
+    to_add = desired_ids - current_ids
+    if to_add:
+        teams_to_add = Team.query.filter(Team.id.in_(to_add)).all()
+        for t in teams_to_add:
+            assoc = UserTeam(user_id=user.id, team_id=t.id, is_manager=desired_map.get(t.id, False))
+            db.session.add(assoc)
+
+    # Atualizações (presente em ambos -> só sincroniza is_manager)
+    to_update = desired_ids & current_ids
+    for tid in to_update:
+        assoc = current_by_team[tid]
+        new_manager = desired_map.get(tid, False)
+        if assoc.is_manager != new_manager:
+            assoc.is_manager = new_manager
+
+    # Remoções
+    to_remove = current_ids - desired_ids
+    if to_remove:
+        UserTeam.query.filter(
+            UserTeam.user_id == user.id,
+            UserTeam.team_id.in_(to_remove)
+        ).delete(synchronize_session=False)
+
+
+# ----------------- Rotas -----------------
 
 @user_bp.route('/me')
 @jwt_required()
@@ -35,19 +124,15 @@ def change_password():
     if not current_password or not new_password:
         return jsonify({"error": "Senha atual e nova senha são obrigatórias"}), 400
     
-    # Verificar senha atual
     if not user.check_password(current_password):
         return jsonify({"error": "Senha atual incorreta"}), 400
     
-    # Validar nova senha
     if len(new_password) < 6:
         return jsonify({"error": "A nova senha deve ter pelo menos 6 caracteres"}), 400
     
-    # Atualizar senha
     user.set_password(new_password)
     db.session.commit()
     
-    # Log da ação
     AuditLog.log_action(
         user_id=current_user_id,
         action='UPDATE',
@@ -57,7 +142,6 @@ def change_password():
         ip_address=request.remote_addr,
         user_agent=request.headers.get('User-Agent')
     )
-    
     return jsonify({"message": "Senha alterada com sucesso"})
 
 @user_bp.route('/update-icon-color', methods=['PUT'])
@@ -75,15 +159,12 @@ def update_icon_color():
     if not icon_color:
         return jsonify({"error": "Cor do ícone é obrigatória"}), 400
     
-    # Validar formato da cor (hex)
     if not re.match(r'^#[0-9A-Fa-f]{6}$', icon_color):
         return jsonify({"error": "Formato de cor inválido. Use formato hex (#RRGGBB)"}), 400
     
-    # Atualizar cor
     user.icon_color = icon_color
     db.session.commit()
     
-    # Log da ação
     AuditLog.log_action(
         user_id=current_user_id,
         action='UPDATE',
@@ -93,7 +174,6 @@ def update_icon_color():
         ip_address=request.remote_addr,
         user_agent=request.headers.get('User-Agent')
     )
-    
     return jsonify({"message": "Cor do ícone atualizada com sucesso"})
 
 @user_bp.route('', methods=['GET'])
@@ -101,19 +181,11 @@ def update_icon_color():
 def list_users():
     """Lista usuários com paginação e busca por nome"""
     try:
-        # Parâmetros de paginação
         page = request.args.get('page', 1, type=int)
         per_page = request.args.get('per_page', 20, type=int)
-        
-        # Parâmetro de busca por nome
         search = request.args.get('search', '').strip()
-        
-        # Construir query base
         query = User.query
-        
-        # Aplicar filtro de busca se fornecido
         if search:
-            # Busca por username ou email (case-insensitive)
             search_filter = f"%{search}%"
             query = query.filter(
                 db.or_(
@@ -121,18 +193,8 @@ def list_users():
                     User.email.ilike(search_filter)
                 )
             )
-        
-        # Ordenar por username
         query = query.order_by(User.username.asc())
-        
-        # Aplicar paginação
-        users_pagination = query.paginate(
-            page=page,
-            per_page=per_page,
-            error_out=False
-        )
-        
-        # Preparar resposta com usuários e metadados de paginação
+        users_pagination = query.paginate(page=page, per_page=per_page, error_out=False)
         response_data = {
             "items": [user.to_dict() for user in users_pagination.items],
             "pagination": {
@@ -147,26 +209,42 @@ def list_users():
             },
             "search": search
         }
-        
         return jsonify(response_data)
-        
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 @user_bp.route('/', methods=['POST'])
 @admin_required
 def create_user():
-    data = request.json
+    data = request.get_json() or {}
+    username = data.get('username')
+    email = data.get('email')
+    password = data.get('password')
+
+    if not username or not email or not password:
+        return jsonify({"error": "username, email e password são obrigatórios"}), 400
+
     user = User(
-        username=data['username'],
-        email=data['email'],
-        is_admin=data.get('is_admin', False)
+        username=username.strip(),
+        email=email.strip(),
+        is_admin=data.get('is_admin', False),
+        is_active=True,
+        icon_color=data.get('icon_color') or '#3498db'
     )
-    user.set_password(data['password'])
+    user.set_password(password)
+
     db.session.add(user)
-    db.session.commit()
-    
-    # Log da ação
+    db.session.flush()  # gera ID sem encerrar a transação
+
+    try:
+        # Sincroniza roles e teams enviados no payload de criação
+        _sync_user_roles(user, data.get('roles'))                  # roles: [int]
+        _sync_user_teams(user, data.get('teams'))                  # teams: [{id,is_manager}]
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({"error": "Violação de integridade ao criar usuário"}), 400
+
     current_user_id = get_jwt_identity()
     AuditLog.log_action(
         user_id=current_user_id,
@@ -177,34 +255,45 @@ def create_user():
         ip_address=request.remote_addr,
         user_agent=request.headers.get('User-Agent')
     )
-    
     return jsonify(user.to_dict()), 201
 
 @user_bp.route('/<int:user_id>', methods=['PUT'])
 @admin_required
 def update_user(user_id):
     user = User.query.get_or_404(user_id)
-    data = request.json
+    data = request.get_json() or {}
 
     # 🔒 Proteção do admin master
     if user_id == 6:
-        # impede perder privilégios de admin
         if "is_admin" in data and data["is_admin"] is False:
             return jsonify({"error": "O admin master não pode perder privilégios"}), 403
-        # impede ser inativado
         if "is_active" in data and data["is_active"] is False:
             return jsonify({"error": "O admin master não pode ser inativado"}), 403
 
+    # Campos básicos
     user.username = data.get('username', user.username)
     user.email = data.get('email', user.email)
-    # se não for admin master, permite alterar is_admin e is_active
+
     if user_id != 6:
-        user.is_admin = data.get('is_admin', user.is_admin)
-        user.is_active = data.get('is_active', user.is_active)
+        if 'is_admin' in data:
+            user.is_admin = bool(data.get('is_admin'))
+        if 'is_active' in data:
+            user.is_active = bool(data.get('is_active'))
 
-    db.session.commit()
+    if 'icon_color' in data:
+        icon_color = data.get('icon_color')
+        if icon_color and re.match(r'^#[0-9A-Fa-f]{6}$', icon_color):
+            user.icon_color = icon_color
 
-    # Log da ação
+    # Sincroniza roles/equipes se enviados
+    try:
+        _sync_user_roles(user, data.get('roles'))   # [int]
+        _sync_user_teams(user, data.get('teams'))   # [{id,is_manager}]
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({"error": "Violação de integridade ao atualizar usuário"}), 400
+
     current_user_id = get_jwt_identity()
     AuditLog.log_action(
         user_id=current_user_id,
@@ -215,10 +304,7 @@ def update_user(user_id):
         ip_address=request.remote_addr,
         user_agent=request.headers.get('User-Agent')
     )
-
     return jsonify(user.to_dict())
-
-
 
 @user_bp.route('/<int:user_id>', methods=['DELETE'])
 @admin_required
@@ -228,7 +314,6 @@ def delete_user(user_id):
 
     user = User.query.get_or_404(user_id)
 
-    # Verifica tasks ativas
     active_tasks = Task.query.filter(
         Task.user_id == user.id,
         Task.status.in_(["pending", "in_progress"])
@@ -243,7 +328,6 @@ def delete_user(user_id):
     db.session.delete(user)
     db.session.commit()
 
-    # Log
     current_user_id = get_jwt_identity()
     AuditLog.log_action(
         user_id=current_user_id,
@@ -254,34 +338,24 @@ def delete_user(user_id):
         ip_address=request.remote_addr,
         user_agent=request.headers.get('User-Agent')
     )
-
     return jsonify({'message': 'Usuário excluído com sucesso.'})
 
-
+# --------- Endpoints específicos de roles ---------
 
 @user_bp.route('/<int:user_id>/roles', methods=['POST'])
 @admin_required
 def add_role_to_user(user_id):
-    """Adiciona uma role a um usuário"""
-    from models.role_model import Role
-    
     user = User.query.get_or_404(user_id)
-    data = request.json
+    data = request.json or {}
     role_id = data.get('role_id')
-    
     if not role_id:
         return jsonify({'error': 'role_id é obrigatório'}), 400
-    
     role = Role.query.get_or_404(role_id)
-    
-    # Verifica se o usuário já possui essa role
     if role in user.roles:
         return jsonify({'error': 'Usuário já possui essa role'}), 400
-    
     user.roles.append(role)
     db.session.commit()
-    
-    # Log da ação
+
     current_user_id = get_jwt_identity()
     AuditLog.log_action(
         user_id=current_user_id,
@@ -292,26 +366,18 @@ def add_role_to_user(user_id):
         ip_address=request.remote_addr,
         user_agent=request.headers.get('User-Agent')
     )
-    
     return jsonify(user.to_dict())
 
 @user_bp.route('/<int:user_id>/roles/<int:role_id>', methods=['DELETE'])
 @admin_required
 def remove_role_from_user(user_id, role_id):
-    """Remove uma role de um usuário"""
-    from models.role_model import Role
-    
     user = User.query.get_or_404(user_id)
     role = Role.query.get_or_404(role_id)
-    
-    # Verifica se o usuário possui essa role
     if role not in user.roles:
         return jsonify({'error': 'Usuário não possui essa role'}), 400
-    
     user.roles.remove(role)
     db.session.commit()
-    
-    # Log da ação
+
     current_user_id = get_jwt_identity()
     AuditLog.log_action(
         user_id=current_user_id,
@@ -322,6 +388,4 @@ def remove_role_from_user(user_id, role_id):
         ip_address=request.remote_addr,
         user_agent=request.headers.get('User-Agent')
     )
-    
     return jsonify(user.to_dict())
-

@@ -1,14 +1,12 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Header from "../components/Header";
 import Sidebar from "../components/Sidebar";
 import DeleteConfirmModal from "../components/DeleteConfirmModal";
-import RoleUserManager from "../components/RoleUserManager";
 import styles from "./AdminRoles.module.css";
 import RoleCreateModal from "../components/RoleCreateModal";
 import api from "../services/axiosInstance";
 import { useNavigate } from "react-router-dom";
 import {
-  FiFilter,
   FiArrowDownCircle,
   FiPlus,
   FiEdit,
@@ -16,7 +14,6 @@ import {
   FiMoreHorizontal,
   FiTrash2,
   FiUsers,
-  FiSettings,
 } from "react-icons/fi";
 import { toast } from "react-toastify";
 
@@ -31,17 +28,20 @@ function AdminRoles() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [roleToDelete, setRoleToDelete] = useState(null);
   const [showDropdown, setShowDropdown] = useState(null);
-  const [showUserManager, setShowUserManager] = useState(false);
-  const [roleToManageUsers, setRoleToManageUsers] = useState(null);
 
-  // Estado para novo cargo
-  const [newRole, setNewRole] = useState({
-    name: "",
-    description: "",
-  });
+  // Novo cargo
+  const [newRole, setNewRole] = useState({ name: "", description: "" });
 
-  // Manteremos a sidebar aberta por padrão em telas maiores
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 768);
+
+  const refreshRoles = useCallback(async () => {
+    try {
+      const response = await api.get("/roles");
+      setRoles(response.data);
+    } catch (err) {
+      console.error("Erro ao recarregar cargos:", err);
+    }
+  }, []);
 
   const sortedRoles = [...roles].sort((a, b) => {
     if (sortBy === "name") return a.name.localeCompare(b.name);
@@ -56,7 +56,6 @@ function AdminRoles() {
     const fetchRoles = async () => {
       try {
         const response = await api.get("/roles");
-        console.log("Cargos recebidos no frontend:", response.data);
         setRoles(response.data);
       } catch (error) {
         console.error("Erro ao buscar cargos:", error);
@@ -69,18 +68,13 @@ function AdminRoles() {
     fetchRoles();
 
     const handleResize = () => {
-      if (window.innerWidth <= 768) {
-        setSidebarOpen(false);
-      }
+      if (window.innerWidth <= 768) setSidebarOpen(false);
     };
 
-    const handleClickOutside = () => {
-      setShowDropdown(null);
-    };
+    const handleClickOutside = () => setShowDropdown(null);
 
     window.addEventListener("resize", handleResize);
     document.addEventListener("click", handleClickOutside);
-
     return () => {
       window.removeEventListener("resize", handleResize);
       document.removeEventListener("click", handleClickOutside);
@@ -107,29 +101,23 @@ function AdminRoles() {
     }
   };
 
-  const toggleSidebar = () => {
-    setSidebarOpen(!sidebarOpen);
-  };
+  const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
 
-  const resetForm = () => {
-    setNewRole({ name: "", description: "" });
-  };
+  const resetForm = () => setNewRole({ name: "", description: "" });
 
   const handleCreateRole = async () => {
     if (!newRole.name) {
       toast.error("O nome do cargo é obrigatório!");
       return;
     }
-
     try {
       const response = await api.post("/roles", newRole);
-      setRoles([...roles, response.data]);
+      // backend não envia users_count; inicializa em 0
+      setRoles((prev) => [...prev, { ...response.data, users_count: 0 }]);
       resetForm();
       setShowRoleForm(false);
-      console.log("Cargo criado com sucesso:", response.data);
     } catch (error) {
       console.error("Erro ao criar cargo:", error);
-
       if (error.response?.status === 400 && error.response.data?.error) {
         toast.error(`Erro: ${error.response.data.error}`);
       } else {
@@ -141,14 +129,19 @@ function AdminRoles() {
   const handleUpdateRole = async (roleId, roleData) => {
     try {
       const response = await api.put(`/roles/${roleId}`, roleData);
+      // Preserva users_count do item atual para evitar zerar no render
       setRoles((prev) =>
-        prev.map((r) => (r.id === roleId ? response.data : r))
+        prev.map((r) =>
+          r.id === roleId ? { ...r, ...response.data, users_count: r.users_count ?? 0 } : r
+        )
       );
-      setEditingRole(null);
-      console.log("Cargo atualizado com sucesso:", response.data);
+      setEditingRole((prev) =>
+        prev && prev.id === roleId ? { ...prev, ...response.data } : prev
+      );
+      // Em seguida, recarrega a lista completa para trazer o users_count correto do backend
+      await refreshRoles();
     } catch (error) {
       console.error("Erro ao atualizar cargo:", error);
-
       if (error.response?.status === 400 && error.response.data?.error) {
         toast.error(`Erro: ${error.response.data.error}`);
       } else {
@@ -164,33 +157,17 @@ function AdminRoles() {
 
   const confirmDelete = async () => {
     if (!roleToDelete) return;
-
     try {
       await api.delete(`/roles/${roleToDelete.id}`);
       setRoles((prev) => prev.filter((r) => r.id !== roleToDelete.id));
     } catch (error) {
       console.error("Erro ao excluir cargo:", error);
-      toast.error(
-        "Erro ao excluir cargo. Verifique se não há usuários vinculados a este cargo."
-      );
+      toast.error("Erro ao excluir cargo. Verifique se não há usuários vinculados a este cargo.");
     } finally {
       setRoleToDelete(null);
       setShowDeleteModal(false);
       setShowDropdown(null);
     }
-  };
-
-  const handleManageUsers = (role) => {
-    setRoleToManageUsers(role);
-    setShowUserManager(true);
-    setShowDropdown(null);
-  };
-
-  const handleRoleUpdate = (updatedRole) => {
-    setRoles((prev) =>
-      prev.map((r) => (r.id === updatedRole.id ? updatedRole : r))
-    );
-    setRoleToManageUsers(updatedRole);
   };
 
   if (loading) {
@@ -207,9 +184,7 @@ function AdminRoles() {
         <div className={styles.errorMessage}>
           <h2>Erro</h2>
           <p>{error}</p>
-          <button onClick={() => window.location.reload()}>
-            Tentar Novamente
-          </button>
+          <button onClick={() => window.location.reload()}>Tentar Novamente</button>
         </div>
       </div>
     );
@@ -218,18 +193,13 @@ function AdminRoles() {
   return (
     <div className={styles.adminRolesPage}>
       <Header onMenuToggle={toggleSidebar} />
-
       <div className={styles.pageBody}>
         <Sidebar onLogout={handleLogout} isOpen={sidebarOpen} />
-
         <main className={styles.contentArea}>
           <div className={styles.rolesWrapper}>
             <div className={styles.rolesHeader}>
               <h2>Administração de Cargos</h2>
-              <button
-                className={styles.addRoleBtn}
-                onClick={() => setShowRoleForm(true)}
-              >
+              <button className={styles.addRoleBtn} onClick={() => setShowRoleForm(true)}>
                 <FiPlus className={styles.btnIcon} />
                 Novo Cargo
               </button>
@@ -255,9 +225,7 @@ function AdminRoles() {
 
             <div className={styles.rolesList}>
               {sortedRoles.length === 0 ? (
-                <div className={styles.emptyRoles}>
-                  Nenhum cargo cadastrado.
-                </div>
+                <div className={styles.emptyRoles}>Nenhum cargo cadastrado.</div>
               ) : (
                 sortedRoles.map((role) => (
                   <div key={role.id} className={styles.roleItem}>
@@ -272,14 +240,16 @@ function AdminRoles() {
                         </div>
                         <div className={styles.roleStats}>
                           <FiUsers className={styles.statsIcon} />
-                          {role.users_count || 0} usuário(s)
+                          {role.users_count ?? 0} usuário(s)
                         </div>
                       </div>
                     </div>
                     <div className={styles.roleActions}>
                       <button
                         className={styles.editBtn}
-                        onClick={() => setEditingRole(role)}
+                        onClick={() =>
+                          setEditingRole((prev) => (prev && prev.id === role.id ? prev : role))
+                        }
                         title="Editar cargo"
                       >
                         <FiEdit />
@@ -289,9 +259,7 @@ function AdminRoles() {
                           className={styles.moreBtn}
                           onClick={(e) => {
                             e.stopPropagation();
-                            setShowDropdown(
-                              showDropdown === role.id ? null : role.id
-                            );
+                            setShowDropdown(showDropdown === role.id ? null : role.id);
                           }}
                           title="Mais opções"
                         >
@@ -299,13 +267,6 @@ function AdminRoles() {
                         </button>
                         {showDropdown === role.id && (
                           <div className={styles.dropdownMenu}>
-                            <button
-                              className={styles.dropdownItem}
-                              onClick={() => handleManageUsers(role)}
-                            >
-                              <FiSettings className={styles.dropdownIcon} />
-                              Gerenciar Usuários
-                            </button>
                             <button
                               className={`${styles.dropdownItem} ${styles.dangerItem}`}
                               onClick={() => {
@@ -333,14 +294,20 @@ function AdminRoles() {
           mode="create"
           onClose={() => setShowRoleForm(false)}
           onCreate={handleCreateRole}
+          // quando criar não tem membros ainda, então não precisa refresh
+          initialTab="detalhes"
         />
 
+        {/* Modal para editar cargo (com membros) */}
         <RoleCreateModal
           isOpen={!!editingRole}
           mode="edit"
           initial={editingRole}
           onClose={() => setEditingRole(null)}
           onUpdate={handleUpdateRole}
+          initialTab="membros"
+          // >>> Notifica o pai quando membros forem alterados
+          onMembersChanged={refreshRoles}
         />
 
         <DeleteConfirmModal
@@ -349,17 +316,6 @@ function AdminRoles() {
           onConfirm={confirmDelete}
           taskTitle={roleToDelete?.name || ""}
         />
-
-        {showUserManager && roleToManageUsers && (
-          <RoleUserManager
-            role={roleToManageUsers}
-            onRoleUpdate={handleRoleUpdate}
-            onClose={() => {
-              setShowUserManager(false);
-              setRoleToManageUsers(null);
-            }}
-          />
-        )}
       </div>
     </div>
   );
