@@ -5,18 +5,15 @@ import { FiUsers, FiFileText, FiSearch, FiUserPlus, FiUserMinus, FiShield } from
 import api from "../services/axiosInstance";
 
 const initialsFromName = (name = "") => {
-  const clean = name.trim().replace(/\s+/g, " ");
+  const clean = String(name || "").trim().replace(/\s+/g, " ");
   if (!clean) return "?";
   const parts = clean.split(" ");
-  const first = parts[0];
-  const last = parts.length > 1 ? parts[parts.length - 1] : null;
-
-  const a = first?.[0] ?? "";
-  const b = last ? (last?.[0] ?? "") : (first?.[1] ?? ""); // se não tiver sobrenome, usa 2ª letra do primeiro nome
+  const first = parts[0] || "";
+  const last = parts.length > 1 ? parts[parts.length - 1] : "";
+  const a = first[0] || "";
+  const b = last ? (last[0] || "") : (first[1] || "");
   return (a + b).toUpperCase();
 };
-
-
 
 export default function TeamCreateModal({
   isOpen,
@@ -29,7 +26,8 @@ export default function TeamCreateModal({
   onAddMember,
   onRemoveMember,
   onToggleManager,
-  initialTab = "detalhes", 
+  initialTab = "detalhes",
+  onTabChange,             // opcional: (tab)=>void para controlar no pai
 }) {
   const isEdit = mode === "edit";
 
@@ -37,6 +35,7 @@ export default function TeamCreateModal({
   const [name, setName] = React.useState("");
   const [description, setDescription] = React.useState("");
   const [errors, setErrors] = React.useState({});
+
   // Membros
   const [tab, setTab] = React.useState("detalhes"); // detalhes | membros
   const [members, setMembers] = React.useState([]); // [{user_id, username, email, is_manager}]
@@ -44,72 +43,105 @@ export default function TeamCreateModal({
   const [available, setAvailable] = React.useState([]); // usuários não membros
   const [loadingAvail, setLoadingAvail] = React.useState(false);
 
+  // ---- Controle de abas: só muda ao ABRIR o modal (ou trocar mode) ----
   React.useEffect(() => {
     if (!isOpen) return;
-    setTab(mode === "edit" && initialTab === "membros" ? "membros" : "detalhes");
+    const startTab = isEdit && initialTab === "membros" ? "membros" : "detalhes";
+    setTab(startTab);
+    onTabChange?.(startTab);
+  }, [isOpen, isEdit, initialTab, onTabChange]);
+
+  // ---- Sincroniza dados quando initial mudar (não mexe na aba) ----
+  React.useEffect(() => {
+    if (!isOpen) return;
     setName(initial?.name || "");
     setDescription(initial?.description || "");
     setErrors({});
-    setMembers(initial?.members || []);
+    setMembers(Array.isArray(initial?.members) ? initial.members : []);
     setAvailable([]);
     setUsersQuery("");
-  }, [isOpen, mode, initial, initialTab]);
-
-
-  // Busca usuários disponíveis (não-membros)
-  React.useEffect(() => {
-    if (!isOpen || !isEdit) return; // só faz sentido ao editar
-    let active = true;
-    const load = async () => {
-      setLoadingAvail(true);
-      try {
-        // pega todos usuários e filtra aqui (ou adapte para endpoint com search/paginação)
-        const res = await api.get("/users", { params: usersQuery ? { search: usersQuery } : {} });
-        const list = Array.isArray(res.data) ? res.data : res.data?.items || [];
-        const memberIds = new Set((members || []).map(m => m.user_id));
-        const filtered = list.filter(u => !memberIds.has(u.id));
-        if (active) setAvailable(filtered);
-      } catch {
-        if (active) setAvailable([]);
-      } finally {
-        if (active) setLoadingAvail(false);
-      }
-    };
-    const t = setTimeout(load, 250); // debounce leve
-    return () => { active = false; clearTimeout(t); };
-  }, [usersQuery, isOpen, isEdit, initial]);
+  }, [isOpen, initial]);
 
   const validate = () => {
     const e = {};
-    if (!name.trim()) e.name = "O nome da equipe é obrigatório.";
+    if (!String(name).trim()) e.name = "O nome da equipe é obrigatório.";
     setErrors(e);
     return Object.keys(e).length === 0;
   };
 
   const submit = async () => {
     if (!validate()) return;
-    const payload = { name: name.trim(), description: description.trim() || null };
-    if (isEdit) await onUpdate?.(initial.id, payload);
-    else await onCreate?.(payload);
-    onClose?.();
+    const payload = {
+      name: String(name).trim(),
+      description: String(description || "").trim() || null,
+    };
+    try {
+      if (isEdit) {
+        await onUpdate?.(initial.id, payload);
+      } else {
+        await onCreate?.(payload);
+      }
+      onClose?.();
+    } catch (err) {
+      // mantém modal aberto em caso de erro
+      console.error("Falha ao salvar equipe:", err);
+    }
   };
 
   const addMember = async (userId) => {
     if (!initial?.id) return;
     const updated = await onAddMember?.(initial.id, userId);
     if (updated?.members) setMembers(updated.members);
+    // Opcional: remove localmente o usuário adicionado da lista de disponíveis (responsivo)
+    setAvailable((prev) => prev.filter((u) => u.id !== userId));
   };
 
   const removeMember = async (userId) => {
     if (!initial?.id) return;
     const updated = await onRemoveMember?.(initial.id, userId);
     if (updated?.members) setMembers(updated.members);
+    // Recarregaremos via efeito (members em deps); não precisa inserir de volta em available aqui
   };
 
   const toggleManager = async (userId, isManager) => {
     if (!initial?.id) return;
     const updated = await onToggleManager?.(initial.id, userId, isManager);
     if (updated?.members) setMembers(updated.members);
+  };
+
+  // ---- Busca usuários disponíveis (não-membros) com debounce ----
+  React.useEffect(() => {
+    if (!isOpen || !isEdit) return;
+
+    let active = true;
+    const load = async () => {
+      setLoadingAvail(true);
+      try {
+        const params = {};
+        const q = String(usersQuery || "").trim();
+        if (q) params.search = q;
+
+        const res = await api.get("/users", { params });
+        const list = Array.isArray(res.data) ? res.data : res.data?.items || [];
+
+        const memberIds = new Set((members || []).map((m) => m.user_id));
+        const filtered = list.filter((u) => !memberIds.has(u.id));
+
+        if (active) setAvailable(filtered);
+      } catch (e) {
+        if (active) setAvailable([]);
+      } finally {
+        if (active) setLoadingAvail(false);
+      }
+    };
+
+    const t = setTimeout(load, 250); // debounce leve
+    return () => { active = false; clearTimeout(t); };
+  }, [usersQuery, isOpen, isEdit, members]); // <- inclui members para refiltrar após add/remove/toggle
+
+  const switchTab = (next) => {
+    setTab(next);
+    onTabChange?.(next);
   };
 
   return (
@@ -120,11 +152,17 @@ export default function TeamCreateModal({
       title={isEdit ? "Editar Equipe" : "Nova Equipe"}
     >
       <div className={styles.tabs}>
-        <button className={`${styles.tab} ${tab==="detalhes" ? styles.active : ""}`} onClick={()=>setTab("detalhes")}>
+        <button
+          className={`${styles.tab} ${tab === "detalhes" ? styles.active : ""}`}
+          onClick={() => switchTab("detalhes")}
+        >
           Detalhes
         </button>
         {isEdit && (
-          <button className={`${styles.tab} ${tab==="membros" ? styles.active : ""}`} onClick={()=>setTab("membros")}>
+          <button
+            className={`${styles.tab} ${tab === "membros" ? styles.active : ""}`}
+            onClick={() => switchTab("membros")}
+          >
             Membros & Gestão
           </button>
         )}
@@ -139,8 +177,9 @@ export default function TeamCreateModal({
               <input
                 type="text"
                 value={name}
-                onChange={(e)=>setName(e.target.value)}
+                onChange={(e) => setName(e.target.value)}
                 placeholder="Ex: Equipe Trabalhista"
+                autoFocus
               />
             </div>
             {errors.name && <span className={styles.err}>{errors.name}</span>}
@@ -152,7 +191,7 @@ export default function TeamCreateModal({
               <FiFileText className={styles.icon} />
               <textarea
                 value={description}
-                onChange={(e)=>setDescription(e.target.value)}
+                onChange={(e) => setDescription(e.target.value)}
                 placeholder="Descrição da equipe..."
                 rows={4}
               />
@@ -170,7 +209,7 @@ export default function TeamCreateModal({
 
             {members?.length ? (
               <div className={styles.list}>
-                {members.map((m)=>(
+                {members.map((m) => (
                   <div key={m.user_id} className={styles.row}>
                     <div className={`${styles.userCol} ${styles.userColRow}`}>
                       <div className={styles.avatarSm}>{initialsFromName(m.username)}</div>
@@ -183,16 +222,16 @@ export default function TeamCreateModal({
                       <button
                         className={`${styles.switchBtn} ${m.is_manager ? styles.on : ""}`}
                         title={m.is_manager ? "Remover como gestor" : "Tornar gestor"}
-                        onClick={()=>toggleManager(m.user_id, m.is_manager)}
+                        onClick={() => toggleManager(m.user_id, m.is_manager)}
                       >
-                        <FiShield/><span>Gestor</span>
+                        <FiShield /><span>Gestor</span>
                       </button>
                       <button
                         className={styles.iconBtnDanger}
                         title="Remover da equipe"
-                        onClick={()=>removeMember(m.user_id)}
+                        onClick={() => removeMember(m.user_id)}
                       >
-                        <FiUserMinus/>
+                        <FiUserMinus />
                       </button>
                     </div>
                   </div>
@@ -207,12 +246,12 @@ export default function TeamCreateModal({
             <div className={styles.sectionHeader}>
               <h4>Adicionar membros</h4>
               <div className={styles.search}>
-                <FiSearch/>
+                <FiSearch />
                 <input
                   type="text"
                   placeholder="Buscar usuário..."
                   value={usersQuery}
-                  onChange={(e)=>setUsersQuery(e.target.value)}
+                  onChange={(e) => setUsersQuery(e.target.value)}
                 />
               </div>
             </div>
@@ -221,7 +260,7 @@ export default function TeamCreateModal({
               <div className={styles.empty}>Carregando...</div>
             ) : available?.length ? (
               <div className={styles.list}>
-                {available.map((u)=>(
+                {available.map((u) => (
                   <div key={u.id} className={styles.row}>
                     <div className={`${styles.userCol} ${styles.userColRow}`}>
                       <div className={styles.avatarSm}>{initialsFromName(u.username)}</div>
@@ -234,9 +273,9 @@ export default function TeamCreateModal({
                       <button
                         className={styles.iconBtn}
                         title="Adicionar à equipe"
-                        onClick={()=>addMember(u.id)}
+                        onClick={() => addMember(u.id)}
                       >
-                        <FiUserPlus/>
+                        <FiUserPlus />
                       </button>
                     </div>
                   </div>
@@ -248,7 +287,6 @@ export default function TeamCreateModal({
           </div>
         </div>
       )}
-
 
       <div className={styles.footer}>
         <button className={styles.ghost} onClick={onClose}>Cancelar</button>

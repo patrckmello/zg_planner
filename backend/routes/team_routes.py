@@ -115,15 +115,15 @@ def delete_team(team_id):
 
     return jsonify({"message": "Time excluído com sucesso."})
 
-# Se quiser gerenciar membros do time:
+from sqlalchemy.exc import IntegrityError
+
 @team_bp.route("/<int:team_id>/users", methods=["POST"])
 @admin_required
 def add_user_to_team(team_id):
     team = Team.query.get_or_404(team_id)
-    data = request.json
-
+    data = request.json or {}
     user_id = data.get("user_id")
-    is_manager = data.get("is_manager", False)
+    is_manager = bool(data.get("is_manager", False))
 
     if not user_id:
         return jsonify({"error": "user_id é obrigatório"}), 400
@@ -132,13 +132,18 @@ def add_user_to_team(team_id):
     if not user:
         return jsonify({"error": "Usuário não encontrado"}), 404
 
+    # checagem rápida (otimista)
     existing = UserTeam.query.filter_by(user_id=user_id, team_id=team_id).first()
     if existing:
         return jsonify({"error": "Usuário já faz parte desse time."}), 400
 
     user_team = UserTeam(user_id=user_id, team_id=team_id, is_manager=is_manager)
     db.session.add(user_team)
-    db.session.commit()
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({"error": "Usuário já faz parte desse time."}), 409
 
     current_user_id = get_jwt_identity()
     AuditLog.log_action(
@@ -151,9 +156,7 @@ def add_user_to_team(team_id):
         user_agent=request.headers.get('User-Agent')
     )
 
-    # Atualiza o time para pegar os membros atualizados
-    updated_team = Team.query.get(team_id)
-    return jsonify(updated_team.to_dict()), 201
+    return jsonify(team.to_dict()), 201
 
 @team_bp.route("/<int:team_id>/users", methods=["GET"])
 @admin_required
@@ -162,11 +165,12 @@ def list_team_users(team_id):
     members = [
         {
             "user_id": ut.user.id,
-            "name": ut.user.username,
+            "username": ut.user.username,
             "email": ut.user.email,
             "is_manager": ut.is_manager
         }
         for ut in team.members
+        if ut.user is not None
     ]
     return jsonify(members)
 

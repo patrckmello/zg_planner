@@ -16,6 +16,8 @@ import "react-toastify/dist/ReactToastify.css";
 import DeleteConfirmModal from "../components/DeleteConfirmModal";
 import styles from "./EditTaskFormPage.module.css";
 import api from "../services/axiosInstance";
+import { getMsStatus } from "../services/msIntegration";
+import { FiZap } from "react-icons/fi";
 import {
   FiSave,
   FiX,
@@ -47,6 +49,9 @@ function EditTaskFormPage() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [requiresApproval, setRequiresApproval] = useState(false);
+
+  const [msStatus, setMsStatus] = useState({ connected: false });
+  const [addToOutlook, setAddToOutlook] = useState(false);
 
   // Refs para campos obrigatórios
   const titleRef = useRef(null);
@@ -150,11 +155,13 @@ function EditTaskFormPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [taskResponse, teamsResponse, userResponse] = await Promise.all([
+        const [taskResponse, teamsResponse, userResponse, ms] = await Promise.all([
           api.get(`/tasks/${id}`),
           api.get("/teams"),
           api.get("/users/me"),
+          getMsStatus(),
         ]);
+        setMsStatus(ms || { connected: false });
 
         const task = taskResponse.data;
         setOriginalTask(task);
@@ -302,6 +309,9 @@ function EditTaskFormPage() {
       newErrors.tempo_estimado = "Tempo deve ser maior que 0";
     }
 
+    if (addToOutlook && !formData.due_date) {
+      newErrors.due_date = "Obrigatória para adicionar ao Outlook";
+    }
     setErrors(newErrors);
 
     // Rolar até o primeiro campo com erro
@@ -427,6 +437,11 @@ function EditTaskFormPage() {
       formDataToSend.append("existing_files", JSON.stringify(existingFiles));
       // Aprovação
       formDataToSend.append("requires_approval", requiresApproval ? "true" : "false");
+      formDataToSend.append(
+        "create_calendar_event",
+        addToOutlook && msStatus.connected ? "true" : "false"
+      );
+
       // —— Anexos novos
       (formData.anexos || []).forEach((anexoObj) => {
         if (anexoObj.file && !anexoObj.isExisting) {
@@ -620,13 +635,7 @@ function EditTaskFormPage() {
                         }
                         placeholder="Nº do processo, cliente..."
                       />
-                      <div className={styles.fullWidth}>
-                        <Checkbox
-                          label="Requer aprovação do gestor"
-                          checked={requiresApproval}
-                          onCheckedChange={(checked) => setRequiresApproval(!!checked)}
-                        />
-                      </div>
+
                       <div className={styles.fullWidth} ref={dueDateRef}>
                         <CustomDateTimePicker
                           label="Data de Vencimento"
@@ -837,6 +846,52 @@ function EditTaskFormPage() {
                   </div>
                 </div>
               </div>
+
+              {/* 🚀 Automação e Integrações */}
+              <div className={styles.formSection}>
+                <div className={styles.sectionHeader}>
+                  <FiZap className={styles.sectionIcon} />
+                  <h2 className={styles.sectionTitle}>Automação e Integrações</h2>
+                </div>
+                <div className={styles.sectionContent}>
+                  <div className={styles.formGrid}>
+                    <div className={styles.fullWidth}>
+                      <Checkbox
+                        label="Requer aprovação do gestor"
+                        checked={requiresApproval}
+                        onCheckedChange={(checked) => setRequiresApproval(!!checked)}
+                      />
+                    </div>
+
+                    <div className={styles.fullWidth}>
+                      <Checkbox
+                        label={
+                          msStatus.connected
+                            ? `Adicionar à agenda do Outlook (${msStatus.email || "conectado"})`
+                            : "Adicionar à agenda do Outlook (conecte sua conta primeiro)"
+                        }
+                        checked={addToOutlook}
+                        onCheckedChange={(checked) => setAddToOutlook(!!checked)}
+                        disabled={!msStatus.connected}
+                      />
+                      {!msStatus.connected && (
+                        <div className={styles.permissionNote}>
+                          <FiCalendar className={styles.noteIcon} />
+                          <span>
+                            Vá em <strong>Meu Perfil ▸ Integrações</strong> e conecte sua conta.
+                          </span>
+                        </div>
+                      )}
+                      <div className={styles.helperText}>
+                        <small>
+                          Evento usa Título/Descrição/Data; duração = Tempo Estimado (ou 30 min).
+                          Convidados: atribuídos e colaboradores.
+                        </small>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div> 
 
               {/* Actions */}
               <div className={styles.formActions}>

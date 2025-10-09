@@ -9,14 +9,19 @@ class Team(db.Model):
     description = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-    members = db.relationship('UserTeam', back_populates='team', cascade="all, delete-orphan")
+    members = db.relationship(
+        'UserTeam',
+        back_populates='team',
+        cascade="all, delete-orphan",
+        passive_deletes=True
+    )
 
     def to_dict(self):
         return {
             "id": self.id,
             "name": self.name,
             "description": self.description,
-            "created_at": self.created_at.isoformat(),
+            "created_at": self.created_at.isoformat() if self.created_at else None,
             "members": [
                 {
                     "user_id": ut.user.id,
@@ -25,5 +30,6 @@ class Team(db.Model):
                     "is_manager": ut.is_manager
                 }
                 for ut in self.members
+                if ut.user is not None
             ]
         }

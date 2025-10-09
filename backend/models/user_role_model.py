@@ -8,8 +8,6 @@ class UserRole(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     role_id = db.Column(db.Integer, db.ForeignKey("roles.id", ondelete="CASCADE"), nullable=False)
 
-    # se quiser metadados, adicione aqui (ex.: assigned_at, is_primary, etc.)
-
     user = db.relationship("User", back_populates="roles_link")
     role = db.relationship("Role", back_populates="users_link")
 

@@ -1,7 +1,7 @@
 import os, re, logging
 from urllib.parse import urlencode, quote
 from datetime import datetime, timedelta, timezone
-from flask import Blueprint, redirect, request, jsonify
+from flask import Blueprint, redirect, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 import msal
@@ -97,6 +97,27 @@ def connect():
     final_url = f"{AUTH_URL}?{query}"
     log.info("[MS-OAUTH] Redirect authorize URL = %s", final_url)
     return redirect(final_url, code=302)
+
+@bp.route("/connect_url", methods=["GET"])
+@jwt_required()
+def connect_url():
+    """
+    Retorna em JSON a URL de autorização do Microsoft Identity,
+    para o frontend redirecionar o browser (window.location).
+    """
+    uid = get_jwt_identity()
+    state = _state_sign(uid)
+    app = _msal_app()
+    auth_url = app.get_authorization_request_url(
+        scopes=GRAPH_SCOPES,
+        redirect_uri=REDIRECT_URI,
+        state=state,
+        prompt="select_account",
+        response_mode="query",
+    )
+    current_app.logger.info("[MS-OAUTH] connect_url -> %s", auth_url)
+    return jsonify({"url": auth_url})
+
 
 @bp.route("/callback", methods=["GET"])
 def callback():

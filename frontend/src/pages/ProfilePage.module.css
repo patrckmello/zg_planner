@@ -518,3 +518,104 @@
   }
 }
 
+/* Integrações (Microsoft) */
+.integrationCard {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 32px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  border: 1px solid #f0f0f0;
+}
+
+.msRow {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.msLeft {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.msHeader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #374151;
+  font-weight: 600;
+}
+
+.msStatusOk, .msStatusErr {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+
+.msOkIcon { color: #10b981; width: 20px; height: 20px; }
+.msErrIcon { color: #ef4444; width: 20px; height: 20px; }
+
+.msTextBox { display: flex; flex-direction: column; gap: 4px; color: #000000; }
+.msMuted { color: #6b7280; font-size: 14px; }
+
+.msRight {
+  display: flex;
+  align-items: center;
+}
+
+.msConnectBtn, .msDisconnectBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.msConnectBtn {
+  background: #2563eb;
+  color: white;
+  box-shadow: 0 2px 4px rgba(37,99,235,0.2);
+}
+.msConnectBtn:hover { background: #1d4ed8; }
+
+.msDisconnectBtn {
+  background: #f8f9fa;
+  color: #374151;
+  border-color: #e5e7eb;
+}
+.msDisconnectBtn:hover { background: #eef2f7; }
+
+.msHelp {
+  margin-top: 12px;
+  font-size: 14px;
+  color: #374151;
+  background: #f9fafb;
+  border: 1px dashed #e5e7eb;
+  padding: 10px;
+  border-radius: 8px;
+}
+
+.msBadge {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+}
+.msBadgeInfo { background: #dbeafe; color: #1d4ed8; }
+.msBadgeDanger { background: #fee2e2; color: #b91c1c; }
+
+/* responsivo */
+@media (max-width: 768px) {
+  .msRow { flex-direction: column; }
+  .msRight { justify-content: flex-end; }
+}

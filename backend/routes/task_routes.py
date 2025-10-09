@@ -15,6 +15,7 @@ from reminder_scheduler import schedule_task_reminders_safe
 from pytz import timezone
 from models.audit_log_model import AuditLog
 from models.notification_outbox_model import NotificationOutbox
+from services.task_calendar_service import schedule_task_event_for_creator
 
 task_bp = Blueprint("tasks", __name__, url_prefix="/api")
 
@@ -636,6 +637,15 @@ def add_task():
         db.session.add(new_task)
         db.session.commit()
 
+        try:
+            create_cal = str(request.form.get("create_calendar_event", "false")).lower() in ("1", "true", "yes", "on")
+            if create_cal and new_task.due_date:
+                schedule_task_event_for_creator(new_task.id, creator_user_id=user_id)
+            if create_cal and not due_date:
+                return jsonify({"error": "Para adicionar ao Outlook, defina a Data de Vencimento."}), 400
+        except Exception:
+            current_app.logger.exception("[CAL] Falha ao criar evento para task %s", new_task.id)
+
         # Registrar auditoria
         AuditLog.log_action(
             user_id=user_id,
@@ -742,6 +752,11 @@ def update_task(task_id):
     elif request.content_type and request.content_type.startswith("multipart/form-data"):
         data = request.form
         files = request.files.getlist("new_files")
+        create_cal_flag = False
+        if data.get("create_calendar_event") is not None:
+            create_cal_flag = str(data.get("create_calendar_event")).lower() in ("1", "true", "yes", "on")
+        if create_cal_flag and not task.due_date:
+            return jsonify({"error": "Para adicionar ao Outlook, defina a Data de Vencimento."}), 400
     else:
         return jsonify({"error": "Content-Type inválido. Use application/json ou multipart/form-data."}), 400
 
@@ -912,6 +927,12 @@ def update_task(task_id):
     # Salvar
     task.updated_at = datetime.utcnow()
     db.session.commit()
+
+    try:
+        if create_cal_flag and task.due_date:
+            schedule_task_event_for_creator(task.id, creator_user_id=user_id)
+    except Exception:
+        current_app.logger.exception("[CAL] Falha ao criar evento (update) task %s", task.id)
 
     # Auditoria (diff limpo)
     try:

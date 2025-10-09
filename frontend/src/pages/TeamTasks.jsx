@@ -21,6 +21,9 @@ import {
   FiX,
 } from "react-icons/fi";
 
+// 👇 ADICIONADO
+import TaskModal from "../components/TaskModal";
+
 // Função para normalizar prioridade
 const normalizePriority = (priority) => {
   if (!priority) return priority;
@@ -47,6 +50,10 @@ function TeamTasks() {
   const [filtersVisible, setFiltersVisible] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+
+  // 👇 ESTADO DO MODAL
+  const [selectedTask, setSelectedTask] = useState(null);
+  const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
 
   // Estados dos filtros
   const [filters, setFilters] = useState({
@@ -88,7 +95,7 @@ function TeamTasks() {
           return;
         }
 
-        // Buscar equipes (rota corrigida sem /api)
+        // Buscar equipes
         const teamsResponse = await api.get("/teams");
         setTeams(teamsResponse.data);
 
@@ -128,7 +135,7 @@ function TeamTasks() {
     const fetchTeamMembers = async () => {
       if (filters.selectedTeam) {
         try {
-          // Usar a rota de produtividade para obter membros da equipe (rota corrigida sem /api)
+          // Usar a rota de produtividade para obter membros da equipe
           const response = await api.get(
             `/teams/${filters.selectedTeam}/productivity`
           );
@@ -137,15 +144,15 @@ function TeamTasks() {
           const members = response.data.productivity.map((member) => ({
             user_id: member.user_id,
             name: member.user_name,
-            email: "", // Não disponível na rota de produtividade
-            is_manager: false, // Não disponível na rota de produtividade
+            email: "",
+            is_manager: false,
           }));
 
           setTeamMembers(members);
         } catch (error) {
           console.error("Erro ao buscar membros da equipe:", error);
 
-          // Se falhar, tentar buscar da equipe selecionada diretamente
+          // Fallback: buscar da equipe selecionada diretamente
           try {
             const selectedTeam = teams.find(
               (team) => team.id === parseInt(filters.selectedTeam)
@@ -162,10 +169,7 @@ function TeamTasks() {
               setTeamMembers([]);
             }
           } catch (fallbackError) {
-            console.error(
-              "Erro no fallback para buscar membros:",
-              fallbackError
-            );
+            console.error("Erro no fallback para buscar membros:", fallbackError);
             setTeamMembers([]);
             toast.error("Erro ao carregar membros da equipe");
           }
@@ -193,8 +197,7 @@ function TeamTasks() {
 
         // Filtros básicos
         if (filters.status) params.append("status", filters.status);
-        if (filters.dueDateFrom)
-          params.append("due_after", filters.dueDateFrom);
+        if (filters.dueDateFrom) params.append("due_after", filters.dueDateFrom);
         if (filters.dueDateTo) params.append("due_before", filters.dueDateTo);
         if (filters.searchTerm) params.append("search", filters.searchTerm);
 
@@ -202,7 +205,6 @@ function TeamTasks() {
 
         // Filtrar tarefas da equipe selecionada
         let teamTasks = response.data.filter((task) => {
-          // Verificar se a tarefa pertence à equipe selecionada
           const taskUser = teamMembers.find(
             (member) => member.user_id === task.user_id
           );
@@ -262,6 +264,33 @@ function TeamTasks() {
     }
   }, [filters, teamMembers]);
 
+  // 👇 handlers do modal
+  const openTaskModal = (task) => {
+    setSelectedTask(task);
+    setIsTaskModalOpen(true);
+  };
+
+  const closeTaskModal = () => {
+    setIsTaskModalOpen(false);
+    setSelectedTask(null);
+  };
+
+  const handleTaskUpdateFromModal = (taskId, updateData) => {
+    setTasks((prev) => {
+      if (updateData?.deleted) {
+        return prev.filter((t) => t.id !== taskId);
+      }
+      return prev.map((t) => (t.id === taskId ? { ...t, ...updateData } : t));
+    });
+
+    setFilteredTasks((prev) => {
+      if (updateData?.deleted) {
+        return prev.filter((t) => t.id !== taskId);
+      }
+      return prev.map((t) => (t.id === taskId ? { ...t, ...updateData } : t));
+    });
+  };
+
   const handlePageChange = (pageNumber) => {
     if (pageNumber > 0 && pageNumber <= totalPages) {
       setCurrentPage(pageNumber);
@@ -273,6 +302,8 @@ function TeamTasks() {
       ...prev,
       [key]: value,
     }));
+    // sempre voltar pra página 1 ao mudar filtro
+    setCurrentPage(1);
   };
 
   const handleMemberToggle = (memberId) => {
@@ -282,6 +313,7 @@ function TeamTasks() {
         ? prev.selectedMembers.filter((id) => id !== memberId)
         : [...prev.selectedMembers, memberId],
     }));
+    setCurrentPage(1);
   };
 
   const clearFilters = () => {
@@ -297,6 +329,7 @@ function TeamTasks() {
       createdDateTo: "",
       searchTerm: "",
     });
+    setCurrentPage(1);
   };
 
   const handleLogout = async () => {
@@ -608,15 +641,11 @@ function TeamTasks() {
                               checked={filters.selectedMembers.includes(
                                 member.user_id
                               )}
-                              onChange={() =>
-                                handleMemberToggle(member.user_id)
-                              }
+                              onChange={() => handleMemberToggle(member.user_id)}
                             />
                             <span>{member.name}</span>
                             {member.is_manager && (
-                              <span className={styles.managerBadge}>
-                                Gestor
-                              </span>
+                              <span className={styles.managerBadge}>Gestor</span>
                             )}
                           </label>
                         ))}
@@ -644,17 +673,13 @@ function TeamTasks() {
                 <div className={styles.emptyState}>
                   <FiUsers size={48} />
                   <h3>Selecione uma Equipe</h3>
-                  <p>
-                    Escolha uma equipe nos filtros para visualizar suas tarefas.
-                  </p>
+                  <p>Escolha uma equipe nos filtros para visualizar suas tarefas.</p>
                 </div>
               ) : filteredTasks.length === 0 ? (
                 <div className={styles.emptyState}>
                   <FiSearch size={48} />
                   <h3>Nenhuma tarefa encontrada</h3>
-                  <p>
-                    Não há tarefas que correspondam aos filtros selecionados.
-                  </p>
+                  <p>Não há tarefas que correspondam aos filtros selecionados.</p>
                 </div>
               ) : (
                 <div className={styles.tasksTable}>
@@ -671,15 +696,19 @@ function TeamTasks() {
                     const responsible = teamMembers.find(
                       (member) => member.user_id === task.user_id
                     );
-                    const normalizedPriority = normalizePriority(
-                      task.prioridade
-                    );
+                    const normalizedPriority = normalizePriority(task.prioridade);
 
                     return (
-                      <div key={task.id} className={styles.tableRow}>
+                      <div
+                        key={task.id}
+                        className={styles.tableRow}
+                        onClick={() => openTaskModal(task)}
+                        style={{ cursor: "pointer" }}
+                        title="Abrir detalhes da tarefa"
+                      >
                         <div className={styles.tableCell}>
                           <div className={styles.taskInfo}>
-                            <h4>{task.title}</h4>
+                            <h4 className={styles.taskTitleClickable}>{task.title}</h4>
                             {task.description && (
                               <p className={styles.taskDescription}>
                                 {task.description.length > 100
@@ -712,9 +741,9 @@ function TeamTasks() {
                         <div className={styles.tableCell}>
                           {normalizedPriority && (
                             <span
-                              className={`${
-                                styles.priorityBadge
-                              } ${getPriorityClass(normalizedPriority)}`}
+                              className={`${styles.priorityBadge} ${getPriorityClass(
+                                normalizedPriority
+                              )}`}
                             >
                               {normalizedPriority}
                             </span>
@@ -737,6 +766,7 @@ function TeamTasks() {
                       </div>
                     );
                   })}
+
                   {totalPages > 1 && (
                     <div className={styles.pagination}>
                       <div className={styles.paginationInfo}>
@@ -782,6 +812,14 @@ function TeamTasks() {
           </div>
         </main>
       </div>
+
+      {/* 👇 MODAL DE TAREFA */}
+      <TaskModal
+        task={selectedTask}
+        isOpen={isTaskModalOpen}
+        onClose={closeTaskModal}
+        onTaskUpdate={handleTaskUpdateFromModal}
+      />
     </div>
   );
 }

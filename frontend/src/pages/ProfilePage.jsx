@@ -4,8 +4,9 @@ import api from "../services/axiosInstance";
 import Header from "../components/Header";
 import Sidebar from "../components/Sidebar";
 import styles from "./ProfilePage.module.css";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
-  User,
+  User as UserIcon,
   Mail,
   Calendar,
   Shield,
@@ -14,6 +15,10 @@ import {
   EyeOff,
   Save,
   Palette,
+  ExternalLink,
+  CheckCircle2,
+  XCircle,
+  Power,
 } from "lucide-react";
 
 function ProfilePage() {
@@ -35,6 +40,11 @@ function ProfilePage() {
   const [selectedColor, setSelectedColor] = useState("#3498db");
   const [savingPassword, setSavingPassword] = useState(false);
   const [savingColor, setSavingColor] = useState(false);
+  const [msStatus, setMsStatus] = useState({ connected: false });
+  const [msLoading, setMsLoading] = useState(false);
+
+  const location = useLocation();
+  const navigate = useNavigate();
 
   // Cores disponíveis para o ícone do usuário
   const availableColors = [
@@ -56,9 +66,26 @@ function ProfilePage() {
   ];
 
   useEffect(() => {
-    fetchUserData();
+    (async () => {
+      await fetchUserData();
+      await fetchMsStatus();
+    })();
   }, []);
 
+  useEffect(() => {
+    const p = new URLSearchParams(location.search);
+    if (p.get("ms") === "ok") {
+      toast.success("Conta Microsoft conectada com sucesso!");
+      const noQuery = location.pathname; // /profile
+      navigate(noQuery, { replace: true });
+    }
+    if (p.get("ms") === "err") {
+      toast.error("Falha ao conectar com a Microsoft.");
+      const noQuery = location.pathname;
+      navigate(noQuery, { replace: true });
+    }
+  }, [location, navigate]);
+  
   const fetchUserData = async () => {
     try {
       const response = await api.get("/users/me");
@@ -69,6 +96,15 @@ function ProfilePage() {
       toast.error("Erro ao carregar dados do perfil");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchMsStatus = async () => {
+    try {
+      const { data } = await api.get("/ms/status");
+      setMsStatus(data || { connected: false });
+    } catch {
+      setMsStatus({ connected: false });
     }
   };
 
@@ -159,13 +195,42 @@ function ProfilePage() {
     }
   };
 
+  const handleMsConnect = async () => {
+    try {
+      setMsLoading(true);
+      // seu backend deve ter /api/ms/connect_url (retorna {url})
+      const { data } = await api.get("/ms/connect_url");
+      window.location.href = data.url; // redireciona pra Microsoft
+    } catch (e) {
+      console.error(e);
+      toast.error("Não foi possível iniciar a conexão com a Microsoft.");
+    } finally {
+      setMsLoading(false);
+    }
+  };
+
+  const handleMsDisconnect = async () => {
+    if (!window.confirm("Desconectar sua conta Microsoft?")) return;
+    try {
+      setMsLoading(true);
+      await api.post("/ms/disconnect");
+      await fetchMsStatus();
+      toast.success("Conta Microsoft desconectada.");
+    } catch (e) {
+      console.error(e);
+      toast.error("Não foi possível desconectar agora.");
+    } finally {
+      setMsLoading(false);
+    }
+  };
+
   const getUserBadgeInfo = (user) => {
     if (user?.is_admin) {
       return { color: "#e74c3c", icon: Crown, text: "Administrador" };
     } else if (user?.is_manager) {
       return { color: "#f39c12", icon: Shield, text: "Gestor" };
     } else {
-      return { color: "#3498db", icon: User, text: "Usuário" };
+      return { color: "#3498db", icon: UserIcon, text: "Usuário" };
     }
   };
 
@@ -178,6 +243,20 @@ function ProfilePage() {
       hour: "2-digit",
       minute: "2-digit",
     });
+  };
+
+  const renderMsExpireBadge = () => {
+    if (!msStatus?.connected || !msStatus?.expires_at) return null;
+    const exp = new Date(msStatus.expires_at);
+    const soon = (exp - new Date()) / 60000 < 10;
+    return (
+      <span
+        className={`${styles.msBadge} ${soon ? styles.msBadgeDanger : styles.msBadgeInfo}`}
+        title={`Token expira em ${exp.toLocaleString()}`}
+      >
+        Expira em: {exp.toLocaleString()}
+      </span>
+    );
   };
 
   if (loading) {
@@ -279,7 +358,7 @@ function ProfilePage() {
                 <div className={styles.infoGrid}>
                   <div className={styles.infoItem}>
                     <div className={styles.infoLabel}>
-                      <User size={18} />
+                      <UserIcon size={18} />
                       <span>Nome Completo</span>
                     </div>
                     <div className={styles.infoValue}>{user.username}</div>
@@ -459,6 +538,72 @@ function ProfilePage() {
                   </form>
                 )}
               </div>
+
+              {/* Card de Integrações */}
+              <div className={styles.integrationCard}>
+                <h3 className={styles.cardTitle}>Integrações</h3>
+
+                <div className={styles.msRow}>
+                  <div className={styles.msLeft}>
+                    <div className={styles.msHeader}>
+                      <Calendar size={18} />
+                      <span>Microsoft Outlook / Calendário</span>
+                    </div>
+
+                    {msStatus.connected ? (
+                      <div className={styles.msStatusOk}>
+                        <CheckCircle2 className={styles.msOkIcon} />
+                        <div className={styles.msTextBox}>
+                          <div>
+                            <strong>Conectado como:</strong> {msStatus.name || msStatus.email}
+                          </div>
+                          <div className={styles.msMuted}>{msStatus.email}</div>
+                          {renderMsExpireBadge()}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className={styles.msStatusErr}>
+                        <XCircle className={styles.msErrIcon} />
+                        <div className={styles.msTextBox}>
+                          <div><strong>Não conectado</strong></div>
+                          <div className={styles.msMuted}>Conecte para criar compromissos no seu Outlook a partir das tarefas.</div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className={styles.msRight}>
+                    {msStatus.connected ? (
+                      <button
+                        className={styles.msDisconnectBtn}
+                        onClick={handleMsDisconnect}
+                        disabled={msLoading}
+                        title="Desconectar Microsoft"
+                      >
+                        <Power size={16} />
+                        Desconectar
+                      </button>
+                    ) : (
+                      <button
+                        className={styles.msConnectBtn}
+                        onClick={handleMsConnect}
+                        disabled={msLoading}
+                        title="Conectar Microsoft"
+                      >
+                        {msLoading ? (
+                          <div className={styles.buttonSpinner}></div>
+                        ) : (
+                          <>
+                            <ExternalLink size={16} />
+                            Conectar
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
             </div>
           </div>
         </div>

@@ -24,6 +24,7 @@ function AdminTeams() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [editingTeam, setEditingTeam] = useState(null);
+  const [teamModalTab, setTeamModalTab] = useState("detalhes");
   const [showTeamForm, setShowTeamForm] = useState(false);
   const [sortBy, setSortBy] = useState("name");
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -140,7 +141,7 @@ function AdminTeams() {
       setTeams((prev) =>
         prev.map((t) => (t.id === teamId ? response.data : t))
       );
-      setEditingTeam(response.data);
+      setEditingTeam((prev) => (prev && prev.id === teamId ? { ...prev, ...response.data } : prev));
         return response.data;
     } catch (error) {
       console.error("Mensagem de erro:", error);
@@ -159,7 +160,7 @@ function AdminTeams() {
       setTeams((prev) =>
         prev.map((t) => (t.id === teamId ? response.data : t))
       );
-      setEditingTeam(response.data);
+      setEditingTeam((prev) => (prev && prev.id === teamId ? { ...prev, ...response.data } : prev));
         return response.data;
     } catch (error) {
       console.error("Mensagem de erro:", error);
@@ -180,7 +181,7 @@ function AdminTeams() {
       setTeams((prev) =>
         prev.map((t) => (t.id === teamId ? response.data : t))
       );
-      setEditingTeam(response.data);
+      setEditingTeam((prev) => (prev && prev.id === teamId ? { ...prev, ...response.data } : prev));
         return response.data;
     } catch (error) {
       console.error("Mensagem de erro:", error);
@@ -340,7 +341,8 @@ function AdminTeams() {
           initial={editingTeam}
           onClose={() => setEditingTeam(null)}
           onUpdate={handleUpdateTeam}
-          initialTab="detalhes"
+          initialTab={teamModalTab}
+          onTabChange={setTeamModalTab}
           onAddMember={handleAddMember}
           onRemoveMember={handleRemoveMember}
           onToggleManager={handleToggleManager}
