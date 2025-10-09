@@ -8,8 +8,9 @@ from dotenv import load_dotenv
 import os, atexit, logging
 from flask_jwt_extended import jwt_required, JWTManager
 from datetime import timedelta
-from flasgger import Swagger
 from flask_jwt_extended import get_jwt
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 # Models (ordem importa)
 from models.user_model import User
@@ -21,6 +22,7 @@ from models.comment_model import Comment
 from models.backup_model import Backup
 from models.audit_log_model import AuditLog
 from models.notification_outbox_model import NotificationOutbox
+from models.jwt_blocklist import JWTBlocklist
 
 # Blueprints
 from routes.auth_routes import auth_bp
@@ -67,17 +69,7 @@ UPLOAD_FOLDER = os.path.join(os.getcwd(), 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-# ---- Swagger ----
-app.config['SWAGGER'] = {"title": "ZG Planner API", "uiversion": 3}
-swagger_template = {
-    "swagger": "2.0",
-    "info": {"title": "ZG Planner API", "description": "Documentação dos endpoints", "version": "1.0.0"},
-    "basePath": "/", "schemes": ["http", "https"],
-    "securityDefinitions": {"BearerAuth": {"type": "apiKey", "name": "Authorization", "in": "header",
-                                           "description": "Use: **Bearer &lt;seu_token_jwt&gt;**"}},
-    "security": [{"BearerAuth": []}],
-}
-swagger = Swagger(app, template=swagger_template)
+limiter = Limiter(get_remote_address, app=app, default_limits=["300/5minutes"])
 
 # ---- Extensões ----
 db.init_app(app)
@@ -93,6 +85,12 @@ CORS(app,
      allow_headers=["Authorization","Content-Type","X-Requested-With","X-Admin-Request"])
 
 jwt = JWTManager(app)
+
+@jwt.token_in_blocklist_loader
+def is_token_revoked(jwt_header, jwt_payload):
+    from extensions import db
+    jti = jwt_payload.get("jti")
+    return db.session.query(JWTBlocklist.id).filter_by(jti=jti).first() is not None
 
 @jwt.expired_token_loader
 def expired_token_callback(jwt_header, jwt_payload):

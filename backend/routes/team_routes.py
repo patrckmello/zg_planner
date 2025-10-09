@@ -14,30 +14,34 @@ team_bp = Blueprint("team_bp", __name__, url_prefix="/api/teams")
 @team_bp.route("", methods=["GET"])
 @jwt_required()
 def list_teams():
-    teams = Team.query.all()
-    teams_data = []
+    uid = int(get_jwt_identity())
+    user = User.query.get(uid)
+    if user.is_admin:
+        teams = Team.query.all()
+    else:
+        team_ids = [ut.team_id for ut in user.teams]
+        teams = Team.query.filter(Team.id.in_(team_ids)).all()
 
-    for team in teams:
-        members_data = []
-        for ut in team.members:
-            if ut.user:
-                members_data.append({
-                    "user_id": ut.user.id,
-                    "username": ut.user.username,
-                    "email": ut.user.email,
-                    "is_manager": ut.is_manager
-                })
+    def scrub_member(ut):
+        return {
+            "user_id": ut.user.id,
+            "username": ut.user.username,
+            # opcional: ocultar e-mail para não-admins
+            "email": ut.user.email if user.is_admin else None,
+            "is_manager": ut.is_manager
+        } if ut.user else None
 
-        teams_data.append({
-            "id": team.id,
-            "name": team.name,
-            "description": team.description,
-            "created_at": team.created_at.isoformat(),
-            "members": members_data
+    out = []
+    for t in teams:
+        members = [scrub_member(ut) for ut in t.members if ut.user]
+        out.append({
+            "id": t.id,
+            "name": t.name,
+            "description": t.description,
+            "created_at": t.created_at.isoformat(),
+            "members": members
         })
-
-    return jsonify(teams_data)
-
+    return jsonify(out)
 
 @team_bp.route("", methods=["POST"])
 @admin_required

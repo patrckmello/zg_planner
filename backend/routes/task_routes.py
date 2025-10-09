@@ -1023,10 +1023,44 @@ def delete_task(task_id):
 
     return jsonify({"message": "Tarefa movida para a lixeira com sucesso", "id": task.id}), 200
 
-@task_bp.route("/uploads/<filename>")
-def uploaded_file(filename):
-    return send_from_directory(current_app.config["UPLOAD_FOLDER"], filename)
+@task_bp.route("/uploads/<path:filename>")
+@jwt_required()
+def uploaded_file_secure(filename):
+    from werkzeug.utils import secure_filename
+    safe = secure_filename(filename)
+    if safe != filename:
+        return jsonify({"error":"invalid filename"}), 400
 
+    # Checagem de permissão: o arquivo precisa pertencer a uma task visível pelo usuário
+    uid = int(get_jwt_identity())
+    full = os.path.join(current_app.config["UPLOAD_FOLDER"], safe)
+    if not os.path.isfile(full):
+        return jsonify({"error":"Arquivo não encontrado"}), 404
+
+    # Encontra uma task que contenha este anexo E seja visível ao usuário
+    t = Task.query.filter(
+        Task.anexos.isnot(None)
+    ).filter(
+        text("EXISTS (SELECT 1 FROM jsonb_array_elements(tasks.anexos) elem "
+             "WHERE (elem->>'name' = :fname OR elem->>'id' = :fname))")
+        .params(fname=safe)
+    ).first()
+
+    if not t:
+        return jsonify({"error":"Arquivo órfão ou não pertencente a nenhuma tarefa"}), 404
+
+    user = User.query.get(uid)
+    if not user or not t.can_be_viewed_by(user):
+        return jsonify({"error":"Acesso negado"}), 403
+
+    # (opcional) whitelist de MIME
+    import mimetypes
+    allowed = {"application/pdf", "image/png", "image/jpeg"}
+    mime, _ = mimetypes.guess_type(full)
+    if mime and mime not in allowed:
+        return jsonify({"error":"MIME não permitido"}), 415
+
+    return send_from_directory(current_app.config["UPLOAD_FOLDER"], safe)
 
 # Nova rota para obter membros de uma equipe (para o componente de atribuição)
 @task_bp.route("/teams/<int:team_id>/members", methods=["GET"])

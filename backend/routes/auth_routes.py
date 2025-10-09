@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify, session, make_response
 from models.user_model import User
 from extensions import db
-from flask_jwt_extended import create_access_token, create_refresh_token, jwt_required, get_jwt_identity
+from flask_jwt_extended import create_access_token, create_refresh_token, jwt_required, get_jwt_identity, get_jwt
 from models.audit_log_model import AuditLog
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/api')
@@ -63,25 +63,27 @@ def login():
 @auth_bp.route('/refresh', methods=['POST'])
 @jwt_required(refresh=True)
 def refresh():
-    current_user_id = get_jwt_identity()
-    # emite novo access e novo refresh (rotação)
-    new_access = create_access_token(identity=current_user_id)
-    new_refresh = create_refresh_token(identity=current_user_id)
-    return jsonify({
-        'access_token': new_access,
-        'refresh_token': new_refresh
-    }), 200
+    from models.jwt_blocklist import JWTBlocklist
+    old_jti = get_jwt().get("jti")
+    if old_jti:
+        db.session.add(JWTBlocklist(jti=old_jti))  # revoga refresh usado
+    uid = get_jwt_identity()
+    new_access = create_access_token(identity=uid, fresh=False)
+    new_refresh = create_refresh_token(identity=uid)
+    db.session.commit()
+    return jsonify({'access_token': new_access, 'refresh_token': new_refresh}), 200
 
 @auth_bp.route('/logout', methods=['POST'])
+@jwt_required(optional=True)
 def logout():
-    user_id = None
+    from models.jwt_blocklist import JWTBlocklist
     try:
-        # Tenta obter o ID do usuário logado, se houver
-        current_user_id = get_jwt_identity()
-        if current_user_id:
-            user_id = int(current_user_id)
+        jti = get_jwt().get("jti")
+        if jti:
+            db.session.add(JWTBlocklist(jti=jti))  # revoga o access atual
+            db.session.commit()
     except Exception:
-        pass # Ignora se não houver token ou for inválido
+        pass
 
     session.clear()
     response = make_response(jsonify({'message': 'Logout bem-sucedido!'}), 200)
