@@ -14,6 +14,7 @@ import Checkbox from "../components/Checkbox/Checkbox";
 import styles from "./TaskFormPage.module.css";
 import api from "../services/axiosInstance";
 import { getMsStatus } from "../services/msIntegration";
+import { toast } from "react-toastify";
 import { FiZap } from "react-icons/fi";
 import {
   FiSave,
@@ -118,7 +119,21 @@ function TaskFormPage() {
     "desenvolvimento",
   ];
 
-  
+  const handleOutlookToggle = (checked) => {
+    if (!msStatus.connected) {
+      toast.warn(
+        "Conecte sua conta Microsoft para adicionar eventos ao Outlook.",
+        {
+          position: "top-right",
+          autoClose: 4000,
+          closeOnClick: true,
+        }
+      );
+      // não altera o estado
+      return;
+    }
+    setAddToOutlook(!!checked);
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -224,6 +239,10 @@ function TaskFormPage() {
 
     if (addToOutlook && !formData.due_date) {
       newErrors.due_date = "Obrigatória para adicionar ao Outlook";
+    }
+
+    if (addToOutlook && !msStatus.connected) {
+      newErrors.addToOutlook = "Conecte sua conta Microsoft antes de adicionar ao Outlook.";
     }
 
     setErrors(newErrors);
@@ -668,25 +687,40 @@ function TaskFormPage() {
                       <Checkbox
                         label={
                           msStatus.connected
-                            ? `Adicionar à agenda do Outlook`
+                            ? "Adicionar à agenda do Outlook"
                             : "Adicionar à agenda do Outlook (conecte sua conta primeiro)"
                         }
                         checked={addToOutlook}
-                        onCheckedChange={(checked) => setAddToOutlook(!!checked)}
-                        disabled={!msStatus.connected}
+                        onCheckedChange={handleOutlookToggle} // ← usa o handler
+                        // não use 'disabled' para permitir o clique e exibir o toast
                       />
+
                       {!msStatus.connected && (
                         <div className={styles.permissionNote}>
                           <FiCalendar className={styles.noteIcon} />
                           <span>
-                            Vá em <strong>Meu Perfil ▸ Integrações</strong> e conecte sua conta.
+                            Vá em <strong>Meu Perfil ▸ Integrações</strong> e conecte sua conta.{" "}
+                            <a
+                              href="/meu-perfil"
+                              className={styles.linkInline}
+                              onClick={() =>
+                                toast.info("Abrindo página de integrações…", {
+                                  position: "top-right",
+                                  autoClose: 2500,
+                                  closeOnClick: true,
+                                })
+                              }
+                            >
+                              Conectar agora
+                            </a>
                           </span>
                         </div>
                       )}
+
                       <div className={styles.helperText}>
                         <small>
-                          O evento usará <em>Título</em>, <em>Descrição</em> e <em>Data de Vencimento</em>;
-                          duração = <em>Tempo Estimado</em> (ou 30 min). Convidados: atribuídos e colaboradores.
+                          O evento usará <em>Título</em>, <em>Descrição</em> e <em>Data de Vencimento</em>; duração ={" "}
+                          <em>Tempo Estimado</em> (ou 30 min). Convidados: atribuídos e colaboradores.
                         </small>
                       </div>
                     </div>

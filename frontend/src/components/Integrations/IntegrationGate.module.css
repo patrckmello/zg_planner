@@ -1,0 +1,15 @@
+.gateWrap { position: relative; }
+.fieldsetReset { border: 0; padding: 0; margin: 0; }
+.overlayButton {
+  position: absolute; inset: 0; cursor: pointer; background: transparent; border: 0; padding: 0;
+}
+.permissionNote {
+  display: flex; align-items: center; gap: 8px; margin-top: 8px;
+  font-size: 0.9rem; color: var(--muted);
+}
+.noteIcon { opacity: 0.8; }
+.inlineCta {
+  margin-left: 8px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--brand);
+  background: white; color: var(--brand); font-weight: 600; cursor: pointer;
+}
+.inlineCta:hover { background: #f4f8ff; }

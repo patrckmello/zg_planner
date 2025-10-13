@@ -1,3 +1,4 @@
+# routes/admin_routes.py
 from flask import Blueprint, request, jsonify, send_file, current_app
 from models.user_model import User
 from models.task_model import Task
@@ -20,22 +21,13 @@ admin_bp = Blueprint("admin_bp", __name__, url_prefix="/api/admin")
 def get_system_stats():
     """Retorna estatísticas do sistema"""
     try:
-        # Contar usuários ativos
         total_users = User.query.filter_by(is_active=True).count()
-        
-        # Contar total de tarefas
         total_tasks = Task.query.count()
-        
-        # Contar backups realizados
         total_backups = Backup.query.filter_by(status='completed').count()
-        
-        # Contar logs de auditoria
         total_audit_logs = AuditLog.query.count()
-        
-        # Estatísticas adicionais
         admin_users = User.query.filter_by(is_admin=True, is_active=True).count()
         pending_backups = Backup.query.filter_by(status='pending').count()
-        
+
         stats = {
             'total_users': total_users,
             'total_tasks': total_tasks,
@@ -45,12 +37,11 @@ def get_system_stats():
             'pending_backups': pending_backups,
             'last_backup': None
         }
-        
-        # Último backup
+
         last_backup = Backup.query.filter_by(status='completed').order_by(Backup.created_at.desc()).first()
         if last_backup:
             stats['last_backup'] = last_backup.created_at.isoformat()
-        
+
         return jsonify(stats)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -71,21 +62,17 @@ def create_backup():
     """Cria um novo backup do banco de dados usando o BackupService"""
     from backup_service import BackupService
     from app import app
-    
+
     current_user_id = get_jwt_identity()
-    
+
     try:
-        # Obter tipo de backup da requisição (padrão: full)
         backup_type = request.json.get('type', 'full') if request.is_json else 'full'
-        
         if backup_type not in ['full', 'schema_only', 'data_only']:
             return jsonify({'error': 'Tipo de backup inválido'}), 400
-        
-        # Usar o serviço de backup
+
         backup_service = BackupService(app)
         result = backup_service.create_full_backup(current_user_id, backup_type)
-        
-        # Log da ação
+
         AuditLog.log_action(
             user_id=current_user_id,
             action='CREATE_BACKUP',
@@ -106,7 +93,7 @@ def create_backup():
                 'error': result['error'],
                 'backup_id': result.get('backup_id')
             }), 500
-            
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -116,14 +103,13 @@ def download_backup(backup_id):
     """Faz download de um backup específico"""
     try:
         backup = Backup.query.get_or_404(backup_id)
-        
+
         if backup.status != 'completed':
             return jsonify({'error': 'Backup não está disponível para download'}), 400
-        
+
         if not os.path.exists(backup.file_path):
             return jsonify({'error': 'Arquivo de backup não encontrado'}), 404
-        
-        # Log da ação
+
         current_user_id = get_jwt_identity()
         AuditLog.log_action(
             user_id=current_user_id,
@@ -134,14 +120,14 @@ def download_backup(backup_id):
             ip_address=request.remote_addr,
             user_agent=request.headers.get('User-Agent')
         )
-        
+
         return send_file(
             backup.file_path,
             as_attachment=True,
             download_name=backup.filename,
             mimetype='application/octet-stream'
         )
-        
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -152,16 +138,13 @@ def delete_backup(backup_id):
     try:
         backup = Backup.query.get_or_404(backup_id)
         filename = backup.filename
-        
-        # Remover arquivo do sistema se existir
+
         if backup.file_path and os.path.exists(backup.file_path):
             os.remove(backup.file_path)
-        
-        # Remover registro do banco
+
         db.session.delete(backup)
         db.session.commit()
-        
-        # Log da ação
+
         current_user_id = get_jwt_identity()
         AuditLog.log_action(
             user_id=current_user_id,
@@ -172,8 +155,8 @@ def delete_backup(backup_id):
             ip_address=request.remote_addr,
             user_agent=request.headers.get('User-Agent')
         )
-        
-        return jsonify({'message': 'Backup excluído com sucesso'}) 
+
+        return jsonify({'message': 'Backup excluído com sucesso'})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -182,32 +165,20 @@ def delete_backup(backup_id):
 def get_audit_logs():
     """Lista logs de auditoria com paginação e metadados"""
     try:
-        # Parâmetros de paginação
         page = request.args.get('page', 1, type=int)
         per_page = request.args.get('per_page', 50, type=int)
-        
-        # Filtros opcionais
         action = request.args.get('action')
         user_id = request.args.get('user_id', type=int)
-        
+
         query = AuditLog.query
-        
         if action:
             query = query.filter(AuditLog.action == action)
         if user_id:
             query = query.filter(AuditLog.user_id == user_id)
-        
-        # Ordenar por data decrescente
+
         query = query.order_by(AuditLog.created_at.desc())
-        
-        # Paginação
-        logs_pagination = query.paginate(
-            page=page,
-            per_page=per_page,
-            error_out=False
-        )
-        
-        # Preparar resposta com logs e metadados de paginação
+        logs_pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+
         response_data = {
             "items": [log.to_dict() for log in logs_pagination.items],
             "pagination": {
@@ -221,9 +192,8 @@ def get_audit_logs():
                 "prev_num": logs_pagination.prev_num
             }
         }
-        
         return jsonify(response_data)
-        
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -232,21 +202,17 @@ def get_audit_logs():
 def export_audit_logs():
     """Exporta logs de auditoria em CSV"""
     try:
-        # Buscar todos os logs (ou aplicar filtros se necessário)
         logs = AuditLog.query.order_by(AuditLog.created_at.desc()).all()
-        
-        # Criar CSV em memória
+
         output = io.StringIO()
         output.write('\ufeff')
         writer = csv.writer(output, delimiter=';', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-        
-        # Cabeçalho
+
         writer.writerow([
             'ID', 'Usuário', 'Ação', 'Tipo de Recurso', 'ID do Recurso',
             'Descrição', 'IP', 'User Agent', 'Data/Hora'
         ])
-        
-        # Dados
+
         for log in logs:
             data = log.to_dict()
             writer.writerow([
@@ -258,13 +224,11 @@ def export_audit_logs():
                 data['description'],
                 data['ip_address'] or '',
                 data['user_agent'] or '',
-                datetime.datetime.strptime(data['created_at'], '%Y-%m-%dT%H:%M:%S.%f').strftime('%d/%m/%Y %H:%M:%S') if data['created_at'] else ''
+                datetime.strptime(data['created_at'], '%Y-%m-%dT%H:%M:%S.%f').strftime('%d/%m/%Y %H:%M:%S') if data['created_at'] else ''
             ])
-        
-        # Preparar arquivo para download
+
         output.seek(0)
-        
-        # Log da ação
+
         current_user_id = get_jwt_identity()
         AuditLog.log_action(
             user_id=current_user_id,
@@ -274,20 +238,21 @@ def export_audit_logs():
             ip_address=request.remote_addr,
             user_agent=request.headers.get('User-Agent')
         )
-        
-        # Criar arquivo temporário
-        filename = f'audit_logs_{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
-        
+
+        filename = f'audit_logs_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
         return send_file(
             io.BytesIO(output.getvalue().encode('utf-8')),
             mimetype='text/csv',
             as_attachment=True,
             download_name=filename
         )
-        
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-    
+
+# ---------------------
+# Helpers para purge
+# ---------------------
 def _hard_delete_task(task: Task):
     """Remove anexos do disco e apaga o registro da tarefa."""
     try:
@@ -302,7 +267,6 @@ def _hard_delete_task(task: Task):
                 except OSError:
                     pass
     except Exception:
-        # não aborta o purge se falhar remoção de arquivo
         pass
 
     db.session.delete(task)
@@ -317,7 +281,6 @@ def _require_admin():
 @admin_bp.delete("/tasks/<int:task_id>/purge")
 @jwt_required()
 def purge_task(task_id):
-    # Apenas admin
     user, err = _require_admin()
     if err: return err
 
@@ -345,7 +308,6 @@ def purge_task(task_id):
 @admin_bp.post("/tasks/purge-old")
 @jwt_required()
 def purge_old_tasks():
-    # Apenas admin
     user, err = _require_admin()
     if err: return err
 
@@ -379,4 +341,39 @@ def purge_old_tasks():
     )
     return jsonify({"purged": count, "days": days}), 200
 
+# ---------------------
+# NOVOS endpoints úteis
+# ---------------------
 
+@admin_bp.get("/scheduler/jobs")
+@admin_required
+def list_scheduler_jobs():
+    """
+    Lista os jobs do APScheduler (id, nome, próximo disparo, trigger).
+    Útil para checar se o `email_weekly_backup` está com next_run correto.
+    """
+    try:
+        from backup_scheduler import backup_scheduler
+        jobs = backup_scheduler.list_jobs() if backup_scheduler else []
+        return jsonify({"jobs": jobs})
+    except Exception as e:
+        current_app.logger.exception("Falha ao listar jobs")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_bp.post("/backup/test-email-in")
+@admin_required
+def schedule_test_backup_email_in():
+    """
+    Agenda um disparo único do e-mail de backup para N minutos à frente.
+    Body JSON: { "minutes": 2 }  (default=2)
+    """
+    try:
+        from backup_scheduler import backup_scheduler
+        data = request.get_json(silent=True) or {}
+        minutes = int(data.get("minutes", 2))
+        backup_scheduler.trigger_test_email_once(minutes_from_now=minutes)
+        return jsonify({"ok": True, "scheduled_in_minutes": minutes})
+    except Exception as e:
+        current_app.logger.exception("Falha ao agendar teste de e-mail de backup")
+        return jsonify({"ok": False, "error": str(e)}), 500

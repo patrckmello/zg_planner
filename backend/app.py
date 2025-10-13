@@ -33,8 +33,6 @@ from routes.role_routes import role_bp
 from routes.comment_routes import comment_bp
 from routes.admin_routes import admin_bp
 from routes.backup_routes import backup_bp
-from routes.debug_routes import debug_bp
-from routes.archive_debug_routes import archive_debug_bp
 from routes.ms_oauth_routes import bp as ms_oauth_bp
 
 # Schedulers
@@ -49,8 +47,10 @@ load_dotenv()
 app = Flask(__name__)
 
 # ---- Logging básico (INFO) ----
-logging.basicConfig(level=logging.INFO,
-                    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s")
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s"
+)
 
 # ---- JWT / Flask ----
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
@@ -69,6 +69,7 @@ UPLOAD_FOLDER = os.path.join(os.getcwd(), 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
+# Flask-Limiter: em produção, configure um storage (ex.: Redis) para não usar memória.
 limiter = Limiter(get_remote_address, app=app, default_limits=["300/5minutes"])
 
 # ---- Extensões ----
@@ -78,11 +79,13 @@ ALLOWED_ORIGINS = [
     os.getenv('FRONTEND_BASE_URL', 'http://10.1.243.120:5174'),
     os.getenv('FRONTEND_ALT_URL', 'http://10.1.243.120:5174'),
 ]
-CORS(app,
-     origins=ALLOWED_ORIGINS,
-     supports_credentials=True,
-     methods=["GET","POST","PUT","PATCH","DELETE","OPTIONS"],
-     allow_headers=["Authorization","Content-Type","X-Requested-With","X-Admin-Request"])
+CORS(
+    app,
+    origins=ALLOWED_ORIGINS,
+    supports_credentials=True,
+    methods=["GET","POST","PUT","PATCH","DELETE","OPTIONS"],
+    allow_headers=["Authorization","Content-Type","X-Requested-With","X-Admin-Request"]
+)
 
 jwt = JWTManager(app)
 
@@ -127,18 +130,22 @@ app.register_blueprint(role_bp)
 app.register_blueprint(comment_bp)
 app.register_blueprint(admin_bp)
 app.register_blueprint(backup_bp)
-app.register_blueprint(debug_bp)
-app.register_blueprint(archive_debug_bp)
 app.register_blueprint(ms_oauth_bp)
 
-from werkzeug.local import LocalProxy
-
-@app.before_request
-def _start_schedulers_once():
+# ---- Inicialização dos schedulers no boot (sem decorator) ----
+def _start_schedulers_once_on_boot():
+    """
+    Inicia schedulers quando o processo principal está rodando.
+    - Em dev com reloader do Werkzeug: roda apenas quando WERKZEUG_RUN_MAIN == 'true'
+    - Em produção: roda quando ENV == 'production'
+    """
     if getattr(app, "_schedulers_started", False):
         return
 
-    if request.endpoint in (None, "static"):
+    is_main = (os.environ.get("WERKZEUG_RUN_MAIN") == "true") or (app.config.get("ENV") == "production")
+    if not is_main:
+        # Subprocesso do reloader: não inicia aqui
+        app.logger.info("[SCHED] Subprocesso detectado, aguardando processo principal.")
         return
 
     app._schedulers_started = True
@@ -150,10 +157,12 @@ def _start_schedulers_once():
     init_mailer_scheduler(app)
     app.logger.info("[SCHED] Todos os schedulers iniciados (reminder, purge, archive, mailer).")
 
-    # Backup
-    backup_sched = init_backup_scheduler(app)
-    backup_sched.start()
+    # Backup (init chama .start() internamente quando apropriado)
+    init_backup_scheduler(app)
     app.logger.info("[BACKUP] Scheduler de backups iniciado.")
+
+# chama já no import do módulo, após app e blueprints estarem prontos
+_start_schedulers_once_on_boot()
 
 # ---- Encerrar schedulers no shutdown ----
 atexit.register(stop_reminder_scheduler)

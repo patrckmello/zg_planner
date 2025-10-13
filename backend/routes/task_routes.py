@@ -296,6 +296,26 @@ def _notify_rejected(task: Task, reason: str | None = None):
         )
         _safe_enqueue_email_for_task(task, u.email, subject, body, kind="task_rejected")
 
+def _user_has_ms_connection(user_id: int) -> bool:
+    # Escolha 1: se você tiver um modelo de token OAuth
+    try:
+        from models.ms_oauth_token import MsOAuthToken  # ajuste o nome do seu model se for diferente
+        return MsOAuthToken.query.filter_by(user_id=user_id).first() is not None
+    except Exception:
+        pass
+
+    # Escolha 2: se o User tiver um campo boolean/coluna de integração
+    u = User.query.get(user_id)
+    if u and hasattr(u, "ms_connected"):
+        return bool(u.ms_connected)
+
+    # Escolha 3: fallback – se o seu serviço expuser algo do tipo
+    try:
+        from services.ms_graph_delegated import is_user_connected
+        return bool(is_user_connected(user_id))
+    except Exception:
+        return False
+
 # ROUTES
 
 @task_bp.route("/tasks", methods=["GET"])
@@ -446,9 +466,16 @@ def get_task_counts():
     if not user or not user.is_active:
         return jsonify({"msg": "Usuário inválido ou inativo"}), 401
 
-    my_tasks_count = Task.query.filter(
+    # 🚫 Sempre excluir concluídas/arquivadas
+    EXCLUDED_STATUSES = ["done"]
+    base_filters = [
         Task.deleted_at.is_(None),
-        Task.status != 'archived', 
+        ~Task.status.in_(EXCLUDED_STATUSES),
+        Task.completed_at.is_(None)
+    ]
+
+    my_tasks_count = Task.query.filter(
+        *base_filters,
         Task.team_id.is_(None),
         or_(
             Task.user_id == user_id,
@@ -456,20 +483,17 @@ def get_task_counts():
         )
     ).count()
 
-    # Tarefas por equipes do usuário
-    user_teams = [ut.team_id for ut in user.teams]
+    user_teams = [ut.team_id for ut in user.teams] if user.teams else []
     if user_teams:
         team_tasks_count = Task.query.filter(
-            Task.deleted_at.is_(None),
-            Task.status != 'archived',  
+            *base_filters,
             Task.team_id.in_(user_teams)
         ).count()
     else:
         team_tasks_count = 0
 
     collaborative_tasks_count = Task.query.filter(
-        Task.deleted_at.is_(None),
-        Task.status != 'archived',   
+        *base_filters,
         text("tasks.collaborators::jsonb @> :uid_json").params(uid_json=f'[{user_id}]')
     ).count()
 
@@ -478,6 +502,7 @@ def get_task_counts():
         "team_tasks": team_tasks_count,
         "collaborative_tasks": collaborative_tasks_count
     })
+
 
 @task_bp.route("/tasks", methods=["POST"])
 @jwt_required()

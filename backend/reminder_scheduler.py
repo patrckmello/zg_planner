@@ -8,8 +8,10 @@ from email_service import email_service
 from extensions import db
 import json
 import os
+from sqlalchemy import or_, and_
 
 SENT_REMINDERS_FILE = os.path.join(os.path.dirname(__file__), 'sent_reminders.txt')
+ACTIVE_STATUSES = ('pending', 'in_progress')
 
 class ReminderScheduler:
     def __init__(self, app):
@@ -55,8 +57,8 @@ class ReminderScheduler:
             with self.app.app_context():
                 tasks = Task.query.filter(
                     Task.lembretes.isnot(None),
-                    Task.status != 'completed',
-                    Task.due_date.isnot(None)
+                    Task.due_date.isnot(None),
+                    Task.status.in_(ACTIVE_STATUSES)
                 ).all()
 
                 current_time = datetime.now(self.brazil_tz)
@@ -117,12 +119,12 @@ class ReminderScheduler:
 
     def _format_reminder_type(self, reminder_type):
         formats = {
-            '5_minutes': '5 minutos antes',
-            '15_minutes': '15 minutos antes',
-            '30_minutes': '30 minutos antes',
-            '1_hour': '1 hora antes',
-            '1_day': '1 dia antes',
-            '1_week': '1 semana antes'
+            '5min': '5 minutos antes',
+            '15min': '15 minutos antes',
+            '30min': '30 minutos antes',
+            '1h': '1 hora antes',
+            '1d': '1 dia antes',
+            '1w': '1 semana antes',
         }
         return formats.get(reminder_type, reminder_type)
 

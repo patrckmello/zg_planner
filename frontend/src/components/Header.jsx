@@ -1,16 +1,17 @@
 import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import styles from "./Header.module.css";
 import api from "../services/axiosInstance";
 import { Menu, Calendar, User, Shield, Crown } from "lucide-react";
 
 function Header({ onMenuToggle }) {
   const [user, setUser] = useState(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchUser = async () => {
       try {
         const response = await api.get("/users/me");
-        console.log("User data:", response.data);
         setUser(response.data);
       } catch (error) {
         console.error("Erro ao buscar usuário:", error);
@@ -18,9 +19,8 @@ function Header({ onMenuToggle }) {
     };
 
     fetchUser();
-  }, [user?.icon_color]); // Adiciona icon_color como dependência
+  }, [user?.icon_color]);
 
-  // Função para determinar a cor do badge baseada no tipo de usuário
   const getUserBadgeInfo = (user) => {
     if (user?.is_admin) {
       return { color: "#e74c3c", icon: Crown, text: "Admin" };
@@ -31,7 +31,6 @@ function Header({ onMenuToggle }) {
     }
   };
 
-  // Função para extrair apenas o primeiro nome
   const getFirstName = (fullName) => {
     if (!fullName) return "Usuário";
     return fullName.split(" ")[0];
@@ -87,7 +86,13 @@ function Header({ onMenuToggle }) {
       </div>
 
       <div className={styles.rightSection}>
-        <div className={styles.userInfo}>
+        {/* Área clicável do perfil */}
+        <div
+          className={styles.userInfo}
+          onClick={() => navigate("/meu-perfil")}
+          style={{ cursor: "pointer" }}
+          title="Ir para meu perfil"
+        >
           <div
             className={styles.userAvatar}
             style={{ backgroundColor: user.icon_color || "#3498db" }}

@@ -24,6 +24,9 @@ function TasksPage() {
     collaborative_tasks: 0,
   });
 
+  // ===== NOVO: helper para ignorar concluídas nos contadores =====
+  const excludeDone = (list = []) => list.filter((t) => t?.status !== "done");
+
   // -------- helpers usados na aba "equipe" e nos counters --------
   const isManager = (user) => {
     if (!user) return false;
@@ -50,9 +53,11 @@ function TasksPage() {
     return new Set(raw.map((t) => t.team_id ?? t.id));
   };
 
+  // ===== ALTERADO: agora ignora tasks com status 'done' nos contadores =====
   const computeCounts = (allTasks, user) => {
     if (!user) return { my_tasks: 0, team_tasks: 0, collaborative_tasks: 0 };
 
+    const tasksNoDone = excludeDone(allTasks);
     const userTeamIds = getUserTeamIds(user);
     const mgr = isManager(user);
 
@@ -80,12 +85,14 @@ function TasksPage() {
     let teamTasks = 0;
     let collabTasks = 0;
 
-    for (const t of allTasks) {
+    for (const t of tasksNoDone) {
       if (isMyTask(t)) myTasks += 1;
 
       if (
         inMyTeam(t) &&
-        (assignedToMeByOthers(t) || multiAssignedIncludesMe(t) || iAssignedToOthers(t))
+        (assignedToMeByOthers(t) ||
+          multiAssignedIncludesMe(t) ||
+          iAssignedToOthers(t))
       ) {
         teamTasks += 1;
       }
@@ -101,7 +108,7 @@ function TasksPage() {
   };
   // ---------------------------------------------------------------
 
-  // Filtrar tarefas baseado na aba ativa
+  // Filtrar tarefas baseado na aba ativa (listagem segue igual; apenas contadores ignoram 'done')
   const getFilteredTasks = (allTasks, tab, user) => {
     if (!user) return allTasks;
 
@@ -131,7 +138,7 @@ function TasksPage() {
             task.collaborators.includes(user.id) &&
             (task.collaborators.length > 1 || task.user_id !== user.id);
 
-          // 3) (somente gestor) tarefas QUE EU ATRIBUÍ para outra pessoa, p/ acompanhamento
+          // 3) (somente gestor) tarefas QUE EU ATRIBUÍ para outra pessoa
           const iAssignedToOthers =
             mgr && task.assigned_by_user_id === user.id && task.user_id !== user.id;
 
@@ -141,7 +148,9 @@ function TasksPage() {
             userTeamIds.size === 0 ||
             userTeamIds.has(task.team_id);
 
-          return inMyTeam && (assignedToMeByOthers || multiAssignedIncludesMe || iAssignedToOthers);
+          return (
+            inMyTeam && (assignedToMeByOthers || multiAssignedIncludesMe || iAssignedToOthers)
+          );
         });
       }
 
@@ -169,7 +178,7 @@ function TasksPage() {
         const all = tasksResponse.data;
         setTasks(all);
 
-        // Counter garantido com a mesma regra da UI:
+        // contadores sem 'done'
         setTaskCounts(computeCounts(all, me));
       } catch (error) {
         console.error("Erro ao buscar dados:", error);
@@ -224,6 +233,7 @@ function TasksPage() {
         next = prev.map((t) => (t.id === taskId ? { ...t, ...updateData } : t));
       }
       if (currentUser) {
+        // recomputa counters ignorando concluídas
         setTaskCounts(computeCounts(next, currentUser));
       }
       return next;
@@ -289,8 +299,10 @@ function TasksPage() {
                   <h3 className={styles.emptyTitle}>Nenhuma tarefa encontrada</h3>
                   <p className={styles.emptyDescription}>
                     {activeTab === "minhas" && "Você ainda não criou nenhuma tarefa."}
-                    {activeTab === "equipe" && "Não há tarefas atribuídas à sua equipe."}
-                    {activeTab === "colaborativas" && "Você não está colaborando em nenhuma tarefa."}
+                    {activeTab === "equipe" &&
+                      "Não há tarefas atribuídas à sua equipe."}
+                    {activeTab === "colaborativas" &&
+                      "Você não está colaborando em nenhuma tarefa."}
                   </p>
                   <button
                     className={styles.emptyAction}

@@ -152,6 +152,27 @@ function EditTaskFormPage() {
     );
   };
 
+  const handleOutlookToggle = (checked) => {
+    if (!msStatus.connected) {
+      toast.warn(
+        "Conecte sua conta Microsoft para adicionar eventos ao Outlook.",
+        {
+          position: "top-right",
+          autoClose: 4000,
+          closeOnClick: true,
+        }
+      );
+      return; // não altera o estado
+    }
+    setAddToOutlook(!!checked);
+  };
+
+  useEffect(() => {
+    if (!msStatus.connected && addToOutlook) {
+      setAddToOutlook(false);
+    }
+  }, [msStatus.connected, addToOutlook]);
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -238,6 +259,8 @@ function EditTaskFormPage() {
     return () => window.removeEventListener("resize", handleResize);
   }, [id, navigate]);
 
+
+
   const handleLogout = async () => {
     try {
       await api.post("/logout");
@@ -311,6 +334,10 @@ function EditTaskFormPage() {
 
     if (addToOutlook && !formData.due_date) {
       newErrors.due_date = "Obrigatória para adicionar ao Outlook";
+    }
+
+    if (addToOutlook && !msStatus.connected) {
+      newErrors.addToOutlook = "Conecte sua conta Microsoft antes de adicionar ao Outlook.";
     }
     setErrors(newErrors);
 
@@ -871,17 +898,32 @@ function EditTaskFormPage() {
                             : "Adicionar à agenda do Outlook (conecte sua conta primeiro)"
                         }
                         checked={addToOutlook}
-                        onCheckedChange={(checked) => setAddToOutlook(!!checked)}
-                        disabled={!msStatus.connected}
+                        onCheckedChange={handleOutlookToggle}  // ← usa o handler
+                        // não usar 'disabled' aqui, para permitir o clique e mostrar o toast
                       />
+
                       {!msStatus.connected && (
                         <div className={styles.permissionNote}>
                           <FiCalendar className={styles.noteIcon} />
                           <span>
-                            Vá em <strong>Meu Perfil ▸ Integrações</strong> e conecte sua conta.
+                            Vá em <strong>Meu Perfil ▸ Integrações</strong> e conecte sua conta.{" "}
+                            <a
+                              href="/meu-perfil"
+                              className={styles.linkInline}
+                              onClick={() =>
+                                toast.info("Abrindo página de integrações…", {
+                                  position: "top-right",
+                                  autoClose: 2500,
+                                  closeOnClick: true,
+                                })
+                              }
+                            >
+                              Conectar agora
+                            </a>
                           </span>
                         </div>
                       )}
+
                       <div className={styles.helperText}>
                         <small>
                           Evento usa Título/Descrição/Data; duração = Tempo Estimado (ou 30 min).

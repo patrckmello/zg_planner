@@ -289,7 +289,7 @@ def manual_cleanup():
     try:
         data = request.get_json() or {}
         dry_run = data.get('dry_run', False)
-        retention_days = data.get('retention_days', ACTIVE_CONFIG.get_retention_days('daily'))
+        retention_days = int(data.get('retention_days', 7))
         
         from datetime import datetime, timedelta
         cutoff_date = datetime.utcnow() - timedelta(days=retention_days)
@@ -360,3 +360,56 @@ def manual_cleanup():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@backup_bp.route('/email-latest', methods=['POST'])
+@admin_required
+def email_latest_backup_now():
+    """Envia por e-mail o backup 'completed' mais recente imediatamente."""
+    current_user_id = get_jwt_identity()
+    try:
+        from email_service import email_service
+        recipient = request.json.get('recipient') if request.is_json else None
+        if not recipient:
+            recipient = os.getenv("BACKUP_EMAIL_RECIPIENT", "ti@zavagnagralha.com.br")
+
+        latest = Backup.query.filter_by(status='completed')\
+                             .order_by(Backup.created_at.desc())\
+                             .first()
+        if not latest or not latest.file_path or not os.path.exists(latest.file_path):
+            return jsonify({'error': 'Nenhum backup completo disponível.'}), 404
+
+        size_mb = round((latest.file_size or os.path.getsize(latest.file_path)) / (1024*1024), 2)
+        subject = f"[ZG Planner] Backup (envio manual): {latest.filename}"
+        body = f"""
+        <html><body>
+        <p>Envio manual do backup mais recente.</p>
+        <ul>
+          <li><strong>Arquivo:</strong> {latest.filename}</li>
+          <li><strong>Gerado em:</strong> {latest.created_at.isoformat()}</li>
+          <li><strong>Tamanho:</strong> {size_mb} MB</li>
+        </ul>
+        <p>Caso o anexo não esteja incluso, ele excedeu o limite configurado e foi omitido.</p>
+        </body></html>
+        """
+
+        ok = email_service.send_email(
+            to_email=recipient,
+            subject=subject,
+            body=body,
+            is_html=True,
+            attachments=[latest.file_path]
+        )
+
+        AuditLog.log_action(
+            user_id=current_user_id,
+            action='EMAIL_LATEST_BACKUP',
+            description=f'Enviou por e-mail o backup {latest.filename} para {recipient} (ok={ok})',
+            resource_type='backup',
+            resource_id=latest.id,
+            ip_address=request.remote_addr,
+            user_agent=request.headers.get('User-Agent')
+        )
+
+        return jsonify({'success': bool(ok), 'sent_to': recipient})
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
