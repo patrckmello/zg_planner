@@ -24,10 +24,9 @@ function TasksPage() {
     collaborative_tasks: 0,
   });
 
-  // ===== NOVO: helper para ignorar concluídas nos contadores =====
+  // ===== helpers =====
   const excludeDone = (list = []) => list.filter((t) => t?.status !== "done");
 
-  // -------- helpers usados na aba "equipe" e nos counters --------
   const isManager = (user) => {
     if (!user) return false;
     const byAdminFlag = !!user.is_admin;
@@ -49,11 +48,25 @@ function TasksPage() {
 
   const getUserTeamIds = (user) => {
     const raw = user?.teams ?? user?.user_teams ?? [];
-    // suporta payloads [{id,...}] ou [{team_id,...}]
     return new Set(raw.map((t) => t.team_id ?? t.id));
   };
 
-  // ===== ALTERADO: agora ignora tasks com status 'done' nos contadores =====
+  // assigned_users pode conter o dono; tratamos abaixo
+  const isInAssignedUsers = (t, me) =>
+    Array.isArray(t?.assigned_users) &&
+    t.assigned_users.includes(me?.id) &&
+    !(t.user_id === me?.id && t.assigned_users.length === 1); // se for o único, é pessoal
+
+  const wasAssignedToMeByOthers = (t, me) =>
+    t?.user_id === me?.id &&
+    t?.assigned_by_user_id != null &&
+    t?.assigned_by_user_id !== me?.id;
+
+  const isPersonalMine = (t, me) =>
+    t?.user_id === me?.id &&
+    (t?.assigned_by_user_id == null || t?.assigned_by_user_id === me?.id);
+
+  // ===== contadores (ignora 'done' e não mistura pessoais na aba equipe) =====
   const computeCounts = (allTasks, user) => {
     if (!user) return { my_tasks: 0, team_tasks: 0, collaborative_tasks: 0 };
 
@@ -64,16 +77,6 @@ function TasksPage() {
     const isMyTask = (t) =>
       t.user_id === user.id &&
       (t.assigned_by_user_id === null || t.assigned_by_user_id === user.id);
-
-    const assignedToMeByOthers = (t) =>
-      t.user_id === user.id &&
-      t.assigned_by_user_id != null &&
-      t.assigned_by_user_id !== user.id;
-
-    const multiAssignedIncludesMe = (t) =>
-      Array.isArray(t.collaborators) &&
-      t.collaborators.includes(user.id) &&
-      (t.collaborators.length > 1 || t.user_id !== user.id);
 
     const iAssignedToOthers = (t) =>
       mgr && t.assigned_by_user_id === user.id && t.user_id !== user.id;
@@ -86,18 +89,27 @@ function TasksPage() {
     let collabTasks = 0;
 
     for (const t of tasksNoDone) {
+      const personal = isPersonalMine(t, user);
+
+      // "Minhas": só pessoais
       if (isMyTask(t)) myTasks += 1;
 
-      if (
+      // "Equipe": não conta pessoais
+      const teamHit =
         inMyTeam(t) &&
-        (assignedToMeByOthers(t) ||
-          multiAssignedIncludesMe(t) ||
-          iAssignedToOthers(t))
-      ) {
-        teamTasks += 1;
-      }
+        !personal &&
+        (isInAssignedUsers(t, user) ||
+          wasAssignedToMeByOthers(t, user) ||
+          iAssignedToOthers(t));
+      if (teamHit) teamTasks += 1;
 
-      if (multiAssignedIncludesMe(t)) collabTasks += 1;
+      // "Colaborativas": seguem por collaborators, sem duplicar pessoais/equipe
+      const collabOnly =
+        Array.isArray(t.collaborators) &&
+        t.collaborators.includes(user.id) &&
+        !isMyTask(t) &&
+        !isInAssignedUsers(t, user);
+      if (collabOnly) collabTasks += 1;
     }
 
     return {
@@ -106,19 +118,18 @@ function TasksPage() {
       collaborative_tasks: collabTasks,
     };
   };
-  // ---------------------------------------------------------------
 
-  // Filtrar tarefas baseado na aba ativa (listagem segue igual; apenas contadores ignoram 'done')
+  // ===== listagem por aba =====
   const getFilteredTasks = (allTasks, tab, user) => {
     if (!user) return allTasks;
 
     switch (tab) {
       case "minhas":
+        // Apenas pessoais (não inclui multi-atribuição onde o dono é um dos assigned_users)
         return allTasks.filter(
-          (task) =>
-            task.user_id === user.id &&
-            (task.assigned_by_user_id === null ||
-              task.assigned_by_user_id === user.id)
+          (t) =>
+            t.user_id === user.id &&
+            (t.assigned_by_user_id === null || t.assigned_by_user_id === user.id)
         );
 
       case "equipe": {
@@ -126,30 +137,22 @@ function TasksPage() {
         const userTeamIds = getUserTeamIds(user);
 
         return allTasks.filter((task) => {
-          // 1) atribuíram PARA MIM (por outra pessoa)
-          const assignedToMeByOthers =
-            task.user_id === user.id &&
-            task.assigned_by_user_id != null &&
-            task.assigned_by_user_id !== user.id;
-
-          // 2) multi-atribuídas que me incluem
-          const multiAssignedIncludesMe =
-            Array.isArray(task.collaborators) &&
-            task.collaborators.includes(user.id) &&
-            (task.collaborators.length > 1 || task.user_id !== user.id);
-
-          // 3) (somente gestor) tarefas QUE EU ATRIBUÍ para outra pessoa
+          const multiAssignedIncludesMe = isInAssignedUsers(task, user);
+          const assignedToMeByOthers = wasAssignedToMeByOthers(task, user);
           const iAssignedToOthers =
             mgr && task.assigned_by_user_id === user.id && task.user_id !== user.id;
 
-          // (opcional): restringe à(s) minha(s) equipe(s) quando houver team_id
           const inMyTeam =
             task.team_id == null ||
             userTeamIds.size === 0 ||
             userTeamIds.has(task.team_id);
 
+          const personal = isPersonalMine(task, user);
+
           return (
-            inMyTeam && (assignedToMeByOthers || multiAssignedIncludesMe || iAssignedToOthers)
+            inMyTeam &&
+            !personal &&
+            (multiAssignedIncludesMe || assignedToMeByOthers || iAssignedToOthers)
           );
         });
       }
@@ -233,7 +236,6 @@ function TasksPage() {
         next = prev.map((t) => (t.id === taskId ? { ...t, ...updateData } : t));
       }
       if (currentUser) {
-        // recomputa counters ignorando concluídas
         setTaskCounts(computeCounts(next, currentUser));
       }
       return next;
@@ -299,8 +301,7 @@ function TasksPage() {
                   <h3 className={styles.emptyTitle}>Nenhuma tarefa encontrada</h3>
                   <p className={styles.emptyDescription}>
                     {activeTab === "minhas" && "Você ainda não criou nenhuma tarefa."}
-                    {activeTab === "equipe" &&
-                      "Não há tarefas atribuídas à sua equipe."}
+                    {activeTab === "equipe" && "Não há tarefas atribuídas à sua equipe."}
                     {activeTab === "colaborativas" &&
                       "Você não está colaborando em nenhuma tarefa."}
                   </p>

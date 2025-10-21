@@ -24,25 +24,31 @@ import {
   Zap,
 } from "lucide-react";
 
+/* ===================== Helpers ===================== */
 const normalizePriority = (priority) => {
   if (!priority) return priority;
-  const priorityMap = {
-    alta: "Alta",
-    media: "Média",
-    baixa: "Baixa",
-    high: "Alta",
-    medium: "Média",
-    low: "Baixa",
-  };
-  return priorityMap[priority.toLowerCase()] || priority;
+  const map = { alta: "Alta", media: "Média", baixa: "Baixa", high: "Alta", medium: "Média", low: "Baixa" };
+  return map[String(priority).toLowerCase()] || priority;
 };
 
 const normalizeCategory = (category) => {
   if (!category) return category;
-  return category.charAt(0).toUpperCase() + category.slice(1).toLowerCase();
+  const s = String(category);
+  return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
 };
 
-// Export simples (CSV)
+// IDs e atribuídos/collabs podem vir como número/string/objeto
+const normalizeId = (v) => (v == null ? null : String(v?.id ?? v));
+const listHasId = (list, id) => Array.isArray(list) && list.some((u) => normalizeId(u) === String(id));
+const collectAssignees = (task) => {
+  const a = Array.isArray(task?.assigned_users) ? task.assigned_users.map(normalizeId) : [];
+  const c = Array.isArray(task?.collaborators) ? task.collaborators.map(normalizeId) : [];
+  // também considere o owner como responsável
+  const owner = normalizeId(task?.user_id);
+  return Array.from(new Set([owner, ...a, ...c].filter(Boolean)));
+};
+
+/* ===================== Export simples ===================== */
 const exportToCSV = (data, teamName) => {
   try {
     const csvContent = [
@@ -62,9 +68,7 @@ const exportToCSV = (data, teamName) => {
       .map((row) => row.join(","))
       .join("\n");
 
-    const blob = new Blob(["\uFEFF" + csvContent], {
-      type: "text/csv;charset=utf-8;",
-    });
+    const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
     link.setAttribute("href", url);
@@ -82,7 +86,6 @@ const exportToCSV = (data, teamName) => {
   }
 };
 
-// Export simples (PDF via print)
 const exportToPDF = (data, teamName) => {
   try {
     const printContent = `
@@ -101,7 +104,7 @@ const exportToPDF = (data, teamName) => {
         <body>
           <h1>Relatório da Equipe: ${teamName || "Equipe"}</h1>
           <p>Data: ${new Date().toLocaleDateString("pt-BR")}</p>
-          
+
           <h2>Métricas Principais</h2>
           <div class="metric"><strong>Total de Tarefas:</strong> ${data.total_tasks || 0}</div>
           <div class="metric"><strong>Concluídas no Prazo:</strong> ${data.tasks_completed_on_time || 0}</div>
@@ -112,7 +115,7 @@ const exportToPDF = (data, teamName) => {
               ? Math.round(((data.tasks_by_status?.done || 0) / data.total_tasks) * 100) + "%"
               : "0%"
           }</div>
-          
+
           <h2>Distribuição por Status</h2>
           <table>
             <tr><th>Status</th><th>Quantidade</th></tr>
@@ -120,22 +123,16 @@ const exportToPDF = (data, teamName) => {
               .map(
                 ([status, count]) =>
                   `<tr><td>${
-                    status === "done"
-                      ? "Concluída"
-                      : status === "pending"
-                      ? "Pendente"
-                      : status === "in_progress"
-                      ? "Em Andamento"
-                      : status === "cancelled"
-                      ? "Cancelada"
-                      : status === "archived"
-                      ? "Arquivada"
-                      : status
+                    status === "done" ? "Concluída" :
+                    status === "pending" ? "Pendente" :
+                    status === "in_progress" ? "Em Andamento" :
+                    status === "cancelled" ? "Cancelada" :
+                    status === "archived" ? "Arquivada" : status
                   }</td><td>${count}</td></tr>`
               )
               .join("")}
           </table>
-          
+
           <h2>Distribuição por Prioridade</h2>
           <table>
             <tr><th>Prioridade</th><th>Quantidade</th></tr>
@@ -159,6 +156,7 @@ const exportToPDF = (data, teamName) => {
   }
 };
 
+/* ===================== Componente ===================== */
 function TeamReports() {
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 768);
@@ -183,7 +181,7 @@ function TeamReports() {
   // Toggle Ativas/Todas
   const [showOnlyActive, setShowOnlyActive] = useState(true);
 
-  // 🔹 Guardar o conjunto de tarefas visíveis no momento (para usar na produtividade)
+  // conjunto visível para produtividade
   const [visibleTeamTasks, setVisibleTeamTasks] = useState([]);
 
   const hasAccess = () => currentUser?.is_admin || currentUser?.is_manager;
@@ -198,9 +196,11 @@ function TeamReports() {
   const fetchTasks = useCallback(
     async (includeArchived) => {
       try {
-        const res = await api.get("/tasks", {
-          params: includeArchived ? { include_archived: true } : {},
-        });
+        const params = includeArchived ? { include_archived: true } : {};
+        // se o backend aceitar, isso faz vir também as multi-atribuídas:
+        params.include_assigned = true;
+
+        const res = await api.get("/tasks", { params });
         setAllTasks(res.data);
       } catch (e) {
         console.error("Erro ao buscar tarefas:", e);
@@ -228,7 +228,7 @@ function TeamReports() {
 
         if (!userResponse.data.is_admin && userResponse.data.is_manager) {
           const userTeams = teamsResponse.data.filter((team) =>
-            team.members.some(
+            team.members?.some(
               (member) => member.user_id === userResponse.data.id && member.is_manager
             )
           );
@@ -247,7 +247,6 @@ function TeamReports() {
       }
     };
 
-    // carrega conforme o toggle atual
     fetchInitialData(!showOnlyActive);
 
     const handleResize = () => {
@@ -257,21 +256,11 @@ function TeamReports() {
     return () => window.removeEventListener("resize", handleResize);
   }, [navigate, fetchTasks, showOnlyActive]);
 
-  // Rebusca apenas as tasks quando alternar Ativas/Todas
   useEffect(() => {
     fetchTasks(!showOnlyActive);
   }, [fetchTasks, showOnlyActive]);
 
-  const getTaskStatus = (task) => {
-    if (task.status === "archived") return { text: "Arquivada", color: "#6b7280" };
-    if (task.status === "done") return { text: "Concluída", color: "#10b981" };
-
-    const now = new Date();
-    const dueDate = getBrasiliaDate(task.due_date);
-    if (dueDate && dueDate < now) return { text: "Atrasada", color: "#ef4444" };
-    return { text: "Pendente", color: "#f59e0b" };
-  };
-
+  /* ===================== Métricas ===================== */
   const calculateTeamMetrics = (teamTasks) => {
     if (!teamTasks || teamTasks.length === 0) {
       return {
@@ -306,15 +295,13 @@ function TeamReports() {
       metrics.tasks_by_status[task.status] = (metrics.tasks_by_status[task.status] || 0) + 1;
 
       if (task.prioridade) {
-        const normalizedPriority = normalizePriority(task.prioridade);
-        metrics.tasks_by_priority[normalizedPriority] =
-          (metrics.tasks_by_priority[normalizedPriority] || 0) + 1;
+        const p = normalizePriority(task.prioridade);
+        metrics.tasks_by_priority[p] = (metrics.tasks_by_priority[p] || 0) + 1;
       }
 
       if (task.categoria) {
-        const normalizedCategory = normalizeCategory(task.categoria);
-        metrics.tasks_by_category[normalizedCategory] =
-          (metrics.tasks_by_category[normalizedCategory] || 0) + 1;
+        const c = normalizeCategory(task.categoria);
+        metrics.tasks_by_category[c] = (metrics.tasks_by_category[c] || 0) + 1;
       }
 
       const dueDate = task.due_date ? getBrasiliaDate(task.due_date) : null;
@@ -332,7 +319,6 @@ function TeamReports() {
         }
       }
 
-      // Não considerar arquivadas nos contadores de atraso/próximas
       if (task.status !== "done" && task.status !== "archived" && dueDate) {
         if (dueDate < now) metrics.overdue_tasks += 1;
         else metrics.upcoming_tasks += 1;
@@ -347,27 +333,70 @@ function TeamReports() {
     return metrics;
   };
 
+  /* ===================== Base de membros da equipe ===================== */
+  // Pega membros da equipe selecionada diretamente do /teams (sempre contempla Ana)
+  const selectedTeamObj = useMemo(
+    () => teams.find((t) => String(t.id) === String(selectedTeam)),
+    [teams, selectedTeam]
+  );
+
+  const teamMembers = useMemo(() => {
+    // tenta extrair user_id e nome de várias formas para ser resiliente
+    const members = Array.isArray(selectedTeamObj?.members) ? selectedTeamObj.members : [];
+    return members.map((m) => {
+      const id = String(m.user_id ?? m.id ?? m.user?.id ?? "");
+      const name =
+        m.name || m.user_name || m.user?.name || m.user?.full_name || `Usuário #${id || "?"}`;
+      return { user_id: id, user_name: name };
+    });
+  }, [selectedTeamObj]);
+
+  const teamMemberIdsSet = useMemo(
+    () => new Set(teamMembers.map((m) => String(m.user_id))),
+    [teamMembers]
+  );
+
+  /* ===================== Busca de dados para o relatório ===================== */
   const fetchReportData = async () => {
     if (!selectedTeam) {
       setReportData(null);
       setTeamProductivity(null);
-      setVisibleTeamTasks([]); // 🔹 limpa visíveis
+      setVisibleTeamTasks([]);
       return;
     }
 
     try {
       setLoading(true);
 
-      const productivityResponse = await api.get(`/teams/${selectedTeam}/productivity`);
-      setTeamProductivity(productivityResponse.data);
+      // ainda buscamos produtividade (para a caixa “Produtividade”), mas a base de membros vem de /teams
+      let prod = null;
+      try {
+        const productivityResponse = await api.get(`/teams/${selectedTeam}/productivity`);
+        prod = productivityResponse.data;
+      } catch (e) {
+        // se a API de produtividade falhar, seguimos só com teamMembers
+        prod = null;
+      }
+      setTeamProductivity(prod);
 
-      const teamMemberIds = productivityResponse.data.productivity.map((m) => m.user_id);
+      // Critério de pertencimento à equipe:
+      // - Dono é membro, OU
+      // - Algum assigned_user/collaborator é membro
+      let teamTasks = allTasks.filter((task) => {
+        const ownerId = normalizeId(task?.user_id);
+        if (teamMemberIdsSet.has(String(ownerId))) return true;
 
-      let teamTasks = allTasks.filter((task) => teamMemberIds.includes(task.user_id));
+        const assignees = collectAssignees(task);
+        return assignees.some((uid) => teamMemberIdsSet.has(String(uid)));
+      });
 
       // Filtros adicionais
       if (filters.user_id) {
-        teamTasks = teamTasks.filter((task) => task.user_id === parseInt(filters.user_id));
+        const uid = String(filters.user_id);
+        teamTasks = teamTasks.filter((task) => {
+          const assignees = collectAssignees(task);
+          return assignees.includes(uid);
+        });
       }
       if (filters.status) {
         teamTasks = teamTasks.filter((task) => task.status === filters.status);
@@ -378,21 +407,18 @@ function TeamReports() {
         );
       }
       if (filters.category) {
+        const needle = String(filters.category).toLowerCase();
         teamTasks = teamTasks.filter(
-          (task) =>
-            task.categoria &&
-            task.categoria.toLowerCase().includes(filters.category.toLowerCase())
+          (task) => task.categoria && String(task.categoria).toLowerCase().includes(needle)
         );
       }
       if (filters.start_date) {
-        teamTasks = teamTasks.filter(
-          (task) => new Date(task.created_at) >= new Date(filters.start_date)
-        );
+        const d = new Date(filters.start_date);
+        teamTasks = teamTasks.filter((task) => new Date(task.created_at) >= d);
       }
       if (filters.end_date) {
-        teamTasks = teamTasks.filter(
-          (task) => new Date(task.created_at) <= new Date(filters.end_date)
-        );
+        const d = new Date(filters.end_date);
+        teamTasks = teamTasks.filter((task) => new Date(task.created_at) <= d);
       }
 
       // Toggle Ativas/Todas
@@ -400,7 +426,6 @@ function TeamReports() {
         teamTasks = teamTasks.filter((task) => task.status !== "archived");
       }
 
-      // 🔹 guarda o conjunto visível para cálculo de produtividade no front
       setVisibleTeamTasks(teamTasks);
 
       const calculated = calculateTeamMetrics(teamTasks);
@@ -419,9 +444,8 @@ function TeamReports() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedTeam, filters, allTasks, showOnlyActive]);
 
-  const handleFilterChange = (key, value) => {
-    setFilters((prev) => ({ ...prev, [key]: value }));
-  };
+  /* ===================== Filtros / UI ===================== */
+  const handleFilterChange = (key, value) => setFilters((prev) => ({ ...prev, [key]: value }));
 
   const clearFilters = () => {
     setFilters({
@@ -449,12 +473,12 @@ function TeamReports() {
   const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
 
   const handleExportPDF = async () => {
-    if (!reportData || !teamProductivity) {
+    if (!reportData) {
       toast.error("Nenhum dado disponível para exportar");
       return;
     }
     try {
-      exportToPDF(reportData, teamProductivity.team_name);
+      exportToPDF(reportData, selectedTeamObj?.name || teamProductivity?.team_name);
       toast.success("Relatório PDF exportado com sucesso!");
     } catch (error) {
       console.error("Erro ao exportar PDF:", error);
@@ -463,12 +487,12 @@ function TeamReports() {
   };
 
   const handleExportCSV = () => {
-    if (!reportData || !teamProductivity) {
+    if (!reportData) {
       toast.error("Nenhum dado disponível para exportar");
       return;
     }
     try {
-      exportToCSV(reportData, teamProductivity.team_name);
+      exportToCSV(reportData, selectedTeamObj?.name || teamProductivity?.team_name);
       toast.success("Dados CSV exportados com sucesso!");
     } catch (error) {
       console.error("Erro ao exportar CSV:", error);
@@ -476,54 +500,41 @@ function TeamReports() {
     }
   };
 
-  // Cores/labels incluindo 'archived'
-  const getStatusColor = (status) => {
-    const colors = {
-      pending: "#f59e0b",
-      in_progress: "#3b82f6",
-      done: "#10b981",
-      cancelled: "#ef4444",
-      archived: "#6b7280",
-    };
-    return colors[status] || "#6b7280";
-  };
+  const getStatusColor = (status) =>
+    ({ pending: "#f59e0b", in_progress: "#3b82f6", done: "#10b981", cancelled: "#ef4444", archived: "#6b7280" }[
+      status
+    ] || "#6b7280");
 
-  const getPriorityColor = (priority) => {
-    const colors = { Alta: "#ef4444", Média: "#f59e0b", Baixa: "#10b981" };
-    return colors[priority] || "#6b7280";
-  };
+  const getPriorityColor = (priority) => ({ Alta: "#ef4444", Média: "#f59e0b", Baixa: "#10b981" }[priority] || "#6b7280");
 
-  const getStatusLabel = (status) => {
-    const labels = {
-      pending: "Pendente",
-      in_progress: "Em Andamento",
-      done: "Concluída",
-      cancelled: "Cancelada",
-      archived: "Arquivada",
-    };
-    return labels[status] || status;
-  };
+  const getStatusLabel = (status) =>
+    ({ pending: "Pendente", in_progress: "Em Andamento", done: "Concluída", cancelled: "Cancelada", archived: "Arquivada" }[
+      status
+    ] || status);
 
-  // 🔹 Nomes dos membros vindos do backend (para mostrar label bonitinho)
+  /* ===================== Nomes dos membros ===================== */
+  // Preferimos os membros da equipe; se faltar alguém, caímos no retorno de produtividade
   const memberNameById = useMemo(() => {
     const map = new Map();
+    teamMembers.forEach((m) => map.set(String(m.user_id), m.user_name));
     (teamProductivity?.productivity || []).forEach((m) => {
-      map.set(m.user_id, m.user_name);
+      const id = String(m.user_id);
+      if (!map.has(id)) map.set(id, m.user_name);
     });
     return map;
-  }, [teamProductivity]);
+  }, [teamMembers, teamProductivity]);
 
-  // 🔹 Produtividade recalculada localmente (respeita filtros + toggle)
+  /* ===================== Produtividade (local) ===================== */
   const computedProductivity = useMemo(() => {
     const byUser = new Map();
     visibleTeamTasks.forEach((t) => {
-      const uid = t.user_id;
-      if (!byUser.has(uid)) {
-        byUser.set(uid, { user_id: uid, total_tasks: 0, completed_tasks: 0 });
-      }
-      const agg = byUser.get(uid);
-      agg.total_tasks += 1;
-      if (t.status === "done") agg.completed_tasks += 1; // nunca conta archived como concluída
+      const responsibles = collectAssignees(t);
+      responsibles.forEach((uid) => {
+        if (!byUser.has(uid)) byUser.set(uid, { user_id: uid, total_tasks: 0, completed_tasks: 0 });
+        const agg = byUser.get(uid);
+        agg.total_tasks += 1;
+        if (t.status === "done") agg.completed_tasks += 1;
+      });
     });
 
     const arr = Array.from(byUser.values()).map((row) => ({
@@ -532,11 +543,11 @@ function TeamReports() {
       completion_rate: row.total_tasks > 0 ? (row.completed_tasks / row.total_tasks) * 100 : 0,
     }));
 
-    // ordena por completed_tasks desc só pra ficar agradável
     arr.sort((a, b) => b.completed_tasks - a.completed_tasks);
     return arr;
   }, [visibleTeamTasks, memberNameById]);
 
+  /* ===================== Gráfico ===================== */
   const renderChart = () => {
     if (!reportData) return null;
 
@@ -562,8 +573,6 @@ function TeamReports() {
       default:
         return null;
     }
-
-    const maxValue = Math.max(...Object.values(data), 1);
 
     return (
       <div className={styles.chartCard}>
@@ -624,6 +633,7 @@ function TeamReports() {
     );
   };
 
+  /* ===================== Render ===================== */
   if (loading && !currentUser) {
     return (
       <div className={styles.reportsPage}>
@@ -750,8 +760,8 @@ function TeamReports() {
                       >
                         <option value="">Todos os Membros</option>
                         {selectedTeam &&
-                          (teamProductivity?.productivity || []).map((member) => (
-                            <option key={member.user_id} value={member.user_id}>
+                          teamMembers.map((member) => (
+                            <option key={member.user_id} value={String(member.user_id)}>
                               {member.user_name}
                             </option>
                           ))}
@@ -780,10 +790,7 @@ function TeamReports() {
 
                     <div className={styles.filterGroup}>
                       <label>Status</label>
-                      <select
-                        value={filters.status}
-                        onChange={(e) => handleFilterChange("status", e.target.value)}
-                      >
+                      <select value={filters.status} onChange={(e) => handleFilterChange("status", e.target.value)}>
                         <option value="">Todos</option>
                         <option value="pending">Pendente</option>
                         <option value="in_progress">Em Andamento</option>
@@ -865,7 +872,9 @@ function TeamReports() {
                       <h3>{reportData.overdue_tasks}</h3>
                       <p>Tarefas Atrasadas</p>
                     </div>
-                    <div className={styles.metricAlert}>{reportData.overdue_tasks > 0 && <Zap size={16} />}</div>
+                    <div className={styles.metricAlert}>
+                      {reportData.overdue_tasks > 0 && <Zap size={16} />}
+                    </div>
                   </div>
 
                   <div className={styles.metricCard}>
@@ -884,13 +893,13 @@ function TeamReports() {
 
                 {renderChart()}
 
-                {/* 🔹 PRODUTIVIDADE (recalculada localmente) */}
+                {/* Produtividade (recalculada localmente) */}
                 {computedProductivity.length > 0 && (
                   <div className={styles.productivityCard}>
                     <div className={styles.cardHeader}>
                       <h3 className={styles.cardTitle}>
                         <Users size={20} />
-                        Produtividade da Equipe: {teamProductivity?.team_name || ""}
+                        Produtividade da Equipe: {selectedTeamObj?.name || teamProductivity?.team_name || ""}
                       </h3>
                     </div>
                     <div className={styles.productivityGrid}>
@@ -938,23 +947,32 @@ function TeamReports() {
                       <div className={styles.performanceLabel}>Taxa de Conclusão da Equipe</div>
                       <div className={styles.performanceValue}>
                         {reportData.total_tasks > 0
-                          ? Math.round(((reportData.tasks_by_status.done || 0) / reportData.total_tasks) * 100)
+                          ? Math.round(
+                              ((reportData.tasks_by_status.done || 0) / reportData.total_tasks) * 100
+                            )
                           : 0}
                         %
                       </div>
                     </div>
                     <div className={styles.performanceItem}>
                       <div className={styles.performanceLabel}>Tarefas Concluídas Atrasadas</div>
-                      <div className={styles.performanceValue}>{reportData.tasks_completed_late || 0}</div>
+                      <div className={styles.performanceValue}>
+                        {reportData.tasks_completed_late || 0}
+                      </div>
                     </div>
                     <div className={styles.performanceItem}>
                       <div className={styles.performanceLabel}>Próximas Tarefas</div>
-                      <div className={styles.performanceValue}>{reportData.upcoming_tasks || 0}</div>
+                      <div className={styles.performanceValue}>
+                        {reportData.upcoming_tasks || 0}
+                      </div>
                     </div>
                     <div className={styles.performanceItem}>
                       <div className={styles.performanceLabel}>Produtividade Média</div>
                       <div className={styles.performanceValue}>
-                        {reportData.total_tasks > 0 && reportData.average_completion_time !== "N/A" ? "Alta" : "Baixa"}
+                        {reportData.total_tasks > 0 &&
+                        reportData.average_completion_time !== "N/A"
+                          ? "Alta"
+                          : "Baixa"}
                       </div>
                     </div>
                   </div>

@@ -20,6 +20,11 @@ import {
   Zap,
 } from "lucide-react";
 
+/* ===== Helpers de ID / listas (para suportar numbers/strings/objs) ===== */
+const normId = (v) => (v == null ? null : String(v?.id ?? v?.user_id ?? v));
+const listIncluiId = (list, id) =>
+  Array.isArray(list) && list.some((u) => normId(u) === String(id));
+
 function Dashboard() {
   const navigate = useNavigate();
   const [dashboardData, setDashboardData] = useState(null);
@@ -33,28 +38,40 @@ function Dashboard() {
       try {
         // Buscar dados do usuário atual
         const userResponse = await api.get("/users/me");
-        setCurrentUser(userResponse.data);
+        const me = userResponse.data;
+        setCurrentUser(me);
 
         // Buscar todas as tarefas
         const tasksResponse = await api.get("/tasks");
         const allTasks = tasksResponse.data;
 
-        // Filtrar tarefas do usuário ou onde é colaborador
-        const userTasks = allTasks.filter(
-          (task) =>
-            task.user_id === userResponse.data.id ||
-            (task.collaborators || []).includes(userResponse.data.id)
-        );
+        const meId = String(me.id);
+
+        // ===== AGRUPAR tarefas do usuário:
+        // dono OU colaborador OU multi-atribuída (assigned_users)
+        const userTasks = allTasks.filter((task) => {
+          const ehDono = String(task.user_id) === meId;
+          const emCollaborators = listIncluiId(task.collaborators, meId);
+          const emAssignedUsers = listIncluiId(task.assigned_users, meId);
+          // fallback p/ casos em que assigned_users vem como [{user_id: X}] etc.
+          const emAssignedObjs =
+            Array.isArray(task.assigned_users) &&
+            task.assigned_users.some(
+              (u) => String(u?.user_id ?? u?.id ?? u) === meId
+            );
+
+          return ehDono || emCollaborators || emAssignedUsers || emAssignedObjs;
+        });
 
         const now = new Date();
 
-        // Função para converter para horário de Brasília
+        // Converte ISO UTC para horário de Brasília
         const getBrasiliaDate = (isoDate) => {
           const date = new Date(isoDate);
           return new Date(date.getTime() - 3 * 60 * 60 * 1000);
         };
 
-        // Função unificada para status da tarefa
+        // Status unificado
         const getTaskStatus = (task) => {
           if (task.status === "done")
             return { text: "Concluída", color: "#10b981" };
@@ -65,9 +82,7 @@ function Dashboard() {
 
         // Métricas
         const totalTasks = userTasks.length;
-        const completedTasks = userTasks.filter(
-          (t) => t.status === "done"
-        ).length;
+        const completedTasks = userTasks.filter((t) => t.status === "done").length;
         const pendingTasks = userTasks.filter(
           (t) => getTaskStatus(t).text === "Pendente"
         ).length;
@@ -90,7 +105,7 @@ function Dashboard() {
               new Date(a.updated_at || a.created_at)
           )
           .slice(0, 5)
-          .map((task) => ({ ...task, statusInfo: getTaskStatus(task) })); // adiciona statusInfo para usar na renderização
+          .map((task) => ({ ...task, statusInfo: getTaskStatus(task) }));
 
         const completionRate =
           totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
@@ -155,19 +170,16 @@ function Dashboard() {
   };
 
   const getBrasiliaDate = (isoDate) => {
-    const date = new Date(isoDate); // ISO UTC
-    // Converte para horário local (Brasília)
+    const date = new Date(isoDate);
     return new Date(date.getTime() - 3 * 60 * 60 * 1000);
   };
 
   const getTaskStatusText = (task) => {
     if (task.status === "done") return "Concluída";
-
     if (task.due_date) {
       const due = getBrasiliaDate(task.due_date);
       if (due < new Date()) return "Atrasada";
     }
-
     return "Pendente";
   };
 
