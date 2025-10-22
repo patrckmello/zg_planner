@@ -338,6 +338,24 @@ def get_tasks():
     requires_approval_param = request.args.get("requires_approval")  # "true"/"false"
     managed_only = str(request.args.get("managed_only", "false")).lower() in ("1","true","yes")
 
+    team_id_param = request.args.get("team_id")
+    team_scope = None
+    if team_id_param:
+        try:
+            team_id_int = int(team_id_param)
+        except ValueError:
+            return jsonify({"error": "team_id inválido."}), 400
+
+        if user.is_admin:
+            team_scope = team_id_int
+        else:
+            # verifica se é gestor da equipe
+            managers = [ut.team_id for ut in user.teams if ut.is_manager]
+            if team_id_int in managers:
+                team_scope = team_id_int
+            else:
+                return jsonify({"error": "Acesso negado para este team_id."}), 403
+
     # base scope
     if user.is_admin:
         query = Task.query.filter(Task.deleted_at.is_(None))
@@ -357,7 +375,6 @@ def get_tasks():
             return jsonify({"error": "Status inválido para filtro."}), 400
         query = query.filter(Task.status == status)
     else:
-        # <- NOVO: por padrão NÃO trazer arquivadas
         if not include_archived:
             query = query.filter(Task.status != 'archived')
 

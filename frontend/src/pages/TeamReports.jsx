@@ -25,6 +25,15 @@ import {
 } from "lucide-react";
 
 /* ===================== Helpers ===================== */
+const displayNameFromMember = (m) =>
+  m?.name ??
+  m?.username ??        // /teams retorna "username"
+  m?.user_name ??       // /teams/:id/productivity retorna "user_name"
+  m?.user?.username ??  // se vier aninhado
+  m?.user?.name ??
+  m?.user?.full_name ??
+  null;
+
 const normalizePriority = (priority) => {
   if (!priority) return priority;
   const map = { alta: "Alta", media: "Média", baixa: "Baixa", high: "Alta", medium: "Média", low: "Baixa" };
@@ -38,12 +47,11 @@ const normalizeCategory = (category) => {
 };
 
 // IDs e atribuídos/collabs podem vir como número/string/objeto
-const normalizeId = (v) => (v == null ? null : String(v?.id ?? v));
+const normalizeId = (v) => (v == null ? null : String(v?.id ?? v?.user_id ?? v));
 const listHasId = (list, id) => Array.isArray(list) && list.some((u) => normalizeId(u) === String(id));
 const collectAssignees = (task) => {
   const a = Array.isArray(task?.assigned_users) ? task.assigned_users.map(normalizeId) : [];
   const c = Array.isArray(task?.collaborators) ? task.collaborators.map(normalizeId) : [];
-  // também considere o owner como responsável
   const owner = normalizeId(task?.user_id);
   return Array.from(new Set([owner, ...a, ...c].filter(Boolean)));
 };
@@ -197,8 +205,7 @@ function TeamReports() {
     async (includeArchived) => {
       try {
         const params = includeArchived ? { include_archived: true } : {};
-        // se o backend aceitar, isso faz vir também as multi-atribuídas:
-        params.include_assigned = true;
+        if (selectedTeam) params.team_id = selectedTeam;
 
         const res = await api.get("/tasks", { params });
         setAllTasks(res.data);
@@ -207,8 +214,28 @@ function TeamReports() {
         toast.error("Erro ao carregar tarefas");
       }
     },
-    []
+    [selectedTeam]
   );
+
+  useEffect(() => {
+    const fetchTeamIfNeeded = async () => {
+      if (!selectedTeam) return;
+      const t = teams.find((x) => String(x.id) === String(selectedTeam));
+      const hasMembers = Array.isArray(t?.members) && t.members.length > 0;
+      if (!hasMembers) {
+        try {
+          const { data } = await api.get(`/teams/${selectedTeam}`);
+          // substitui o item da lista por um "completo"
+          setTeams((prev) =>
+            prev.map((x) => (String(x.id) === String(selectedTeam) ? data : x))
+          );
+        } catch (e) {
+          console.warn("Falha ao detalhar equipe, seguindo com dados atuais.", e);
+        }
+      }
+    };
+    fetchTeamIfNeeded();
+  }, [selectedTeam, teams]);
 
   useEffect(() => {
     const fetchInitialData = async (includeArchived) => {
@@ -258,7 +285,7 @@ function TeamReports() {
 
   useEffect(() => {
     fetchTasks(!showOnlyActive);
-  }, [fetchTasks, showOnlyActive]);
+  }, [fetchTasks, showOnlyActive, selectedTeam]);
 
   /* ===================== Métricas ===================== */
   const calculateTeamMetrics = (teamTasks) => {
@@ -341,12 +368,10 @@ function TeamReports() {
   );
 
   const teamMembers = useMemo(() => {
-    // tenta extrair user_id e nome de várias formas para ser resiliente
     const members = Array.isArray(selectedTeamObj?.members) ? selectedTeamObj.members : [];
     return members.map((m) => {
-      const id = String(m.user_id ?? m.id ?? m.user?.id ?? "");
-      const name =
-        m.name || m.user_name || m.user?.name || m.user?.full_name || `Usuário #${id || "?"}`;
+      const id = String(m?.user_id ?? m?.id ?? m?.user?.id ?? "");
+      const name = displayNameFromMember(m) || `Usuário #${id || "?"}`;
       return { user_id: id, user_name: name };
     });
   }, [selectedTeamObj]);
@@ -516,13 +541,30 @@ function TeamReports() {
   // Preferimos os membros da equipe; se faltar alguém, caímos no retorno de produtividade
   const memberNameById = useMemo(() => {
     const map = new Map();
-    teamMembers.forEach((m) => map.set(String(m.user_id), m.user_name));
-    (teamProductivity?.productivity || []).forEach((m) => {
-      const id = String(m.user_id);
-      if (!map.has(id)) map.set(id, m.user_name);
+
+    // nomes vindos de /teams
+    teamMembers.forEach((m) => {
+      if (m.user_id) map.set(String(m.user_id), m.user_name);
     });
+
+    // nomes vindos de /teams/:id/productivity (campo "user_name")
+    (teamProductivity?.productivity || []).forEach((row) => {
+      const id = String(row.user_id);
+      const name = row.user_name || row.username || row.name;
+      if (id && name && !map.has(id)) map.set(id, name);
+    });
+
+    // garante nome do usuário atual também
+    if (currentUser?.id) {
+      map.set(
+        String(currentUser.id),
+        currentUser.username || currentUser.name || currentUser.full_name
+      );
+    }
+
     return map;
-  }, [teamMembers, teamProductivity]);
+  }, [teamMembers, teamProductivity, currentUser]);
+
 
   /* ===================== Produtividade (local) ===================== */
   const computedProductivity = useMemo(() => {

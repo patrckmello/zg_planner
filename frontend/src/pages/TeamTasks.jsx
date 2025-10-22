@@ -21,13 +21,34 @@ import {
   FiX,
 } from "react-icons/fi";
 
-// 👇 ADICIONADO
+// 👇 MODAL
 import TaskModal from "../components/TaskModal";
 
-// Função para normalizar prioridade
+/* ===================== Helpers ===================== */
+
+// IDs podem vir como número/string/objeto
+const normalizeId = (v) => (v == null ? null : String(v?.id ?? v?.user_id ?? v));
+
+const collectAssignees = (task) => {
+  const a = Array.isArray(task?.assigned_users) ? task.assigned_users.map(normalizeId) : [];
+  const c = Array.isArray(task?.collaborators) ? task.collaborators.map(normalizeId) : [];
+  const owner = normalizeId(task?.user_id);
+  return Array.from(new Set([owner, ...a, ...c].filter(Boolean)));
+};
+
+// nome amigável independente da rota (teams/productivity/etc.)
+const displayNameFromMember = (m) =>
+  m?.name ??
+  m?.username ??
+  m?.user_name ??
+  m?.user?.username ??
+  m?.user?.name ??
+  null;
+
+// Normalizar prioridade
 const normalizePriority = (priority) => {
   if (!priority) return priority;
-  const priorityMap = {
+  const map = {
     alta: "Alta",
     media: "Média",
     baixa: "Baixa",
@@ -35,7 +56,7 @@ const normalizePriority = (priority) => {
     medium: "Média",
     low: "Baixa",
   };
-  return priorityMap[priority.toLowerCase()] || priority;
+  return map[String(priority).toLowerCase()] || priority;
 };
 
 function TeamTasks() {
@@ -51,14 +72,14 @@ function TeamTasks() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  // 👇 ESTADO DO MODAL
+  // Modal
   const [selectedTask, setSelectedTask] = useState(null);
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
 
-  // Estados dos filtros
+  // Filtros
   const [filters, setFilters] = useState({
     selectedTeam: "",
-    selectedMembers: [],
+    selectedMembers: [], // guarde como strings
     status: "",
     priority: "",
     category: "",
@@ -74,43 +95,33 @@ function TeamTasks() {
   const currentTasks = filteredTasks.slice(indexOfFirstItem, indexOfLastItem);
   const totalPages = Math.ceil(filteredTasks.length / itemsPerPage);
 
-  // Verificar se o usuário tem permissão de acesso
-  const hasAccess = () => {
-    return currentUser?.is_admin || currentUser?.is_manager;
-  };
+  const hasAccess = () => currentUser?.is_admin || currentUser?.is_manager;
 
+  /* ===================== Bootstrap ===================== */
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
-        // Buscar dados do usuário atual
         const userResponse = await api.get("/users/me");
         setCurrentUser(userResponse.data);
 
-        // Verificar se tem acesso
         if (!userResponse.data.is_admin && !userResponse.data.is_manager) {
-          toast.error(
-            "Acesso negado. Apenas gestores e administradores podem acessar esta página."
-          );
+          toast.error("Acesso negado. Apenas gestores e administradores podem acessar esta página.");
           navigate("/dashboard");
           return;
         }
 
-        // Buscar equipes
         const teamsResponse = await api.get("/teams");
-        setTeams(teamsResponse.data);
+        let list = teamsResponse.data;
 
-        // Se o usuário é gestor (não admin), filtrar apenas suas equipes
+        // Se for gestor não-admin, mostre só times onde ele é gestor
         if (!userResponse.data.is_admin && userResponse.data.is_manager) {
-          const userTeams = teamsResponse.data.filter((team) =>
-            team.members.some(
-              (member) =>
-                member.user_id === userResponse.data.id && member.is_manager
-            )
+          list = list.filter((team) =>
+            team.members?.some((m) => m.user_id === userResponse.data.id && m.is_manager)
           );
-          setTeams(userTeams);
         }
-      } catch (error) {
-        console.error("Erro ao buscar dados iniciais:", error);
+        setTeams(list);
+      } catch (err) {
+        console.error("Erro ao buscar dados iniciais:", err);
         toast.error("Erro ao carregar dados. Faça login novamente.");
         navigate("/login");
       } finally {
@@ -121,68 +132,57 @@ function TeamTasks() {
     fetchInitialData();
 
     const handleResize = () => {
-      if (window.innerWidth <= 768) {
-        setSidebarOpen(false);
-      }
+      if (window.innerWidth <= 768) setSidebarOpen(false);
     };
-
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, [navigate]);
 
-  // Buscar membros da equipe quando uma equipe é selecionada
+  /* ===================== Membros da equipe ===================== */
   useEffect(() => {
     const fetchTeamMembers = async () => {
-      if (filters.selectedTeam) {
-        try {
-          // Usar a rota de produtividade para obter membros da equipe
-          const response = await api.get(
-            `/teams/${filters.selectedTeam}/productivity`
-          );
-
-          // Transformar dados de produtividade em formato de membros
-          const members = response.data.productivity.map((member) => ({
-            user_id: member.user_id,
-            name: member.user_name,
-            email: "",
-            is_manager: false,
-          }));
-
-          setTeamMembers(members);
-        } catch (error) {
-          console.error("Erro ao buscar membros da equipe:", error);
-
-          // Fallback: buscar da equipe selecionada diretamente
-          try {
-            const selectedTeam = teams.find(
-              (team) => team.id === parseInt(filters.selectedTeam)
-            );
-            if (selectedTeam && selectedTeam.members) {
-              const members = selectedTeam.members.map((member) => ({
-                user_id: member.user_id,
-                name: member.name || `Usuário ${member.user_id}`,
-                email: member.email || "",
-                is_manager: member.is_manager || false,
-              }));
-              setTeamMembers(members);
-            } else {
-              setTeamMembers([]);
-            }
-          } catch (fallbackError) {
-            console.error("Erro no fallback para buscar membros:", fallbackError);
-            setTeamMembers([]);
-            toast.error("Erro ao carregar membros da equipe");
-          }
-        }
-      } else {
+      if (!filters.selectedTeam) {
         setTeamMembers([]);
+        return;
+      }
+
+      try {
+        // tenta via produtividade (tem IDs + nomes)
+        const { data } = await api.get(`/teams/${filters.selectedTeam}/productivity`);
+        const members = (data.productivity || []).map((m) => ({
+          user_id: String(m.user_id),
+          name: m.user_name || m.username || `Usuário #${m.user_id}`,
+          email: "",
+          is_manager: false,
+        }));
+        setTeamMembers(members);
+      } catch (error) {
+        console.warn("Produtividade indisponível, fallback para /teams", error);
+        try {
+          const team = teams.find((t) => String(t.id) === String(filters.selectedTeam));
+          if (team?.members?.length) {
+            const members = team.members.map((member) => ({
+              user_id: String(member.user_id),
+              name: displayNameFromMember(member) || `Usuário #${member.user_id}`,
+              email: member.email || "",
+              is_manager: !!member.is_manager,
+            }));
+            setTeamMembers(members);
+          } else {
+            setTeamMembers([]);
+          }
+        } catch (e2) {
+          console.error("Erro no fallback de membros:", e2);
+          setTeamMembers([]);
+          toast.error("Erro ao carregar membros da equipe");
+        }
       }
     };
 
     fetchTeamMembers();
   }, [filters.selectedTeam, teams]);
 
-  // Buscar tarefas quando os filtros mudarem
+  /* ===================== Tarefas ===================== */
   useEffect(() => {
     const fetchTasks = async () => {
       if (!filters.selectedTeam) {
@@ -194,8 +194,9 @@ function TeamTasks() {
       try {
         setLoading(true);
         const params = new URLSearchParams();
+        // (opcional) backend já exclui arquivadas por padrão; ajuste se quiser:
+        // params.append("include_archived", "true");
 
-        // Filtros básicos
         if (filters.status) params.append("status", filters.status);
         if (filters.dueDateFrom) params.append("due_after", filters.dueDateFrom);
         if (filters.dueDateTo) params.append("due_before", filters.dueDateTo);
@@ -203,50 +204,44 @@ function TeamTasks() {
 
         const response = await api.get(`/tasks?${params.toString()}`);
 
-        // Filtrar tarefas da equipe selecionada
+        // pertence à equipe se owner/assigned/collab ∈ membros
+        const teamIds = new Set(teamMembers.map((m) => String(m.user_id)));
         let teamTasks = response.data.filter((task) => {
-          const taskUser = teamMembers.find(
-            (member) => member.user_id === task.user_id
-          );
-          return taskUser !== undefined;
+          const assignees = collectAssignees(task);
+          return assignees.some((uid) => teamIds.has(String(uid)));
         });
 
-        // Aplicar filtros adicionais no frontend
+        // filtro por membros selecionados (considera todos os responsáveis)
         if (filters.selectedMembers.length > 0) {
-          teamTasks = teamTasks.filter((task) =>
-            filters.selectedMembers.includes(task.user_id)
-          );
+          const selectedSet = new Set(filters.selectedMembers.map(String));
+          teamTasks = teamTasks.filter((task) => {
+            const responsibleIds = collectAssignees(task);
+            return responsibleIds.some((uid) => selectedSet.has(String(uid)));
+          });
         }
 
         if (filters.priority) {
-          teamTasks = teamTasks.filter((task) => {
-            const normalizedTaskPriority = normalizePriority(task.prioridade);
-            return normalizedTaskPriority === filters.priority;
-          });
+          teamTasks = teamTasks.filter(
+            (task) => normalizePriority(task.prioridade) === filters.priority
+          );
         }
 
         if (filters.category) {
           teamTasks = teamTasks.filter(
             (task) =>
               task.categoria &&
-              task.categoria
-                .toLowerCase()
-                .includes(filters.category.toLowerCase())
+              String(task.categoria).toLowerCase().includes(filters.category.toLowerCase())
           );
         }
 
         if (filters.createdDateFrom) {
-          teamTasks = teamTasks.filter(
-            (task) =>
-              new Date(task.created_at) >= new Date(filters.createdDateFrom)
-          );
+          const d = new Date(filters.createdDateFrom);
+          teamTasks = teamTasks.filter((task) => new Date(task.created_at) >= d);
         }
 
         if (filters.createdDateTo) {
-          teamTasks = teamTasks.filter(
-            (task) =>
-              new Date(task.created_at) <= new Date(filters.createdDateTo)
-          );
+          const d = new Date(filters.createdDateTo);
+          teamTasks = teamTasks.filter((task) => new Date(task.created_at) <= d);
         }
 
         setTasks(response.data);
@@ -261,10 +256,13 @@ function TeamTasks() {
 
     if (teamMembers.length > 0) {
       fetchTasks();
+    } else {
+      setTasks([]);
+      setFilteredTasks([]);
     }
   }, [filters, teamMembers]);
 
-  // 👇 handlers do modal
+  /* ===================== Modal Handlers ===================== */
   const openTaskModal = (task) => {
     setSelectedTask(task);
     setIsTaskModalOpen(true);
@@ -277,24 +275,19 @@ function TeamTasks() {
 
   const handleTaskUpdateFromModal = (taskId, updateData) => {
     setTasks((prev) => {
-      if (updateData?.deleted) {
-        return prev.filter((t) => t.id !== taskId);
-      }
+      if (updateData?.deleted) return prev.filter((t) => t.id !== taskId);
       return prev.map((t) => (t.id === taskId ? { ...t, ...updateData } : t));
     });
 
     setFilteredTasks((prev) => {
-      if (updateData?.deleted) {
-        return prev.filter((t) => t.id !== taskId);
-      }
+      if (updateData?.deleted) return prev.filter((t) => t.id !== taskId);
       return prev.map((t) => (t.id === taskId ? { ...t, ...updateData } : t));
     });
   };
 
+  /* ===================== UI helpers ===================== */
   const handlePageChange = (pageNumber) => {
-    if (pageNumber > 0 && pageNumber <= totalPages) {
-      setCurrentPage(pageNumber);
-    }
+    if (pageNumber > 0 && pageNumber <= totalPages) setCurrentPage(pageNumber);
   };
 
   const handleFilterChange = (key, value) => {
@@ -302,17 +295,20 @@ function TeamTasks() {
       ...prev,
       [key]: value,
     }));
-    // sempre voltar pra página 1 ao mudar filtro
     setCurrentPage(1);
   };
 
   const handleMemberToggle = (memberId) => {
-    setFilters((prev) => ({
-      ...prev,
-      selectedMembers: prev.selectedMembers.includes(memberId)
-        ? prev.selectedMembers.filter((id) => id !== memberId)
-        : [...prev.selectedMembers, memberId],
-    }));
+    const id = String(memberId);
+    setFilters((prev) => {
+      const exists = prev.selectedMembers.includes(id);
+      return {
+        ...prev,
+        selectedMembers: exists
+          ? prev.selectedMembers.filter((x) => x !== id)
+          : [...prev.selectedMembers, id],
+      };
+    });
     setCurrentPage(1);
   };
 
@@ -343,9 +339,7 @@ function TeamTasks() {
     }
   };
 
-  const toggleSidebar = () => {
-    setSidebarOpen(!sidebarOpen);
-  };
+  const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
 
   const getStatusIcon = (status) => {
     switch (status) {
@@ -360,19 +354,17 @@ function TeamTasks() {
     }
   };
 
-  const getStatusLabel = (status) => {
-    const labels = {
+  const getStatusLabel = (status) =>
+    ({
       pending: "Pendente",
       in_progress: "Em Andamento",
       done: "Concluída",
       cancelled: "Cancelada",
-    };
-    return labels[status] || status;
-  };
+    }[status] || status);
 
   const getPriorityClass = (priority) => {
-    const normalizedPriority = normalizePriority(priority);
-    switch (normalizedPriority) {
+    const norm = normalizePriority(priority);
+    switch (norm) {
       case "Alta":
         return styles.priorityHigh;
       case "Média":
@@ -384,11 +376,9 @@ function TeamTasks() {
     }
   };
 
-  const formatDate = (dateString) => {
-    if (!dateString) return "-";
-    return new Date(dateString).toLocaleDateString("pt-BR");
-  };
+  const formatDate = (dateString) => (!dateString ? "-" : new Date(dateString).toLocaleDateString("pt-BR"));
 
+  /* ===================== Render ===================== */
   if (loading && !currentUser) {
     return (
       <div className={styles.spinnerContainer}>
@@ -407,10 +397,7 @@ function TeamTasks() {
             <div className={styles.accessDenied}>
               <FiUsers size={64} />
               <h2>Acesso Restrito</h2>
-              <p>
-                Esta página é acessível apenas para gestores de equipe e
-                administradores.
-              </p>
+              <p>Esta página é acessível apenas para gestores de equipe e administradores.</p>
             </div>
           </main>
         </div>
@@ -427,14 +414,11 @@ function TeamTasks() {
 
         <main className={styles.contentArea}>
           <div className={styles.tasksWrapper}>
-            {/* Header da página */}
+            {/* Header */}
             <div className={styles.pageHeader}>
               <div className={styles.headerContent}>
                 <h1 className={styles.pageTitle}>Tarefas da Equipe</h1>
-                <button
-                  className={styles.addTaskBtn}
-                  onClick={() => navigate("/tasks/new")}
-                >
+                <button className={styles.addTaskBtn} onClick={() => navigate("/tasks/new")}>
                   <FiPlus />
                   Nova Tarefa
                 </button>
@@ -449,10 +433,7 @@ function TeamTasks() {
 
             {/* Filtros */}
             <div className={styles.filtersCard}>
-              <div
-                className={styles.filtersHeader}
-                onClick={() => setFiltersVisible(!filtersVisible)}
-              >
+              <div className={styles.filtersHeader} onClick={() => setFiltersVisible(!filtersVisible)}>
                 <div className={styles.filtersTitle}>
                   <FiFilter />
                   <span>Filtros</span>
@@ -463,7 +444,7 @@ function TeamTasks() {
               {filtersVisible && (
                 <div className={styles.filtersContent}>
                   <div className={styles.filtersGrid}>
-                    {/* Seleção de Equipe */}
+                    {/* Equipe */}
                     <div className={styles.filterGroup}>
                       <label>
                         <FiUsers />
@@ -471,9 +452,7 @@ function TeamTasks() {
                       </label>
                       <select
                         value={filters.selectedTeam}
-                        onChange={(e) =>
-                          handleFilterChange("selectedTeam", e.target.value)
-                        }
+                        onChange={(e) => handleFilterChange("selectedTeam", e.target.value)}
                         required
                       >
                         <option value="">Selecione uma equipe</option>
@@ -485,7 +464,7 @@ function TeamTasks() {
                       </select>
                     </div>
 
-                    {/* Busca por termo */}
+                    {/* Busca */}
                     <div className={styles.filterGroup}>
                       <label>
                         <FiSearch />
@@ -495,9 +474,7 @@ function TeamTasks() {
                         type="text"
                         placeholder="Título da tarefa..."
                         value={filters.searchTerm}
-                        onChange={(e) =>
-                          handleFilterChange("searchTerm", e.target.value)
-                        }
+                        onChange={(e) => handleFilterChange("searchTerm", e.target.value)}
                         className={styles.searchInput}
                       />
                     </div>
@@ -508,12 +485,7 @@ function TeamTasks() {
                         <FiTag />
                         Status
                       </label>
-                      <select
-                        value={filters.status}
-                        onChange={(e) =>
-                          handleFilterChange("status", e.target.value)
-                        }
-                      >
+                      <select value={filters.status} onChange={(e) => handleFilterChange("status", e.target.value)}>
                         <option value="">Todos</option>
                         <option value="pending">Pendente</option>
                         <option value="in_progress">Em Andamento</option>
@@ -530,9 +502,7 @@ function TeamTasks() {
                       </label>
                       <select
                         value={filters.priority}
-                        onChange={(e) =>
-                          handleFilterChange("priority", e.target.value)
-                        }
+                        onChange={(e) => handleFilterChange("priority", e.target.value)}
                       >
                         <option value="">Todas</option>
                         <option value="Alta">Alta</option>
@@ -551,14 +521,12 @@ function TeamTasks() {
                         type="text"
                         placeholder="Digite a categoria..."
                         value={filters.category}
-                        onChange={(e) =>
-                          handleFilterChange("category", e.target.value)
-                        }
+                        onChange={(e) => handleFilterChange("category", e.target.value)}
                         className={styles.searchInput}
                       />
                     </div>
 
-                    {/* Data de Vencimento - De */}
+                    {/* Datas */}
                     <div className={styles.filterGroup}>
                       <label>
                         <FiCalendar />
@@ -567,14 +535,11 @@ function TeamTasks() {
                       <input
                         type="date"
                         value={filters.dueDateFrom}
-                        onChange={(e) =>
-                          handleFilterChange("dueDateFrom", e.target.value)
-                        }
+                        onChange={(e) => handleFilterChange("dueDateFrom", e.target.value)}
                         className={styles.dateInput}
                       />
                     </div>
 
-                    {/* Data de Vencimento - Até */}
                     <div className={styles.filterGroup}>
                       <label>
                         <FiCalendar />
@@ -583,14 +548,11 @@ function TeamTasks() {
                       <input
                         type="date"
                         value={filters.dueDateTo}
-                        onChange={(e) =>
-                          handleFilterChange("dueDateTo", e.target.value)
-                        }
+                        onChange={(e) => handleFilterChange("dueDateTo", e.target.value)}
                         className={styles.dateInput}
                       />
                     </div>
 
-                    {/* Data de Criação - De */}
                     <div className={styles.filterGroup}>
                       <label>
                         <FiCalendar />
@@ -599,14 +561,11 @@ function TeamTasks() {
                       <input
                         type="date"
                         value={filters.createdDateFrom}
-                        onChange={(e) =>
-                          handleFilterChange("createdDateFrom", e.target.value)
-                        }
+                        onChange={(e) => handleFilterChange("createdDateFrom", e.target.value)}
                         className={styles.dateInput}
                       />
                     </div>
 
-                    {/* Data de Criação - Até */}
                     <div className={styles.filterGroup}>
                       <label>
                         <FiCalendar />
@@ -615,15 +574,13 @@ function TeamTasks() {
                       <input
                         type="date"
                         value={filters.createdDateTo}
-                        onChange={(e) =>
-                          handleFilterChange("createdDateTo", e.target.value)
-                        }
+                        onChange={(e) => handleFilterChange("createdDateTo", e.target.value)}
                         className={styles.dateInput}
                       />
                     </div>
                   </div>
 
-                  {/* Seleção de Membros da Equipe */}
+                  {/* Membros */}
                   {teamMembers.length > 0 && (
                     <div className={styles.membersSection}>
                       <label className={styles.membersLabel}>
@@ -632,21 +589,14 @@ function TeamTasks() {
                       </label>
                       <div className={styles.membersGrid}>
                         {teamMembers.map((member) => (
-                          <label
-                            key={member.user_id}
-                            className={styles.memberCheckbox}
-                          >
+                          <label key={member.user_id} className={styles.memberCheckbox}>
                             <input
                               type="checkbox"
-                              checked={filters.selectedMembers.includes(
-                                member.user_id
-                              )}
+                              checked={filters.selectedMembers.includes(String(member.user_id))}
                               onChange={() => handleMemberToggle(member.user_id)}
                             />
                             <span>{member.name}</span>
-                            {member.is_manager && (
-                              <span className={styles.managerBadge}>Gestor</span>
-                            )}
+                            {member.is_manager && <span className={styles.managerBadge}>Gestor</span>}
                           </label>
                         ))}
                       </div>
@@ -662,7 +612,7 @@ function TeamTasks() {
               )}
             </div>
 
-            {/* Lista de Tarefas */}
+            {/* Lista */}
             <div className={styles.tasksContainer}>
               {loading ? (
                 <div className={styles.loadingContainer}>
@@ -693,9 +643,18 @@ function TeamTasks() {
                   </div>
 
                   {currentTasks.map((task) => {
-                    const responsible = teamMembers.find(
-                      (member) => member.user_id === task.user_id
-                    );
+                    const assignees = collectAssignees(task);
+                    const assigneesNames = assignees
+                      .map((uid) => teamMembers.find((m) => String(m.user_id) === String(uid))?.name)
+                      .filter(Boolean);
+
+                    const responsibleName =
+                      assigneesNames.length === 0
+                        ? "N/A"
+                        : assigneesNames.length === 1
+                        ? assigneesNames[0]
+                        : `${assigneesNames[0]} +${assigneesNames.length - 1}`;
+
                     const normalizedPriority = normalizePriority(task.prioridade);
 
                     return (
@@ -716,18 +675,14 @@ function TeamTasks() {
                                   : task.description}
                               </p>
                             )}
-                            {task.categoria && (
-                              <span className={styles.categoryTag}>
-                                {task.categoria}
-                              </span>
-                            )}
+                            {task.categoria && <span className={styles.categoryTag}>{task.categoria}</span>}
                           </div>
                         </div>
 
                         <div className={styles.tableCell}>
                           <div className={styles.responsibleInfo}>
                             <FiUser />
-                            <span>{responsible?.name || "N/A"}</span>
+                            <span>{responsibleName}</span>
                           </div>
                         </div>
 
@@ -740,11 +695,7 @@ function TeamTasks() {
 
                         <div className={styles.tableCell}>
                           {normalizedPriority && (
-                            <span
-                              className={`${styles.priorityBadge} ${getPriorityClass(
-                                normalizedPriority
-                              )}`}
-                            >
+                            <span className={`${styles.priorityBadge} ${getPriorityClass(normalizedPriority)}`}>
                               {normalizedPriority}
                             </span>
                           )}
@@ -772,7 +723,6 @@ function TeamTasks() {
                       <div className={styles.paginationInfo}>
                         Página {currentPage} de {totalPages}
                       </div>
-
                       <div className={styles.paginationControls}>
                         <button
                           className={styles.paginationBtn}
@@ -787,9 +737,7 @@ function TeamTasks() {
                             <button
                               key={`page-${index}`}
                               onClick={() => handlePageChange(index + 1)}
-                              className={`${styles.pageNumberBtn} ${
-                                currentPage === index + 1 ? styles.active : ""
-                              }`}
+                              className={`${styles.pageNumberBtn} ${currentPage === index + 1 ? styles.active : ""}`}
                             >
                               {index + 1}
                             </button>
@@ -813,7 +761,7 @@ function TeamTasks() {
         </main>
       </div>
 
-      {/* 👇 MODAL DE TAREFA */}
+      {/* MODAL DE TAREFA */}
       <TaskModal
         task={selectedTask}
         isOpen={isTaskModalOpen}
