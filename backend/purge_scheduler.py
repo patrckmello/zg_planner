@@ -1,12 +1,17 @@
-from datetime import datetime, timedelta, timezone
+# purge_scheduler.py
+from datetime import datetime, timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
 from flask import current_app
+from sqlalchemy import func
 from extensions import db
 from models.task_model import Task
 from models.audit_log_model import AuditLog
 import os
 
 scheduler = None
+
+def _utcnow_naive():
+    return datetime.utcnow()
 
 def _delete_task_files(task):
     """Apaga do disco os arquivos de anexos (se houver)."""
@@ -15,37 +20,60 @@ def _delete_task_files(task):
         if not upload_dir:
             return
         for anexo in (task.anexos or []):
-            name = anexo.get("name") if isinstance(anexo, dict) else str(anexo)
+            # aceita dict {"name": "..."} ou {"path": "..."} ou {"url": "..."} ou string
+            name = None
+            if isinstance(anexo, dict):
+                name = anexo.get("name") or anexo.get("path") or anexo.get("url")
+            else:
+                name = str(anexo)
+
             if not name:
                 continue
+
+            # se veio URL, tenta extrair o nome do arquivo
+            if "://" in name:
+                name = name.rsplit("/", 1)[-1]
+
             path = os.path.join(upload_dir, name)
+            # garante que não sai da pasta de uploads
+            try:
+                os.path.commonpath([os.path.abspath(path), os.path.abspath(upload_dir)])
+            except Exception:
+                continue
+
             if os.path.exists(path):
                 try:
                     os.remove(path)
                 except OSError:
                     pass
     except Exception:
-        # não deixa o purge quebrar por falha ao apagar arquivo
         current_app.logger.exception("Falha ao apagar anexos no purge")
 
 def purge_trash_once(app, days=7):
-    """Executa UMA varredura: apaga definitivamente tasks na lixeira com +N dias."""
+    """Apaga definitivamente tasks na lixeira com > N dias."""
     with app.app_context():
-        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
-        # deleted_at pode ser naive na sua base; se for, use datetime.utcnow() e compare sem tz.
+        cutoff = _utcnow_naive() - timedelta(days=days)
+
+        # LOG de diagnóstico útil
+        current_app.logger.info(f"[PURGE] Rodando com cutoff={cutoff.isoformat()} (UTC naive)")
+
+        # deleted_at também é UTC naive (Task.soft_delete usa datetime.utcnow())
         old_tasks = Task.query.filter(
             Task.deleted_at.isnot(None),
             Task.deleted_at < cutoff
         ).all()
 
+        current_app.logger.info(f"[PURGE] Candidatos encontrados: {len(old_tasks)}")
+
         count = 0
         for t in old_tasks:
-            # apaga arquivos
+            # apaga arquivos vinculados
             _delete_task_files(t)
+
             # auditoria antes de deletar
             try:
                 AuditLog.log_action(
-                    user_id=t.deleted_by_user_id,  # quem moveu pra lixeira (se existir)
+                    user_id=t.deleted_by_user_id,
                     action="PURGE",
                     resource_type="Task",
                     resource_id=t.id,
@@ -53,16 +81,18 @@ def purge_trash_once(app, days=7):
                 )
             except Exception:
                 current_app.logger.exception("Falha ao registrar auditoria (PURGE auto)")
-            # remove do banco
+
             db.session.delete(t)
             count += 1
 
-        db.session.commit()
+        if count:
+            db.session.commit()
+
         current_app.logger.info(f"[PURGE] Removidas definitivamente {count} tarefa(s).")
         return count
 
 def init_purge_scheduler(app, hour=3, minute=30):
-    """Agenda execução diária (ex.: 03:30)"""
+    """Agenda execução diária (ex.: 03:30 America/Sao_Paulo)."""
     global scheduler
     if scheduler:
         return scheduler
@@ -75,9 +105,12 @@ def init_purge_scheduler(app, hour=3, minute=30):
         minute=minute,
         id="purge_trash_daily",
         replace_existing=True,
+        coalesce=True,
+        max_instances=1,
+        misfire_grace_time=3600,  # tolera 1h de atraso
     )
     scheduler.start()
-    app.logger.info("[PURGE] Scheduler iniciado (diário).")
+    app.logger.info(f"[PURGE] Scheduler iniciado (diário {hour:02d}:{minute:02d} America/Sao_Paulo).")
     return scheduler
 
 def stop_purge_scheduler():

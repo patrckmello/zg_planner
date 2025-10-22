@@ -10,6 +10,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 import os
 import subprocess
 from datetime import datetime, timedelta
+from archive_scheduler import archive_done_tasks_once
 import csv
 import io
 from werkzeug.utils import secure_filename
@@ -377,3 +378,15 @@ def schedule_test_backup_email_in():
     except Exception as e:
         current_app.logger.exception("Falha ao agendar teste de e-mail de backup")
         return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@admin_bp.route("/archive/run-now", methods=["POST"])
+@admin_required
+def run_archive_now():
+    try:
+        count = archive_done_tasks_once(current_app, days=int(request.args.get("days", "7")))
+        return jsonify({"archived": count}), 200
+    except Exception as e:
+        current_app.logger.exception("Falha ao rodar arquivamento manual")
+        db.session.rollback()
+        return jsonify({"error": "failed", "detail": str(e)}), 500

@@ -110,11 +110,15 @@ class Task(db.Model):
         self.approved_at = datetime.utcnow()
 
     def mark_done(self):
+        # normaliza status
+        self.status = 'done'
+        # se precisar aprovação e não estiver aprovado, bloqueia
         if self.requires_manager_approval() and not self.is_approved():
             raise ValueError("Tarefa requer aprovação do gestor antes de ser concluída.")
-        self.status = 'done'
+        # sempre define completed_at
         if not self.completed_at:
             self.completed_at = datetime.utcnow()
+        # ao concluir, a tarefa não está arquivada ainda
         self.archived_at = None
         self.archived_by_user_id = None
 

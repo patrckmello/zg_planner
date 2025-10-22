@@ -1,38 +1,37 @@
+# archive_scheduler.py
 from datetime import datetime, timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
 from flask import current_app
-from sqlalchemy import and_
+from sqlalchemy import and_, func
 from extensions import db
 from models.task_model import Task
 from models.audit_log_model import AuditLog
 
 archive_scheduler = None
 
-ARCHIVE_STATUSES = {"done", "completed", "concluida", "concluded"}
+# Inclui variações, com/sem acento, PT/EN
+ARCHIVE_STATUSES = {
+    "done", "completed", "concluded",
+    "concluida", "concluída",  # com e sem acento
+}
 
 def _utcnow_naive():
-
     return datetime.utcnow()
 
 def archive_done_tasks_once(app, days=7):
-
     with app.app_context():
         cutoff = _utcnow_naive() - timedelta(days=days)
 
-        try:
-            q = Task.query.filter(
-                Task.deleted_at.is_(None),
-                Task.completed_at.isnot(None),
-                Task.completed_at < cutoff,
-                Task.status.in_(list(ARCHIVE_STATUSES)),
-            )
-        except Exception:
-            q = Task.query.filter(
-                Task.deleted_at.is_(None),
-                Task.completed_at.isnot(None),
-                Task.completed_at < cutoff,
-                Task.status == "done",
-            )
+        # Normaliza para lower na consulta (evita problemas de caixa)
+        status_lc = [s.lower() for s in ARCHIVE_STATUSES]
+
+        q = Task.query.filter(
+            Task.deleted_at.is_(None),
+            Task.archived_at.is_(None),  # garante que só pegue não-arquivadas
+            Task.completed_at.isnot(None),
+            Task.completed_at < cutoff,
+            func.lower(Task.status).in_(status_lc),
+        )
 
         candidates = q.all()
         current_app.logger.info(
@@ -41,10 +40,13 @@ def archive_done_tasks_once(app, days=7):
 
         count = 0
         for t in candidates:
+            # Segurança extra: se alguém mudou status depois, pula
+            if t.archived_at:
+                continue
             if hasattr(t, "mark_archived") and callable(getattr(t, "mark_archived")):
                 t.mark_archived()
             else:
-                # fallback: marca como arquivada diretamente
+                setattr(t, "status", "archived")
                 setattr(t, "archived_at", _utcnow_naive())
                 setattr(t, "archived_by_user_id", None)
 
@@ -81,9 +83,12 @@ def init_archive_scheduler(app, hour=3, minute=45):
         replace_existing=True,
         coalesce=True,
         max_instances=1,
+        misfire_grace_time=3600,  # tolera 1h de atraso
     )
     archive_scheduler.start()
-    app.logger.info(f"[ARCHIVE] Scheduler iniciado (diário {hour:02d}:{minute:02d} America/Sao_Paulo).")
+    app.logger.info(
+        f"[ARCHIVE] Scheduler iniciado (diário {hour:02d}:{minute:02d} America/Sao_Paulo)."
+    )
     return archive_scheduler
 
 def stop_archive_scheduler():
