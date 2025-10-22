@@ -462,8 +462,9 @@ function EditTaskFormPage() {
           url: f.url,
         }));
       formDataToSend.append("existing_files", JSON.stringify(existingFiles));
-      // Aprovação
-      formDataToSend.append("requires_approval", requiresApproval ? "true" : "false");
+      if (canSeeApprovalControls) {
+        formDataToSend.append("requires_approval", requiresApproval ? "true" : "false");
+      }
       formDataToSend.append(
         "create_calendar_event",
         addToOutlook && msStatus.connected ? "true" : "false"
@@ -532,6 +533,9 @@ function EditTaskFormPage() {
       )
     );
   };
+
+  const isTeamTask = !!(formData.team_id || originalTask?.team_id);
+  const canSeeApprovalControls = isManagerOfAnyTeam() || isTeamTask;
 
   // Verificar se o usuário pode editar a tarefa
   const canEditTask = () => {
@@ -883,11 +887,13 @@ function EditTaskFormPage() {
                 <div className={styles.sectionContent}>
                   <div className={styles.formGrid}>
                     <div className={styles.fullWidth}>
-                      <Checkbox
-                        label="Requer aprovação do gestor"
-                        checked={requiresApproval}
-                        onCheckedChange={(checked) => setRequiresApproval(!!checked)}
-                      />
+                      {canSeeApprovalControls && (
+                        <Checkbox
+                          label="Requer aprovação do gestor"
+                          checked={requiresApproval}
+                          onCheckedChange={(checked) => setRequiresApproval(!!checked)}
+                        />
+                      )}
                     </div>
 
                     <div className={styles.fullWidth}>

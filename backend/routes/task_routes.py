@@ -567,6 +567,13 @@ def add_task():
         else:
             team_id = None
 
+        # 🚧 Blindagem do requires_approval (anti-bypass)
+        req_approval_flag = str(data.get("requires_approval", "false")).lower() in ("1","true","yes")
+        is_manager_or_admin = bool(user.is_admin or any(assoc.is_manager for assoc in user.teams))
+        is_team_task = bool(team_id)
+        if req_approval_flag and not (is_team_task or is_manager_or_admin):
+            return jsonify({"error": "Aprovação do gestor só é permitida para gestores ou tarefas de equipe."}), 403
+
         # Processar usuários atribuídos
         assigned_to_user_ids = data.get("assigned_to_user_ids")
         if assigned_to_user_ids:
@@ -673,7 +680,7 @@ def add_task():
             lembretes=lembretes,
             tags=tags,
             anexos=anexos_data,
-            requires_approval=str(data.get("requires_approval", "false")).lower() in ("1", "true", "yes")
+            requires_approval=req_approval_flag
         )
 
         db.session.add(new_task)
@@ -709,8 +716,6 @@ def add_task():
         import traceback
         print(traceback.format_exc())
         return jsonify({"error": "Erro interno no servidor", "message": str(e)}), 500
-
-
 
 @task_bp.route("/tasks/<int:task_id>", methods=["GET"])
 @jwt_required()
@@ -831,17 +836,26 @@ def update_task(task_id):
         task.tempo_unidade = data["tempo_unidade"]
     if data.get("relacionado_a") is not None:
         task.relacionado_a = data["relacionado_a"]
-    # Aprovação - pode ligar/desligar (cuidado com implicações)
+
+    # 🚧 Blindagem do requires_approval (anti-bypass)
     if data.get("requires_approval") is not None:
         ra_flag = str(data.get("requires_approval")).lower() in ("1","true","yes")
+        is_manager_or_admin = bool(user.is_admin or any(assoc.is_manager for assoc in user.teams))
+        is_team_task = bool(task.team_id)
+
+        if ra_flag and not (is_team_task or is_manager_or_admin):
+            return jsonify({"error": "Aprovação do gestor só é permitida para gestores ou tarefas de equipe."}), 403
+
         task.requires_approval = ra_flag
-        # Se passou a exigir aprovação e já está 'done', força pendência até aprovar (opcional)
+
+        # Se passou a exigir aprovação e já está 'done', força revisão até aprovar
         if ra_flag and task.status == 'done' and not task.is_approved():
             task.status = 'in_progress'
             task.completed_at = None
             task.approval_status = 'pending'
             task.approved_by_user_id = None
             task.approved_at = None
+
     # --- Status & timestamps coerentes ---
     ALLOWED_STATUSES = {"pending", "in_progress", "done", "cancelled", "archived"}
     prev_status = task.status
@@ -879,7 +893,6 @@ def update_task(task_id):
             elif prev_status == "archived" and new_status != "archived":
                 task.archived_at = None
                 task.archived_by_user_id = None
-
 
     # Reatribuição (só se pode e se mudou)
     def _reassign_to(new_user_id: int):
@@ -971,7 +984,7 @@ def update_task(task_id):
     db.session.commit()
 
     try:
-        if create_cal_flag and task.due_date:
+        if 'create_calendar_event' in locals() and create_cal_flag and task.due_date:
             schedule_task_event_for_creator(task.id, creator_user_id=user_id)
     except Exception:
         current_app.logger.exception("[CAL] Falha ao criar evento (update) task %s", task.id)
@@ -1019,7 +1032,6 @@ def update_task(task_id):
         schedule_task_reminders_safe(task)
 
     return jsonify(task.to_dict())
-
 
 @task_bp.route("/tasks/<int:task_id>", methods=["DELETE"])
 @jwt_required()

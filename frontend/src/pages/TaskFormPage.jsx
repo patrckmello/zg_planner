@@ -299,8 +299,9 @@ function TaskFormPage() {
       if (formData.team_id) {
         formDataToSend.append("team_id", formData.team_id);
       }
-      // Aprovação
-      formDataToSend.append("requires_approval", requiresApproval ? "true" : "false");
+      if (canSeeApprovalControls) {
+        formDataToSend.append("requires_approval", requiresApproval ? "true" : "false");
+      }
 
       formDataToSend.append(
         "create_calendar_event",
@@ -356,7 +357,8 @@ function TaskFormPage() {
       )
     );
   };
-
+  const isTeamTask = !!formData.team_id;
+  const canSeeApprovalControls = isManagerOfAnyTeam() || isTeamTask;
   return (
     <div className={styles.taskFormPage}>
       <Header onMenuToggle={toggleSidebar} />
@@ -676,11 +678,13 @@ function TaskFormPage() {
                 <div className={styles.sectionContent}>
                   <div className={styles.formGrid}>
                     <div className={styles.fullWidth}>
-                      <Checkbox
-                        label="Requer aprovação do gestor"
-                        checked={requiresApproval}
-                        onCheckedChange={(checked) => setRequiresApproval(!!checked)}
-                      />
+                      {canSeeApprovalControls && (
+                        <Checkbox
+                          label="Requer aprovação do gestor"
+                          checked={requiresApproval}
+                          onCheckedChange={(checked) => setRequiresApproval(!!checked)}
+                        />
+                      )}
                     </div>
 
                     <div className={styles.fullWidth}>
