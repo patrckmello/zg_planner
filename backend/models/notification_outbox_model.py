@@ -8,7 +8,13 @@ class NotificationOutbox(db.Model):
 
     id = Column(Integer, primary_key=True)
     kind = Column(String(50), nullable=False)
-    task_id = Column(Integer, nullable=False)
+
+    # antes: nullable=False
+    task_id = Column(Integer, nullable=True, index=True)
+
+    # novo: para notificações que não têm task (ex.: reset de senha)
+    user_id = Column(Integer, nullable=True, index=True)
+
     comment_id = Column(Integer, nullable=True)
     recipients = Column(JSON, nullable=False, default=list)
     payload = Column(JSON, nullable=False, default=dict)
@@ -25,9 +31,24 @@ class NotificationOutbox(db.Model):
 
     # ---------- helpers ----------
     @staticmethod
-    def enqueue_email(*, kind: str, task_id: int, recipients: list[dict], subject: str, body: str, is_html: bool = True, dispatch_key: str | None = None, extra_payload: dict | None = None):
+    def enqueue_email(
+        *,
+        kind: str,
+        recipients: list[dict],
+        subject: str,
+        body: str,
+        is_html: bool = True,
+        dispatch_key: str | None = None,
+        extra_payload: dict | None = None,
+        task_id: int | None = None,
+        user_id: int | None = None,
+        comment_id: int | None = None,
+    ):
         if not recipients:
             return
+
+        if task_id is None and user_id is None:
+            raise ValueError("NotificationOutbox.enqueue_email: informe task_id ou user_id.")
 
         payload = {"subject": subject, "body": body, "is_html": is_html}
         if extra_payload:
@@ -37,6 +58,8 @@ class NotificationOutbox(db.Model):
             db.session.add(NotificationOutbox(
                 kind=kind,
                 task_id=task_id,
+                user_id=user_id,
+                comment_id=comment_id,
                 recipients=[r],
                 payload=payload,
                 status="pending",

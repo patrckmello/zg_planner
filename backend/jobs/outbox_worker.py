@@ -107,6 +107,32 @@ def _wrap_basic_html(title: str, inner_html: str, primary_color="#2563EB") -> st
 </html>
 """
 
+def _render_password_reset_html(payload: dict) -> str:
+    reset_url = payload.get("reset_url", "#")
+    inner = f"""
+      <p style="margin:0 0 10px 0; font-size:14px; color:#6b7280;">
+        Você solicitou a redefinição da sua senha do ZG Planner.
+      </p>
+
+      <div style="background:#f9f9f9; border:1px solid #e5e7eb; border-left:4px solid #2563EB; padding:14px 16px; border-radius:6px;">
+        <p style="margin:0 0 10px 0; font-size:14px; color:#374151;">
+          Clique no botão abaixo para criar uma nova senha. O link expira em 60 minutos.
+        </p>
+        <div style="margin-top:12px;">
+          <a href="{reset_url}" target="_blank"
+             style="display:inline-block; background:#2563EB; color:#fff; text-decoration:none; padding:12px 18px; border-radius:8px; font-weight:bold; font-size:16px;">
+             Redefinir senha
+          </a>
+        </div>
+        <p style="margin-top:12px; font-size:12px; color:#6b7280;">
+          Se o botão não funcionar, copie e cole este link no navegador:<br>
+          <span style="word-break:break-all;"><a href="{reset_url}" target="_blank" style="color:#2563EB;">{reset_url}</a></span>
+        </p>
+      </div>
+    """
+    return _wrap_basic_html(title="[ZG Planner] Redefinição de senha", inner_html=inner)
+
+
 def _render_approval_like_html(kind: str, payload: dict) -> str:
     task_title = payload.get("task_title", "Tarefa")
     task_url   = payload.get("task_url", "http://10.1.2.2:5174/tasks")
@@ -189,6 +215,8 @@ def process_outbox_batch(limit=50):
                 html = _render_comment_email_html(item.payload)
             elif kind in ("approval_submitted", "task_approved", "task_rejected", "plain_email"):
                 html = _render_approval_like_html(kind, item.payload)
+            elif kind == "password_reset":
+                html = _render_password_reset_html(item.payload)
             else:
                 item.last_error = f"Kind não suportado: {kind}"
                 item.attempts += 1

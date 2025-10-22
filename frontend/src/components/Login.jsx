@@ -5,6 +5,9 @@ import styles from './Login.module.css';
 import { FaEye, FaEyeSlash } from 'react-icons/fa';
 import logo from "../assets/zg.png";
 
+const API = 'http://10.1.243.120:5555/api';
+axios.defaults.timeout = 10000;
+
 function Login() {
   const [email, setEmail] = useState(() => localStorage.getItem('email') || '');
   const [password, setPassword] = useState('');
@@ -28,36 +31,30 @@ function Login() {
     setLoading(true);
 
     let valid = true;
-
     if (!validateEmail(email)) {
       setEmailError('Email inválido');
       valid = false;
-    } else {
-      setEmailError('');
-    }
+    } else setEmailError('');
 
     if (!validatePassword(password)) {
       setPasswordError('Senha deve ter pelo menos 6 caracteres');
       valid = false;
-    } else {
-      setPasswordError('');
-    }
+    } else setPasswordError('');
 
-    if (!valid) {
-      setLoading(false);
-      return;
-    }
+    if (!valid) { setLoading(false); return; }
 
     try {
-      const res = await axios.post('http://10.1.243.120:5555/api/login', { email, password });
-
+      const res = await axios.post(`${API}/login`, { email, password });
       localStorage.setItem('access_token', res.data.access_token);
       localStorage.setItem('refresh_token', res.data.refresh_token);
       localStorage.setItem('user', JSON.stringify(res.data.user));
-
       navigate('/dashboard');
     } catch (err) {
-      setError(err.response?.data.error || 'Erro no login');
+      if (err.code === 'ECONNABORTED' || !err.response) {
+        setError('Não foi possível conectar ao servidor. Verifique sua rede/servidor e tente novamente.');
+      } else {
+        setError(err.response?.data?.error || 'Erro no login.');
+      }
     } finally {
       setLoading(false);
     }
@@ -74,10 +71,7 @@ function Login() {
               className={styles.input}
               placeholder="E-mail"
               value={email}
-              onChange={(e) => {
-                setEmail(e.target.value);
-                if (emailError) setEmailError('');
-              }}
+              onChange={(e) => { setEmail(e.target.value); if (emailError) setEmailError(''); }}
               required
             />
             {emailError && <p className={styles.error}>{emailError}</p>}
@@ -88,10 +82,7 @@ function Login() {
                 className={styles.input}
                 placeholder="Senha"
                 value={password}
-                onChange={(e) => {
-                  setPassword(e.target.value);
-                  if (passwordError) setPasswordError('');
-                }}
+                onChange={(e) => { setPassword(e.target.value); if (passwordError) setPasswordError(''); }}
                 required
               />
               <button
@@ -105,13 +96,19 @@ function Login() {
             </div>
             {passwordError && <p className={styles.error}>{passwordError}</p>}
 
-            <button
-              type="submit"
-              disabled={loading}
-              className={styles.submitBtn}
-            >
+            <button type="submit" disabled={loading} className={styles.submitBtn}>
               {loading ? 'Entrando...' : 'Entrar'}
             </button>
+
+            <div className={styles.helperRow}>
+              <button
+                type="button"
+                className={styles.linkBtn}
+                onClick={() => navigate(`/password/forgot?email=${encodeURIComponent(email || '')}`)}
+              >
+                Esqueci minha senha
+              </button>
+            </div>
           </form>
           {error && <p className={styles.error}>{error}</p>}
         </div>
