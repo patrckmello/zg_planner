@@ -792,22 +792,31 @@ def update_task(task_id):
     if not (can_basic_edit or can_reassign):
         return jsonify({"error": "Acesso negado"}), 403
 
-    # Payload
+    # ----------------------------------------------------
+    # Payload + leitura da flag create_calendar_event
+    # ----------------------------------------------------
+    create_cal_flag = False  # garante existência em todos os fluxos
+
     if request.is_json:
         data = request.get_json()
         files = []
+        val = data.get("create_calendar_event")
+        if val is not None:
+            create_cal_flag = str(val).lower() in ("1", "true", "yes", "on")
+
     elif request.content_type and request.content_type.startswith("multipart/form-data"):
         data = request.form
         files = request.files.getlist("new_files")
-        create_cal_flag = False
-        if data.get("create_calendar_event") is not None:
-            create_cal_flag = str(data.get("create_calendar_event")).lower() in ("1", "true", "yes", "on")
-        if create_cal_flag and not task.due_date:
-            return jsonify({"error": "Para adicionar ao Outlook, defina a Data de Vencimento."}), 400
+        val = data.get("create_calendar_event")
+        if val is not None:
+            create_cal_flag = str(val).lower() in ("1", "true", "yes", "on")
+
     else:
         return jsonify({"error": "Content-Type inválido. Use application/json ou multipart/form-data."}), 400
 
-    # due_date
+    # ----------------------------------------------------
+    # due_date (pode vir no update; valida só depois de aplicar)
+    # ----------------------------------------------------
     if data.get("due_date"):
         try:
             due_date = datetime.fromisoformat(data["due_date"])
@@ -819,7 +828,9 @@ def update_task(task_id):
         except ValueError:
             return jsonify({"error": "Formato inválido para due_date. Use ISO 8601."}), 400
 
+    # ----------------------------------------------------
     # Campos básicos
+    # ----------------------------------------------------
     if data.get("title") is not None:
         task.title = data["title"]
     if data.get("description") is not None:
@@ -837,9 +848,11 @@ def update_task(task_id):
     if data.get("relacionado_a") is not None:
         task.relacionado_a = data["relacionado_a"]
 
-    # 🚧 Blindagem do requires_approval (anti-bypass)
+    # ----------------------------------------------------
+    # Blindagem do requires_approval (anti-bypass)
+    # ----------------------------------------------------
     if data.get("requires_approval") is not None:
-        ra_flag = str(data.get("requires_approval")).lower() in ("1","true","yes")
+        ra_flag = str(data.get("requires_approval")).lower() in ("1", "true", "yes")
         is_manager_or_admin = bool(user.is_admin or any(assoc.is_manager for assoc in user.teams))
         is_team_task = bool(task.team_id)
 
@@ -856,7 +869,9 @@ def update_task(task_id):
             task.approved_by_user_id = None
             task.approved_at = None
 
-    # --- Status & timestamps coerentes ---
+    # ----------------------------------------------------
+    # Status & timestamps coerentes
+    # ----------------------------------------------------
     ALLOWED_STATUSES = {"pending", "in_progress", "done", "cancelled", "archived"}
     prev_status = task.status
     if "status" in data:
@@ -894,7 +909,9 @@ def update_task(task_id):
                 task.archived_at = None
                 task.archived_by_user_id = None
 
-    # Reatribuição (só se pode e se mudou)
+    # ----------------------------------------------------
+    # Reatribuição (se pode e se mudou)
+    # ----------------------------------------------------
     def _reassign_to(new_user_id: int):
         nonlocal task, user_id
         if new_user_id != task.user_id:
@@ -916,7 +933,9 @@ def update_task(task_id):
             except ValueError:
                 return jsonify({"error": "assigned_to_user_id inválido"}), 400
 
-    # Colaboradores (só se pode reatribuir)
+    # ----------------------------------------------------
+    # Colaboradores (se pode reatribuir)
+    # ----------------------------------------------------
     if data.get("collaborator_ids") is not None and can_reassign:
         try:
             collaborators = json.loads(data["collaborator_ids"])
@@ -925,7 +944,9 @@ def update_task(task_id):
         except (json.JSONDecodeError, ValueError):
             return jsonify({"error": "Formato inválido para collaborator_ids."}), 400
 
+    # ----------------------------------------------------
     # Anexos (multipart)
+    # ----------------------------------------------------
     if request.content_type and request.content_type.startswith("multipart/form-data"):
         existing_files_data = data.get("existing_files")
         if existing_files_data:
@@ -965,7 +986,9 @@ def update_task(task_id):
                         "url": f"{request.scheme}://{request.host}/uploads/{filename}"
                     })
 
-    # Tags/lembretes
+    # ----------------------------------------------------
+    # Tags / Lembretes
+    # ----------------------------------------------------
     try:
         lembretes = json.loads(data.get("lembretes", "[]"))
         if isinstance(lembretes, list):
@@ -979,17 +1002,26 @@ def update_task(task_id):
     except Exception:
         pass
 
-    # Salvar
+    # ----------------------------------------------------
+    # Validação final para calendário (depois de possível update da due_date)
+    # ----------------------------------------------------
+    if create_cal_flag and not task.due_date:
+        return jsonify({"error": "Para adicionar ao Outlook, defina a Data de Vencimento."}), 400
+
+    # ----------------------------------------------------
+    # Salvar e auditoria
+    # ----------------------------------------------------
     task.updated_at = datetime.utcnow()
     db.session.commit()
 
     try:
-        if 'create_calendar_event' in locals() and create_cal_flag and task.due_date:
+        # cria evento no Outlook se marcado e houver due_date
+        if create_cal_flag and task.due_date:
             schedule_task_event_for_creator(task.id, creator_user_id=user_id)
     except Exception:
         current_app.logger.exception("[CAL] Falha ao criar evento (update) task %s", task.id)
 
-    # Auditoria (diff limpo)
+    # Auditoria (diff)
     try:
         after_state = task.to_dict()
         changes = diff_snapshots(before_state, after_state)
