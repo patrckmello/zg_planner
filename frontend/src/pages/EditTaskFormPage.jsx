@@ -15,6 +15,8 @@ import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import DeleteConfirmModal from "../components/DeleteConfirmModal";
 import styles from "./EditTaskFormPage.module.css";
+import useFormAutosave from "../hooks/useFormAutosave";
+import { openMsPopup } from "../utils/oauthPopup";
 import api from "../services/axiosInstance";
 import { getMsStatus } from "../services/msIntegration";
 import { FiZap } from "react-icons/fi";
@@ -151,20 +153,25 @@ function EditTaskFormPage() {
       </span>
     );
   };
-
+  const autosaveKey = `task:edit:${id}`;
+  const { clearAutosave } = useFormAutosave(formData, setFormData, autosaveKey);
   const handleOutlookToggle = (checked) => {
-    if (!msStatus.connected) {
-      toast.warn(
-        "Conecte sua conta Microsoft para adicionar eventos ao Outlook.",
-        {
-          position: "top-right",
-          autoClose: 4000,
-          closeOnClick: true,
-        }
-      );
-      return; // não altera o estado
-    }
-    setAddToOutlook(!!checked);
+    if (!checked) { setAddToOutlook(false); return; }
+    if (msStatus.connected) { setAddToOutlook(true); return; }
+    openMsPopup({
+      onSuccess: async () => {
+        toast.success("Conta Microsoft conectada!");
+        try {
+          const ms = await getMsStatus();
+          setMsStatus(ms || { connected: true });
+          setAddToOutlook(true);
+        } catch { setAddToOutlook(false); }
+      },
+      onError: () => {
+        toast.error("Não foi possível conectar agora.");
+        setAddToOutlook(false);
+      }
+    }); 
   };
 
   useEffect(() => {
@@ -240,6 +247,7 @@ function EditTaskFormPage() {
         console.error("Erro ao carregar dados:", error);
         toast.error("Erro ao carregar tarefa. Redirecionando...");
         navigate("/tasks");
+        clearAutosave();
       } finally {
         setInitialLoading(false);
       }
@@ -281,6 +289,25 @@ function EditTaskFormPage() {
     if (errors[field]) {
       setErrors((prev) => ({ ...prev, [field]: null }));
     }
+  };
+
+  const handleConnectNow = () => {
+    openMsPopup({
+      onSuccess: async () => {
+        toast.success("Conta Microsoft conectada!");
+        try {
+          // Atualiza o status e já habilita o checkbox
+          const ms = await getMsStatus();
+          setMsStatus(ms || { connected: true });
+          setAddToOutlook(true);
+        } catch {
+          setAddToOutlook(false);
+        }
+      },
+      onError: (e) => {
+        toast.error(e?.message || "Não foi possível conectar agora.");
+      },
+    });
   };
 
   // Função para rolar até o primeiro campo com erro
@@ -913,18 +940,16 @@ function EditTaskFormPage() {
                           <FiCalendar className={styles.noteIcon} />
                           <span>
                             Vá em <strong>Meu Perfil ▸ Integrações</strong> e conecte sua conta.{" "}
-                            <a
-                              href="/meu-perfil"
-                              className={styles.linkInline}
-                              onClick={() =>
-                                toast.info("Abrindo página de integrações…", {
-                                  position: "top-right",
-                                  autoClose: 2500,
-                                  closeOnClick: true,
-                                })
-                              }
+                          <a
+                            href="#"
+                            className={styles.linkInline}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              handleConnectNow();
+                            }}
+                            role="button"
                             >
-                              Conectar agora
+                            Conectar agora
                             </a>
                           </span>
                         </div>

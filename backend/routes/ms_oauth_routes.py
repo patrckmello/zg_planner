@@ -123,61 +123,86 @@ def connect_url():
 def callback():
     error = request.args.get("error")
     if error:
-        log.error("[MS-OAUTH] Erro na autorização: %s", error)
-        return redirect(FRONTEND_ERR, code=302)
+        current_app.logger.error("[MS-OAUTH] Erro na autorização: %s", error)
+        status = "err"
+        email = ""
+    else:
+        code = request.args.get("code")
+        state = request.args.get("state")
+        if not code or not state:
+            current_app.logger.error("[MS-OAUTH] Callback sem code/state")
+            status = "err"
+            email = ""
+        else:
+            try:
+                uid = _state_verify(state)
+            except (BadSignature, SignatureExpired):
+                current_app.logger.error("[MS-OAUTH] State inválido/expirado")
+                status = "err"
+                email = ""
+            else:
+                app = _msal_app()
+                current_app.logger.info("[MS-OAUTH] Troca code->token (scopes=%s)", GRAPH_SCOPES)
+                result = app.acquire_token_by_authorization_code(
+                    code, scopes=GRAPH_SCOPES, redirect_uri=REDIRECT_URI
+                )
+                if "access_token" not in result:
+                    current_app.logger.error("[MS-OAUTH] Falha token: %s", result)
+                    status = "err"
+                    email = ""
+                else:
+                    idt = result.get("id_token_claims") or {}
+                    oid = idt.get("oid")
+                    upn = idt.get("preferred_username") or idt.get("email") or idt.get("unique_name")
+                    name = idt.get("name")
+                    expires_in = int(result.get("expires_in", 3600))
+                    # >>> use sempre UTC awareness
+                    expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
 
-    code = request.args.get("code")
-    state = request.args.get("state")
-    if not code or not state:
-        log.error("[MS-OAUTH] Callback sem code/state")
-        return redirect(FRONTEND_ERR, code=302)
+                    integ = UserIntegration.query.filter_by(user_id=uid, provider="microsoft").first()
+                    if not integ:
+                        integ = UserIntegration(user_id=uid, provider="microsoft")
+                        db.session.add(integ)
 
-    try:
-        uid = _state_verify(state)
-    except (BadSignature, SignatureExpired):
-        log.error("[MS-OAUTH] State inválido/expirado")
-        return redirect(FRONTEND_ERR, code=302)
+                    integ.provider_user_id = oid
+                    integ.email = upn
+                    integ.display_name = name
+                    integ.access_token = result["access_token"]
+                    if result.get("refresh_token"):
+                        integ.refresh_token = result["refresh_token"]
+                    integ.expires_at = expires_at
+                    integ.scopes = " ".join(GRAPH_SCOPES)
+                    db.session.commit()
 
-    app = _msal_app()
+                    current_app.logger.info("[MS-OAUTH] Conectado: %s (%s)", name, upn)
+                    status = "ok"
+                    email = upn or ""
 
-    # Para trocar o code por token, o MSAL pede apenas os scopes de RECURSO
-    # (não passe openid/profile/offline_access aqui).
-    log.info("[MS-OAUTH] Troca de code por token com scopes=%s", GRAPH_SCOPES)
-    result = app.acquire_token_by_authorization_code(
-        code,
-        scopes=GRAPH_SCOPES,
-        redirect_uri=REDIRECT_URI,
-    )
-
-    if "access_token" not in result:
-        log.error("[MS-OAUTH] Falha ao adquirir token: %s", result)
-        return redirect(FRONTEND_ERR, code=302)
-
-    idt = result.get("id_token_claims") or {}
-    oid = idt.get("oid")
-    upn = idt.get("preferred_username") or idt.get("email") or idt.get("unique_name")
-    name = idt.get("name")
-
-    expires_in = int(result.get("expires_in", 3600))
-    expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
-
-    integ = UserIntegration.query.filter_by(user_id=uid, provider="microsoft").first()
-    if not integ:
-        integ = UserIntegration(user_id=uid, provider="microsoft")
-        db.session.add(integ)
-
-    integ.provider_user_id = oid
-    integ.email = upn
-    integ.display_name = name
-    integ.access_token = result["access_token"]
-    if result.get("refresh_token"):  # refresh pode não vir; se vier, guardamos
-        integ.refresh_token = result["refresh_token"]
-    integ.expires_at = expires_at
-    integ.scopes = " ".join(GRAPH_SCOPES)
-    db.session.commit()
-
-    log.info("[MS-OAUTH] Usuário %s (%s) conectado ao Microsoft Graph", name, upn)
-    return redirect(FRONTEND_OK, code=302)
+    # Resposta para popup: envia postMessage ao opener e fecha
+    html = f"""
+    <!doctype html><meta charset="utf-8">
+    <style>body{{font-family:system-ui;margin:24px;color:#111}}.box{{padding:16px;border:1px solid #ddd;border-radius:8px}}</style>
+    <div class="box">
+      <b>Você pode fechar esta janela.</b><br/>
+      Status: <code>{status}</code>{' — '+email if email else ''}
+    </div>
+    <script>
+      (function(){{
+        try {{
+          if (window.opener) {{
+            window.opener.postMessage({{
+              source: "zg_planner",
+              provider: "microsoft",
+              status: "{status}",
+              email: "{email}"
+            }}, "*");
+          }}
+        }} catch(e) {{}}
+        setTimeout(function(){{ window.close(); }}, 300);
+      }})();
+    </script>
+    """
+    return html, 200, {"Content-Type": "text/html; charset=utf-8"}
 
 @bp.route("/disconnect", methods=["POST"])
 @jwt_required()

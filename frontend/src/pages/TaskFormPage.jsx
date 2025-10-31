@@ -13,6 +13,8 @@ import CustomDateTimePicker from "../components/forms/CustomDateTimePicker";
 import Checkbox from "../components/Checkbox/Checkbox";
 import styles from "./TaskFormPage.module.css";
 import api from "../services/axiosInstance";
+import useFormAutosave from "../hooks/useFormAutosave";
+import { openMsPopup } from "../utils/oauthPopup";
 import { getMsStatus } from "../services/msIntegration";
 import { toast } from "react-toastify";
 import { FiZap } from "react-icons/fi";
@@ -118,21 +120,27 @@ function TaskFormPage() {
     "análise",
     "desenvolvimento",
   ];
+  const autosaveKey = "task:new"; // chave do rascunho da criação
+  const { clearAutosave } = useFormAutosave(formData, setFormData, autosaveKey);
 
   const handleOutlookToggle = (checked) => {
-    if (!msStatus.connected) {
-      toast.warn(
-        "Conecte sua conta Microsoft para adicionar eventos ao Outlook.",
-        {
-          position: "top-right",
-          autoClose: 4000,
-          closeOnClick: true,
+    if (!checked) { setAddToOutlook(false); return; }
+      if (msStatus.connected) { setAddToOutlook(true); return; }
+      // abrir popup sem perder o form
+      openMsPopup({
+        onSuccess: async () => {
+          toast.success("Conta Microsoft conectada!");
+          try {
+            const { data } = await api.get("/ms/status");
+            setMsStatus(data || { connected: true });
+            setAddToOutlook(true);
+          } catch { setAddToOutlook(false); }
+        },
+        onError: () => {
+          toast.error("Não foi possível conectar agora.");
+          setAddToOutlook(false);
         }
-      );
-      // não altera o estado
-      return;
-    }
-    setAddToOutlook(!!checked);
+    });
   };
 
   useEffect(() => {
@@ -186,6 +194,25 @@ function TaskFormPage() {
     if (errors[field]) {
       setErrors((prev) => ({ ...prev, [field]: null }));
     }
+  };
+
+  const handleConnectNow = () => {
+    openMsPopup({
+      onSuccess: async () => {
+        toast.success("Conta Microsoft conectada!");
+        try {
+          // Atualiza o status e já habilita o checkbox
+          const ms = await getMsStatus();
+          setMsStatus(ms || { connected: true });
+          setAddToOutlook(true);
+        } catch {
+          setAddToOutlook(false);
+        }
+      },
+      onError: (e) => {
+        toast.error(e?.message || "Não foi possível conectar agora.");
+      },
+    });
   };
 
   // Função para rolar até o primeiro campo com erro
@@ -323,6 +350,7 @@ function TaskFormPage() {
 
       console.log("Tarefa criada com sucesso:", response.data);
       navigate("/tasks");
+      clearAutosave();
     } catch (err) {
       console.error("Erro ao criar tarefa:", err);
       if (err.response?.data?.error) {
@@ -705,15 +733,13 @@ function TaskFormPage() {
                           <span>
                             Vá em <strong>Meu Perfil ▸ Integrações</strong> e conecte sua conta.{" "}
                             <a
-                              href="/meu-perfil"
+                              href="#"
                               className={styles.linkInline}
-                              onClick={() =>
-                                toast.info("Abrindo página de integrações…", {
-                                  position: "top-right",
-                                  autoClose: 2500,
-                                  closeOnClick: true,
-                                })
-                              }
+                              onClick={(e) => {
+                                e.preventDefault();
+                                handleConnectNow();
+                              }}
+                              role="button"
                             >
                               Conectar agora
                             </a>
