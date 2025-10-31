@@ -66,3 +66,17 @@ def manager_required(fn):
 
         return fn(*args, **kwargs)
     return wrapper
+
+def require_password_not_pending(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        verify_jwt_in_request()
+        uid = get_jwt_identity()
+        user = User.query.get(int(uid)) if uid is not None else None
+        if user and user.must_change_password:
+            return jsonify({
+                "error": "PASSWORD_CHANGE_REQUIRED",
+                "message": "Você precisa alterar sua senha antes de continuar."
+            }), 428  # 428 Precondition Required
+        return f(*args, **kwargs)
+    return wrapper

@@ -45,10 +45,23 @@ function Login() {
 
     try {
       const res = await axios.post(`${API}/login`, { email, password });
-      localStorage.setItem('access_token', res.data.access_token);
-      localStorage.setItem('refresh_token', res.data.refresh_token);
-      localStorage.setItem('user', JSON.stringify(res.data.user));
-      navigate('/dashboard');
+
+      const { access_token, refresh_token, user, forcePasswordChange } = res.data;
+
+      // sempre salva o email pra UX
+      localStorage.setItem('email', email);
+
+      if (forcePasswordChange) {
+        // salva só o access pra chamar a troca de senha
+        localStorage.setItem('access_token', access_token);
+        // opcional: não salvar refresh aqui
+        navigate('/primeiro-acesso', { state: { email } });
+      } else {
+        localStorage.setItem('access_token', access_token);
+        localStorage.setItem('refresh_token', refresh_token);
+        localStorage.setItem('user', JSON.stringify(user));
+        navigate('/dashboard');
+      }
     } catch (err) {
       if (err.code === 'ECONNABORTED' || !err.response) {
         setError('Não foi possível conectar ao servidor. Verifique sua rede/servidor e tente novamente.');
@@ -58,6 +71,7 @@ function Login() {
     } finally {
       setLoading(false);
     }
+
   };
 
   return (

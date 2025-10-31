@@ -5,7 +5,7 @@ from extensions import db
 from decorators import admin_required
 from flask_jwt_extended import jwt_required, get_jwt_identity
 import re
-
+from datetime import datetime, timezone
 from models.task_model import Task
 
 # ADD: imports necessários para roles e equipes
@@ -112,37 +112,53 @@ def get_me():
 @jwt_required()
 def change_password():
     current_user_id = get_jwt_identity()
-    user = User.query.get(current_user_id)
-    
+    user = User.query.get(int(current_user_id))
+
     if not user:
         return jsonify({"error": "Usuário não encontrado"}), 404
-    
-    data = request.get_json()
-    current_password = data.get('current_password')
-    new_password = data.get('new_password')
-    
+
+    data = request.get_json(silent=True) or {}
+    current_password = (data.get('current_password') or "").strip()
+    new_password = (data.get('new_password') or "").strip()
+    confirm_password = (data.get('confirm_password') or "").strip()
+
+    # Campos obrigatórios
     if not current_password or not new_password:
         return jsonify({"error": "Senha atual e nova senha são obrigatórias"}), 400
-    
+
+    # Confere senha atual
     if not user.check_password(current_password):
         return jsonify({"error": "Senha atual incorreta"}), 400
-    
-    if len(new_password) < 6:
-        return jsonify({"error": "A nova senha deve ter pelo menos 6 caracteres"}), 400
-    
+
+    # Regras básicas (ajusta conforme tua política)
+    if len(new_password) < 8:
+        return jsonify({"error": "A nova senha deve ter pelo menos 8 caracteres"}), 400
+
+    if confirm_password and new_password != confirm_password:
+        return jsonify({"error": "As senhas não conferem"}), 400
+
+    if current_password == new_password:
+        return jsonify({"error": "A nova senha precisa ser diferente da atual"}), 400
+
+    # Troca senha + limpa flag de primeiro acesso
     user.set_password(new_password)
+    user.must_change_password = False
+    user.last_password_change = datetime.now(timezone.utc)
     db.session.commit()
-    
+
+    # Auditoria
     AuditLog.log_action(
-        user_id=current_user_id,
-        action='UPDATE',
-        description='Usuário alterou sua senha',
+        user_id=int(current_user_id),
+        action='PASSWORD_CHANGED',
+        description='Usuário alterou sua senha (rota /users/change-password).',
         resource_type='user',
-        resource_id=current_user_id,
+        resource_id=int(current_user_id),
         ip_address=request.remote_addr,
         user_agent=request.headers.get('User-Agent')
     )
-    return jsonify({"message": "Senha alterada com sucesso"})
+
+    # Front: faz logout local e redireciona pro login
+    return jsonify({"status": "ok", "message": "Senha alterada. Faça login novamente."}), 200
 
 @user_bp.route('/update-icon-color', methods=['PUT'])
 @jwt_required()

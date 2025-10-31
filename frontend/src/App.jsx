@@ -17,6 +17,7 @@ import TeamTasks from "./pages/TeamTasks";
 import TeamReports from "./pages/TeamReports";
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
+import FirstAccess from "./pages/FirstAccess";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
@@ -28,6 +29,7 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/password/forgot" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/primeiro-acesso" element={<FirstAccess />} />
         {/* Protegendo rotas de usuário autenticado */}
         <Route element={<PrivateRoute />}>
           <Route path="/dashboard" element={<Dashboard />} />

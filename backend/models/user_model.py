@@ -15,6 +15,8 @@ class User(db.Model):
     is_active = db.Column(db.Boolean, default=True)
     icon_color = db.Column(db.String(7), default='#3498db')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    must_change_password = db.Column(db.Boolean, nullable=False, default=True)
+    last_password_change = db.Column(db.DateTime, nullable=True)
 
     roles_link = db.relationship(
         'UserRole',

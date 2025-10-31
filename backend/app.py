@@ -12,6 +12,8 @@ from flask_jwt_extended import get_jwt
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
+from decorators import require_password_not_pending
+
 # Models (ordem importa)
 from models.user_model import User
 from models.role_model import Role
@@ -179,6 +181,7 @@ def index():
 
 @app.route('/api/dashboard')
 @jwt_required()
+@require_password_not_pending
 def dashboard():
     return jsonify({'message': 'Bem-vindo ao dashboard!'})
 

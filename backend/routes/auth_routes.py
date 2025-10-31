@@ -46,7 +46,10 @@ def login():
         )
         return jsonify({'error': 'Usuário inativo. Contate o administrador.'}), 403
 
-    access_token = create_access_token(identity=str(user.id))
+    access_token = create_access_token(
+        identity=str(user.id),
+        additional_claims={"must_change_password": bool(user.must_change_password)}
+    )
     refresh_token = create_refresh_token(identity=str(user.id))
     
     # Log de login bem-sucedido
@@ -64,7 +67,8 @@ def login():
         'message': 'Login realizado com sucesso!',
         'access_token': access_token,
         'refresh_token': refresh_token,
-        'user': user.to_dict()
+        'user': user.to_dict(),
+        'forcePasswordChange': bool(user.must_change_password)
     })
 
 @auth_bp.route('/refresh', methods=['POST'])
