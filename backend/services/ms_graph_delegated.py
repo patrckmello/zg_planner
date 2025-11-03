@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Optional
 import msal
 from zoneinfo import ZoneInfo
+from urllib.parse import quote
 
 from extensions import db
 from models.user_integration_model import UserIntegration
@@ -139,6 +140,101 @@ def send_mail_as_user(user_id: int, to: List[str], subject: str,
     if resp.status_code not in (202, 200, 204):
         log.error("Erro sendMail delegado: %s | %s", resp.status_code, resp.text)
         raise RuntimeError(resp.text)
+
+def _graph_get(token: str, url: str) -> dict:
+    resp = requests.get(url, headers=_headers(token), timeout=20)
+    if resp.status_code not in (200,):
+        raise RuntimeError(f"GET {url} -> {resp.status_code} {resp.text[:300]}")
+    return resp.json()
+
+def _graph_post(token: str, url: str, payload: dict) -> dict:
+    resp = requests.post(url, headers=_headers(token), data=json.dumps(payload), timeout=20)
+    if resp.status_code not in (200, 201):
+        raise RuntimeError(f"POST {url} -> {resp.status_code} {resp.text[:300]}")
+    return resp.json()
+
+def _graph_patch(token: str, url: str, payload: dict, etag: Optional[str] = None) -> dict:
+    headers = _headers(token)
+    if etag:
+        headers["If-Match"] = etag
+    resp = requests.patch(url, headers=headers, data=json.dumps(payload), timeout=20)
+    if resp.status_code not in (200, 201):
+        raise RuntimeError(f"PATCH {url} -> {resp.status_code} {resp.text[:300]}")
+    return resp.json()
+
+def _graph_delete(token: str, url: str, etag: Optional[str] = None) -> None:
+    headers = _headers(token)
+    if etag:
+        headers["If-Match"] = etag
+    resp = requests.delete(url, headers=headers, timeout=20)
+    if resp.status_code not in (204, 404):
+        raise RuntimeError(f"DELETE {url} -> {resp.status_code} {resp.text[:300]}")
+
+def update_event_as_user(
+    user_id: int, event_id: str, subject: str,
+    start_iso: str, end_iso: str, timezone_str: str,
+    attendees: Optional[List[str]] = None,
+    body_html: Optional[str] = None,
+    location: Optional[str] = None,
+    etag: Optional[str] = None,
+    calendar_id: Optional[str] = None
+) -> dict:
+    integ = UserIntegration.query.filter_by(user_id=user_id, provider="microsoft").first()
+    if not integ:
+        raise RuntimeError("Usuário não conectado ao Microsoft.")
+    token = _ensure_token(integ)
+
+    start_local, tz_graph = _sanitize_for_graph(start_iso, timezone_str or LOCAL_TZ)
+    end_local, _ = _sanitize_for_graph(end_iso, timezone_str or LOCAL_TZ)
+
+    url = _event_url(event_id, calendar_id)
+    body = {
+        "subject": subject or "(sem título)",
+        "start": {"dateTime": start_local, "timeZone": tz_graph},
+        "end":   {"dateTime": end_local,   "timeZone": tz_graph},
+        "body": {"contentType": "HTML", "content": body_html or ""},
+        "location": {"displayName": location or ""},
+        "attendees": [{"emailAddress": {"address": e}, "type": "required"} for e in (attendees or [])],
+        "allowNewTimeProposals": True,
+    }
+
+    try:
+        return _graph_patch(token, url, body, etag=etag)
+    except RuntimeError as e:
+        msg = str(e)
+        # 412 = ETag desatualizado -> pega novo e tenta de novo
+        if "412" in msg or "PreconditionFailed" in msg:
+            fresh = _graph_get(token, url)
+            new_etag = fresh.get("@odata.etag") or fresh.get("etag")
+            return _graph_patch(token, url, body, etag=new_etag)
+
+        # ID inválido ou item sumiu -> recria no calendário padrão
+        if ("ErrorInvalidIdMalformed" in msg) or ("ErrorItemNotFound" in msg) or ("404" in msg):
+            create_url = f"{GRAPH_BASE}/me/events"
+            created = _graph_post(token, create_url, body)
+            return created
+
+        # demais erros: propaga
+        raise
+
+def delete_event_as_user(
+    user_id: int, event_id: str, etag: Optional[str] = None, calendar_id: Optional[str] = None
+) -> None:
+    integ = UserIntegration.query.filter_by(user_id=user_id, provider="microsoft").first()
+    if not integ:
+        return
+    token = _ensure_token(integ)
+    url = _event_url(event_id, calendar_id)
+    _graph_delete(token, url, etag=etag)
+
+def _event_url(event_id: str, calendar_id: Optional[str] = None) -> str:
+    eid = quote(event_id or "", safe="")
+    # Se tiver um calendarId REAL, usa /me/calendars/{cid}/events/{eid}
+    if calendar_id and calendar_id not in ("", "primary", None):
+        cid = quote(calendar_id, safe="")
+        return f"{GRAPH_BASE}/me/calendars/{cid}/events/{eid}"
+    # Caso contrário, usa o calendário padrão
+    return f"{GRAPH_BASE}/me/events/{eid}"
 
 # ========= Evento no calendário do usuário =========
 def create_event_as_user(user_id: int, subject: str, start_iso: str, end_iso: str,

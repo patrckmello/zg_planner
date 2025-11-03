@@ -2,6 +2,7 @@ from extensions import db
 from datetime import datetime
 from sqlalchemy import JSON
 from sqlalchemy.orm import validates
+from sqlalchemy import Text
 
 class Task(db.Model):
     __tablename__ = 'tasks'
@@ -56,6 +57,12 @@ class Task(db.Model):
 
     team_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=True)
     team = db.relationship('Team', backref='tasks')
+
+    ms_event_id    = db.Column(db.String(512)) 
+    ms_calendar_id = db.Column(db.String(128))    # default "primary"
+    ms_event_etag  = db.Column(db.String(256))    # pra If-Match
+    ms_last_sync   = db.Column(db.DateTime,    nullable=True)
+    ms_sync_status = db.Column(db.String(32))    # "ok","error","deleted"
 
     @validates('approval_status')
     def _validate_approval_status(self, key, value):
@@ -253,6 +260,10 @@ class Task(db.Model):
             "deleted_at": self.deleted_at.isoformat() if self.deleted_at else None,
             "deleted_by_user_id": self.deleted_by_user_id,
             "deleted_by_user": deleted_by_user_info,
+            "ms_event_id": self.ms_event_id,
+            "ms_calendar_id": self.ms_calendar_id,
+            "ms_last_sync": self.ms_last_sync.isoformat() if self.ms_last_sync else None,
+            "ms_sync_status": self.ms_sync_status,
         }
 
     def can_be_assigned_by(self, user):

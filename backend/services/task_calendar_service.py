@@ -9,7 +9,7 @@ from extensions import db
 from models.task_model import Task
 from models.user_model import User
 from services.ms_graph_delegated import create_event_as_user
-
+from services.ms_graph_delegated import update_event_as_user, delete_event_as_user
 # ------------------------------------------------------------
 # Config
 # ------------------------------------------------------------
@@ -54,6 +54,92 @@ def _as_local_from_utc(dt: datetime, tz_name: str) -> datetime:
 # ------------------------------------------------------------
 # Helpers diversos
 # ------------------------------------------------------------
+def _compute_times_for_task_local(task: Task) -> tuple[datetime, datetime]:
+    start_local = _as_local_from_utc(task.due_date, DEFAULT_TZ)
+    mins = _minutes_from_task(task)
+    end_local = start_local + timedelta(minutes=mins)
+    if end_local <= start_local:
+        end_local = start_local + timedelta(minutes=30)
+    return start_local, end_local
+
+def ensure_event_for_task(task: Task, actor_user_id: int) -> dict | None:
+    """
+    Cria ou atualiza o evento vinculado à task. Salva ms_event_id/etag/last_sync.
+    """
+    if not task.due_date:
+        return None
+
+    start_local, end_local = _compute_times_for_task_local(task)
+    subject = f"[ZG Planner] {getattr(task, 'title', '')}"
+    task_url = f"{FRONTEND_BASE_URL}/tasks/{task.id}"
+    location = (getattr(task, "categoria", None) or "")[:64]
+
+    attendee_ids = set(getattr(task, "assigned_users", None) or [])
+    attendee_ids.update(getattr(task, "collaborators", None) or [])
+    if getattr(task, "assigned_by_user_id", None):
+        attendee_ids.add(int(task.assigned_by_user_id))
+    attendees_emails = _emails_by_ids(attendee_ids)
+
+    body_html = build_event_body_html(
+        task=task,
+        task_url=task_url,
+        start_local=start_local,
+        end_local=end_local,
+        tz_name=DEFAULT_TZ,
+        attendees_emails=attendees_emails
+    )
+
+    if task.ms_event_id:
+        ev = update_event_as_user(
+            user_id=actor_user_id,
+            event_id=task.ms_event_id,
+            subject=subject,
+            start_iso=_iso_local(start_local),
+            end_iso=_iso_local(end_local),
+            timezone_str=DEFAULT_TZ,
+            attendees=attendees_emails,
+            body_html=body_html,
+            location=location,
+            etag=task.ms_event_etag,
+            calendar_id=task.ms_calendar_id or "primary"
+        )
+        task.ms_event_etag  = ev.get("@odata.etag") or ev.get("etag") or task.ms_event_etag
+        task.ms_last_sync   = datetime.now(timezone.utc)
+        task.ms_sync_status = "ok"
+        return ev
+    else:
+        ev = create_event_as_user(
+            user_id=actor_user_id,
+            subject=subject,
+            start_iso=_iso_local(start_local),
+            end_iso=_iso_local(end_local),
+            timezone_str=DEFAULT_TZ,
+            attendees=attendees_emails,
+            body_html=body_html,
+            location=location
+        )
+        task.ms_event_id    = ev.get("id")
+        task.ms_calendar_id = "primary"
+        task.ms_event_etag  = ev.get("@odata.etag") or ev.get("etag")
+        task.ms_last_sync   = datetime.now(timezone.utc)
+        task.ms_sync_status = "ok"
+        return ev
+
+def delete_event_for_task(task: Task, actor_user_id: int) -> None:
+    if not task.ms_event_id:
+        return
+    try:
+        delete_event_as_user(
+            user_id=actor_user_id,
+            event_id=task.ms_event_id,
+            etag=task.ms_event_etag,
+            calendar_id=task.ms_calendar_id or "primary"
+        )
+    finally:
+        task.ms_event_id    = None
+        task.ms_event_etag  = None
+        task.ms_sync_status = "deleted"
+        task.ms_last_sync   = datetime.now(timezone.utc)
 
 def _emails_by_ids(user_ids: Iterable[int]) -> list[str]:
     ids = list({int(x) for x in (user_ids or [])})

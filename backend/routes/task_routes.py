@@ -16,6 +16,7 @@ from pytz import timezone
 from models.audit_log_model import AuditLog
 from models.notification_outbox_model import NotificationOutbox
 from services.task_calendar_service import schedule_task_event_for_creator
+from services.task_calendar_service import ensure_event_for_task, delete_event_for_task
 
 task_bp = Blueprint("tasks", __name__, url_prefix="/api")
 
@@ -689,11 +690,12 @@ def add_task():
         try:
             create_cal = str(request.form.get("create_calendar_event", "false")).lower() in ("1", "true", "yes", "on")
             if create_cal and new_task.due_date:
-                schedule_task_event_for_creator(new_task.id, creator_user_id=user_id)
-            if create_cal and not due_date:
+                ensure_event_for_task(new_task, actor_user_id=user_id)
+                db.session.commit()
+            if create_cal and not new_task.due_date:
                 return jsonify({"error": "Para adicionar ao Outlook, defina a Data de Vencimento."}), 400
         except Exception:
-            current_app.logger.exception("[CAL] Falha ao criar evento para task %s", new_task.id)
+            current_app.logger.exception("[CAL] Falha ao criar/atualizar evento da task %s", new_task.id)
 
         # Registrar auditoria
         AuditLog.log_action(
@@ -1015,11 +1017,16 @@ def update_task(task_id):
     db.session.commit()
 
     try:
-        # cria evento no Outlook se marcado e houver due_date
         if create_cal_flag and task.due_date:
-            schedule_task_event_for_creator(task.id, creator_user_id=user_id)
+            ensure_event_for_task(task, actor_user_id=user_id)
+            db.session.commit()
+        elif not create_cal_flag and task.ms_event_id:
+            # usuário desmarcou o toggle no update -> apagar no Outlook
+            delete_event_for_task(task, actor_user_id=user_id)
+            db.session.commit()
     except Exception:
-        current_app.logger.exception("[CAL] Falha ao criar evento (update) task %s", task.id)
+        current_app.logger.exception("[CAL] Falha ao sincronizar evento (update) task %s", task.id)
+
 
     # Auditoria (diff)
     try:
@@ -1096,6 +1103,12 @@ def delete_task(task_id):
     task.updated_at = datetime.utcnow()
     db.session.commit()
 
+    # Apaga no Outlook se tiver vínculo
+    try:
+        if task.ms_event_id:
+            delete_event_for_task(task, actor_user_id=user_id)
+    except Exception:
+        current_app.logger.exception("[CAL] Falha ao deletar evento vinculado (task %s)", task.id)
     # Auditoria
     AuditLog.log_action(
         user_id=user_id,

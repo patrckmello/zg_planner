@@ -25,7 +25,6 @@ import {
   FiX,
   FiTrash2,
   FiClock,
-  FiUser,
   FiUsers,
   FiTag,
   FiPaperclip,
@@ -74,10 +73,9 @@ function EditTaskFormPage() {
     lembretes: [],
     tags: [],
     anexos: [],
-    assigned_to_user_ids: [], // Alterado para array
+    assigned_to_user_ids: [],
     collaborator_ids: [],
     team_id: "",
-    
   });
 
   const [originalTask, setOriginalTask] = useState(null);
@@ -153,25 +151,53 @@ function EditTaskFormPage() {
       </span>
     );
   };
+
   const autosaveKey = `task:edit:${id}`;
   const { clearAutosave } = useFormAutosave(formData, setFormData, autosaveKey);
+
   const handleOutlookToggle = (checked) => {
-    if (!checked) { setAddToOutlook(false); return; }
-    if (msStatus.connected) { setAddToOutlook(true); return; }
+    // Desmarcar = só desliga. Se já existir evento, o backend removerá ao salvar.
+    if (!checked) {
+      if (originalTask?.ms_event_id) {
+        const ok = window.confirm(
+          "Desmarcar vai remover o evento do Outlook ao salvar. Deseja continuar?"
+        );
+        if (!ok) return;
+      }
+      setAddToOutlook(false);
+      return;
+    }
+
+    // Marcar = precisa due_date
+    if (!formData.due_date) {
+      toast.warn("Defina a Data de Vencimento para adicionar ao Outlook.");
+      return;
+    }
+
+    // Se já estiver conectado, só marca
+    if (msStatus.connected) {
+      setAddToOutlook(true);
+      return;
+    }
+
+    // Tenta conectar na hora
     openMsPopup({
       onSuccess: async () => {
         toast.success("Conta Microsoft conectada!");
         try {
           const ms = await getMsStatus();
           setMsStatus(ms || { connected: true });
-          setAddToOutlook(true);
-        } catch { setAddToOutlook(false); }
+          // só marca se ainda temos due_date
+          setAddToOutlook(!!formData.due_date);
+        } catch {
+          setAddToOutlook(false);
+        }
       },
       onError: () => {
         toast.error("Não foi possível conectar agora.");
         setAddToOutlook(false);
-      }
-    }); 
+      },
+    });
   };
 
   useEffect(() => {
@@ -189,6 +215,7 @@ function EditTaskFormPage() {
           api.get("/users/me"),
           getMsStatus(),
         ]);
+
         setMsStatus(ms || { connected: false });
 
         const task = taskResponse.data;
@@ -196,7 +223,7 @@ function EditTaskFormPage() {
         setTeams(teamsResponse.data);
         setCurrentUser(userResponse.data);
 
-        // Processar anexos vindos do backend
+        // Adaptar anexos
         const adaptAnexos = (task.anexos || []).map((anexo) => {
           if (typeof anexo === "string") {
             return {
@@ -219,7 +246,7 @@ function EditTaskFormPage() {
           }
         });
 
-        // Preencher formulário com dados da tarefa
+        // Preencher formulário
         setFormData({
           title: task.title || "",
           description: task.description || "",
@@ -233,15 +260,18 @@ function EditTaskFormPage() {
           lembretes: task.lembretes || [],
           tags: task.tags || [],
           anexos: adaptAnexos,
-          assigned_to_user_ids: Array.isArray(task.assigned_to_user_ids)
-            ? task.assigned_to_user_ids.map((id) => parseInt(id))
+          // 🔧 usar assigned_users do backend
+          assigned_to_user_ids: Array.isArray(task.assigned_users)
+            ? task.assigned_users.map((id) => parseInt(id))
             : task.user_id
             ? [parseInt(task.user_id)]
-            : [], // Garante que seja um array de números
-          collaborator_ids: task.collaborator_ids || [],
+            : [],
+          collaborator_ids: task.collaborators || [],
           team_id: task.team_id || "",
-          
         });
+
+        // ✅ manter estado do toggle de calendário se já tiver evento
+        setAddToOutlook(!!task.ms_event_id);
         setRequiresApproval(!!task.requires_approval);
       } catch (error) {
         console.error("Erro ao carregar dados:", error);
@@ -266,8 +296,6 @@ function EditTaskFormPage() {
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, [id, navigate]);
-
-
 
   const handleLogout = async () => {
     try {
@@ -296,10 +324,9 @@ function EditTaskFormPage() {
       onSuccess: async () => {
         toast.success("Conta Microsoft conectada!");
         try {
-          // Atualiza o status e já habilita o checkbox
           const ms = await getMsStatus();
           setMsStatus(ms || { connected: true });
-          setAddToOutlook(true);
+          setAddToOutlook(!!formData.due_date);
         } catch {
           setAddToOutlook(false);
         }
@@ -310,7 +337,6 @@ function EditTaskFormPage() {
     });
   };
 
-  // Função para rolar até o primeiro campo com erro
   const scrollToFirstError = (newErrors) => {
     const errorFields = Object.keys(newErrors);
     if (errorFields.length === 0) return;
@@ -321,7 +347,6 @@ function EditTaskFormPage() {
       tempo_estimado: tempoEstimadoRef,
     };
 
-    // Encontrar o primeiro campo com erro que tem ref
     for (const field of errorFields) {
       const ref = fieldRefMap[field];
       if (ref && ref.current) {
@@ -331,17 +356,11 @@ function EditTaskFormPage() {
           inline: "nearest",
         });
 
-        // Focar no campo após um pequeno delay
         setTimeout(() => {
-          if (
+          const input =
             ref.current.querySelector("input") ||
-            ref.current.querySelector("textarea")
-          ) {
-            const input =
-              ref.current.querySelector("input") ||
-              ref.current.querySelector("textarea");
-            input.focus();
-          }
+            ref.current.querySelector("textarea");
+          if (input) input.focus();
         }, 300);
         break;
       }
@@ -368,7 +387,6 @@ function EditTaskFormPage() {
     }
     setErrors(newErrors);
 
-    // Rolar até o primeiro campo com erro
     if (Object.keys(newErrors).length > 0) {
       scrollToFirstError(newErrors);
     }
@@ -377,7 +395,6 @@ function EditTaskFormPage() {
   };
 
   const handleFileChange = (files) => {
-    // Rastrear arquivos removidos
     const currentFileNames = files.map((f) => f.name);
     const originalFileNames = formData.anexos
       .filter((f) => f.isExisting)
@@ -423,25 +440,18 @@ function EditTaskFormPage() {
       }
 
       // —— Arrays JSON
-      formDataToSend.append(
-        "lembretes",
-        JSON.stringify(formData.lembretes || [])
-      );
+      formDataToSend.append("lembretes", JSON.stringify(formData.lembretes || []));
       formDataToSend.append("tags", JSON.stringify(formData.tags || []));
       formDataToSend.append(
         "collaborator_ids",
         JSON.stringify(formData.collaborator_ids || [])
       );
 
-      // —— Só envia assigned_to_user_ids se:
-      // (a) usuário pode reatribuir (gestor/admin da equipe selecionada)
-      // (b) houve mudança real nos responsáveis
+      // —— Só envia assigned_to_user_ids se: pode reatribuir E houve mudança
       const canReassign = isManagerOfAnyTeam() && isManagerOfSelectedTeam();
 
-      const originalAssignees = Array.isArray(
-        originalTask?.assigned_to_user_ids
-      )
-        ? originalTask.assigned_to_user_ids.map(Number)
+      const originalAssignees = Array.isArray(originalTask?.assigned_users)
+        ? originalTask.assigned_users.map(Number)
         : originalTask?.user_id
         ? [Number(originalTask.user_id)]
         : [];
@@ -464,19 +474,13 @@ function EditTaskFormPage() {
           JSON.stringify(currentAssignees)
         );
       }
-      // ⚠️ Caso NÃO possa reatribuir ou NÃO houve mudança,
-      // NÃO enviamos assigned_to_user_ids — evitando sobrescrever 'assigned_by_user_id' no backend.
 
-      // —— IDs opcionais
       if (formData.team_id) {
         formDataToSend.append("team_id", formData.team_id);
       }
 
       // —— Arquivos removidos
-      formDataToSend.append(
-        "files_to_remove",
-        JSON.stringify(removedFiles || [])
-      );
+      formDataToSend.append("files_to_remove", JSON.stringify(removedFiles || []));
 
       // —— Anexos existentes
       const existingFiles = (formData.anexos || [])
@@ -489,9 +493,16 @@ function EditTaskFormPage() {
           url: f.url,
         }));
       formDataToSend.append("existing_files", JSON.stringify(existingFiles));
+
+      // —— Aprovação
       if (canSeeApprovalControls) {
-        formDataToSend.append("requires_approval", requiresApproval ? "true" : "false");
+        formDataToSend.append(
+          "requires_approval",
+          requiresApproval ? "true" : "false"
+        );
       }
+
+      // —— Calendário
       formDataToSend.append(
         "create_calendar_event",
         addToOutlook && msStatus.connected ? "true" : "false"
@@ -531,7 +542,6 @@ function EditTaskFormPage() {
     } catch (error) {
       console.error("Erro ao excluir tarefa:", error);
       toast.error("Ocorreu um erro ao excluir a tarefa. Tente novamente.");
-      // Fecha o modal mesmo se der erro, para o usuário poder tentar de novo.
       setShowDeleteModal(false);
     } finally {
       setIsDeleting(false);
@@ -542,13 +552,11 @@ function EditTaskFormPage() {
     navigate(-1);
   };
 
-  // Verificar se o usuário atual é gestor de alguma equipe
   const isManagerOfAnyTeam = () => {
     if (!currentUser) return false;
     return currentUser.is_admin || currentUser.is_manager;
   };
 
-  // Verificar se o usuário atual é gestor da equipe selecionada
   const isManagerOfSelectedTeam = () => {
     if (!formData.team_id || !currentUser) return false;
     const selectedTeam = teams.find((t) => t.id === parseInt(formData.team_id));
@@ -564,7 +572,6 @@ function EditTaskFormPage() {
   const isTeamTask = !!(formData.team_id || originalTask?.team_id);
   const canSeeApprovalControls = isManagerOfAnyTeam() || isTeamTask;
 
-  // Verificar se o usuário pode editar a tarefa
   const canEditTask = () => {
     if (!currentUser || !originalTask) return false;
     return (
@@ -891,7 +898,7 @@ function EditTaskFormPage() {
                       value={formData.anexos}
                       onChange={handleFileChange}
                       maxFiles={10}
-                      maxFileSize={10 * 1024 * 1024} // 10MB
+                      maxFileSize={10 * 1024 * 1024}
                       acceptedTypes={[
                         "image/*",
                         "application/pdf",
@@ -918,7 +925,9 @@ function EditTaskFormPage() {
                         <Checkbox
                           label="Requer aprovação do gestor"
                           checked={requiresApproval}
-                          onCheckedChange={(checked) => setRequiresApproval(!!checked)}
+                          onCheckedChange={(checked) =>
+                            setRequiresApproval(!!checked)
+                          }
                         />
                       )}
                     </div>
@@ -931,8 +940,7 @@ function EditTaskFormPage() {
                             : "Adicionar à agenda do Outlook (conecte sua conta primeiro)"
                         }
                         checked={addToOutlook}
-                        onCheckedChange={handleOutlookToggle}  // ← usa o handler
-                        // não usar 'disabled' aqui, para permitir o clique e mostrar o toast
+                        onCheckedChange={handleOutlookToggle}
                       />
 
                       {!msStatus.connected && (
@@ -940,18 +948,55 @@ function EditTaskFormPage() {
                           <FiCalendar className={styles.noteIcon} />
                           <span>
                             Vá em <strong>Meu Perfil ▸ Integrações</strong> e conecte sua conta.{" "}
-                          <a
-                            href="#"
-                            className={styles.linkInline}
-                            onClick={(e) => {
-                              e.preventDefault();
-                              handleConnectNow();
-                            }}
-                            role="button"
+                            <a
+                              href="#"
+                              className={styles.linkInline}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                handleConnectNow();
+                              }}
+                              role="button"
                             >
-                            Conectar agora
+                              Conectar agora
                             </a>
                           </span>
+                        </div>
+                      )}
+
+                      {/* Status de sync quando existir algo */}
+                      {originalTask && (
+                        <div className={styles.helperText} style={{ marginTop: 6 }}>
+                          <small>
+                            {originalTask.ms_event_id ? (
+                              <>
+                                Status: <strong>{originalTask.ms_sync_status || "ok"}</strong>
+                                {originalTask.ms_last_sync ? (
+                                  <> · Última sync: {new Date(originalTask.ms_last_sync).toLocaleString()}</>
+                                ) : null}
+                                {" · "}ID: <code>{originalTask.ms_event_id}</code>
+                              </>
+                            ) : (
+                              <>Nenhum evento vinculado ainda.</>
+                            )}
+                          </small>
+                        </div>
+                      )}
+
+                      {/* Hints de ação */}
+                      {addToOutlook && (
+                        <div className={styles.helperText} style={{ marginTop: 6 }}>
+                          <small>
+                            Ao salvar, {originalTask?.ms_event_id ? "o evento será atualizado." : "um novo evento será criado."}
+                            {!formData.due_date && " (Defina uma Data de Vencimento para permitir)"}
+                          </small>
+                        </div>
+                      )}
+                      {!addToOutlook && originalTask?.ms_event_id && (
+                        <div
+                          className={styles.helperText}
+                          style={{ marginTop: 6, color: "#b45309" }}
+                        >
+                          <small>Ao salvar, o evento atual será removido do Outlook.</small>
                         </div>
                       )}
 
@@ -964,7 +1009,7 @@ function EditTaskFormPage() {
                     </div>
                   </div>
                 </div>
-              </div> 
+              </div>
 
               {/* Actions */}
               <div className={styles.formActions}>
@@ -1001,6 +1046,7 @@ function EditTaskFormPage() {
           </div>
         </main>
       </div>
+
       {showDeleteModal && (
         <DeleteConfirmModal
           isOpen={showDeleteModal}
@@ -1011,11 +1057,7 @@ function EditTaskFormPage() {
           message={`Tem certeza que deseja excluir a tarefa "${formData.title}"? Esta ação não pode ser desfeita.`}
         />
       )}
-      <ToastContainer
-        position="bottom-right"
-        autoClose={5000}
-        hideProgressBar={false}
-      />
+      <ToastContainer position="bottom-right" autoClose={5000} hideProgressBar={false} />
     </div>
   );
 }
