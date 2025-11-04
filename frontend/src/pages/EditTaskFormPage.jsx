@@ -8,6 +8,7 @@ import Select from "../components/ui/Select";
 import TagInput from "../components/forms/TagInput";
 import FileUploadArea from "../components/forms/FileUploadArea";
 import TeamMemberSelector from "../components/forms/TeamMemberSelector";
+import SubtasksEditor from "../components/forms/SubtasksEditor";
 import CollaboratorSelector from "../components/forms/CollaboratorSelector";
 import CustomDateTimePicker from "../components/forms/CustomDateTimePicker";
 import Checkbox from "../components/Checkbox/Checkbox";
@@ -76,6 +77,7 @@ function EditTaskFormPage() {
     assigned_to_user_ids: [],
     collaborator_ids: [],
     team_id: "",
+    subtasks: [],
   });
 
   const [originalTask, setOriginalTask] = useState(null);
@@ -206,6 +208,18 @@ function EditTaskFormPage() {
     }
   }, [msStatus.connected, addToOutlook]);
 
+  // ========= Helper p/ normalizar tags de entrada (string ou objeto) =========
+  const normTagIn = (t) => {
+    if (!t) return null;
+    if (typeof t === "string") return { name: t.trim() };
+    if (typeof t === "object") {
+      const name = (t.name || t.label || "").trim();
+      if (!name) return null;
+      return { name, color: t.color || undefined };
+    }
+    return null;
+  };
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -246,10 +260,11 @@ function EditTaskFormPage() {
           }
         });
 
-        // Preencher formulário
+        // Preencher formulário (tags já normalizadas para {name,color?})
         setFormData({
           title: task.title || "",
           description: task.description || "",
+          subtasks: Array.isArray(task.subtasks) ? task.subtasks : [],
           status: task.status || "pending",
           due_date: task.due_date || "",
           prioridade: task.prioridade || "media",
@@ -258,9 +273,10 @@ function EditTaskFormPage() {
           tempo_unidade: task.tempo_unidade || "horas",
           relacionado_a: task.relacionado_a || "",
           lembretes: task.lembretes || [],
-          tags: task.tags || [],
+          tags: (Array.isArray(task.tags) ? task.tags : [])
+            .map(normTagIn)
+            .filter(Boolean),
           anexos: adaptAnexos,
-          // 🔧 usar assigned_users do backend
           assigned_to_user_ids: Array.isArray(task.assigned_users)
             ? task.assigned_users.map((id) => parseInt(id))
             : task.user_id
@@ -423,6 +439,7 @@ function EditTaskFormPage() {
       // —— Campos básicos
       formDataToSend.append("title", formData.title);
       formDataToSend.append("description", formData.description);
+      formDataToSend.append("subtasks", JSON.stringify(formData.subtasks || []));
       formDataToSend.append("status", formData.status);
       formDataToSend.append("prioridade", formData.prioridade);
       formDataToSend.append("categoria", formData.categoria);
@@ -441,7 +458,22 @@ function EditTaskFormPage() {
 
       // —— Arrays JSON
       formDataToSend.append("lembretes", JSON.stringify(formData.lembretes || []));
-      formDataToSend.append("tags", JSON.stringify(formData.tags || []));
+
+      // ===== TAGS: enviando apenas os nomes (compatível com backend atual) =====
+      const tagsPayloadNamesOnly = (formData.tags || []).map((t) =>
+        typeof t === "string" ? t : t.name
+      );
+      formDataToSend.append("tags", JSON.stringify(tagsPayloadNamesOnly));
+
+      // --- Se o backend aceitar cor, troque pelo bloco abaixo e remova o de cima:
+      /*
+      const tagsPayloadWithColor = (formData.tags || []).map((t) => {
+        if (typeof t === "string") return { name: t };
+        return { name: t.name, color: t.color || undefined };
+      });
+      formDataToSend.append("tags", JSON.stringify(tagsPayloadWithColor));
+      */
+
       formDataToSend.append(
         "collaborator_ids",
         JSON.stringify(formData.collaborator_ids || [])
@@ -654,6 +686,12 @@ function EditTaskFormPage() {
                           }
                           placeholder="Descreva os detalhes da tarefa"
                           rows={4}
+                        />
+                      </div>
+                      <div className={styles.fullWidth}>
+                        <SubtasksEditor
+                          value={formData.subtasks}
+                          onChange={(list) => updateField("subtasks", list)}
                         />
                       </div>
                     </div>
@@ -883,6 +921,7 @@ function EditTaskFormPage() {
                       suggestions={tagSuggestions}
                       placeholder="Adicionar tag..."
                       maxTags={10}
+                      allowColorPick={true}   // <<< habilita o picker
                     />
                   </div>
                 </div>

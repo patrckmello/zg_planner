@@ -216,3 +216,75 @@
 .approvalBadge[data-status="approved"] { background: #d1e7dd; color:#0f5132; }
 .approvalBadge[data-status="rejected"] { background: #f8d7da; color:#842029; }
 .approvalBadge[data-status="none"]     { background: #e7f1ff; color:#084298; }
+
+.tagChipsRow {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tagChip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 1;
+  font-weight: 600;
+  user-select: none;
+}
+
+.tagChipMore {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  background: #f3f4f6;
+  color: #111827;
+  border: 1px dashed #d1d5db;
+}
+
+/* badge de andamento no header direito */
+.progressBadge{
+  margin-left:auto;
+  font-size:12px;
+  background:#ecf5ff;
+  color:#0b62a3;
+  border:1px solid #d7eaff;
+  padding:4px 8px;
+  border-radius:999px;
+}
+
+/* barra fininha sob o título */
+.progressTrack{
+  width:100%;
+  height:8px;
+  background:#f3f7fb;
+  border:1px solid #e8eef6;
+  border-radius:999px;
+  overflow:hidden;
+  margin:6px 0 10px;
+}
+.progressBar{
+  height:100%;
+  width:0%;
+  background:#3498db;
+  border-radius:999px;
+  position:relative;
+  transition:width .25s ease-in-out;
+}
+.progressBar::before{
+  content:"";
+  position:absolute; inset:0;
+  background:repeating-linear-gradient(
+    -45deg,
+    rgba(255,255,255,.35) 0px,
+    rgba(255,255,255,.35) 8px,
+    rgba(255,255,255,.15) 8px,
+    rgba(255,255,255,.15) 16px
+  );
+  animation:cardStripes 1s linear infinite;
+}
+@keyframes cardStripes{ to{ transform: translateX(16px); } }

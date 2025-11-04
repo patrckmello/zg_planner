@@ -35,6 +35,7 @@ class Task(db.Model):
     relacionado_a = db.Column(db.String(200))
     lembretes = db.Column(JSON, default=list)
     tags = db.Column(JSON, default=list)
+    subtasks = db.Column(JSON, default=list)
     anexos = db.Column(JSON, default=list)
 
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -119,13 +120,18 @@ class Task(db.Model):
     def mark_done(self):
         # normaliza status
         self.status = 'done'
-        # se precisar aprovação e não estiver aprovado, bloqueia
+
+        # precisa aprovação?
         if self.requires_manager_approval() and not self.is_approved():
             raise ValueError("Tarefa requer aprovação do gestor antes de ser concluída.")
-        # sempre define completed_at
+
+        # BLOQUEIO POR SUBTASK
+        if not self.can_finish():
+            raise ValueError("Conclua todas as subtarefas antes de finalizar a tarefa.")
+
         if not self.completed_at:
             self.completed_at = datetime.utcnow()
-        # ao concluir, a tarefa não está arquivada ainda
+        # ao concluir, a tarefa não está arquivada
         self.archived_at = None
         self.archived_by_user_id = None
 
@@ -209,7 +215,11 @@ class Task(db.Model):
             "lembretes": self.lembretes or [],
             "tags": self.tags or [],
             "anexos": self.anexos or [],
-
+            # --- subtarefas ---
+            "subtasks": self.subtasks or [],
+            "subtasks_total": self.subtask_counts().get("total"),
+            "subtasks_done": self.subtask_counts().get("done"),
+            "subtasks_percent": self.subtask_counts().get("percent"),
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
 
@@ -289,3 +299,42 @@ class Task(db.Model):
             if self.team_id in team_member_ids:
                 return True
         return False
+
+    def _coerce_subtasks(self):
+        """Normaliza estrutura de subtarefas (ids, tipos e ordenação)."""
+        norm = []
+        for i, st in enumerate(self.subtasks or []):
+            if not isinstance(st, dict):
+                continue
+            st_id = st.get("id") or f"st-{self.id}-{i+1}"
+            title = (st.get("title") or "").strip()
+            if not title:
+                continue
+            norm.append({
+                "id": st_id,
+                "title": title,
+                "done": bool(st.get("done", False)),
+                "assignee_id": st.get("assignee_id"),
+                "due_date": st.get("due_date"),
+                "required": bool(st.get("required", False)),
+                "weight": int(st.get("weight", 1)),
+                "order": int(st.get("order", i)),
+            })
+        self.subtasks = sorted(norm, key=lambda x: x["order"])
+
+    def subtask_counts(self):
+        self._coerce_subtasks()
+        total = len(self.subtasks or [])
+        done = sum(1 for s in (self.subtasks or []) if s.get("done"))
+        total_w = sum(max(1, int(s.get("weight", 1))) for s in (self.subtasks or [])) or 0
+        done_w = sum(max(1, int(s.get("weight", 1))) for s in (self.subtasks or []) if s.get("done"))
+        percent = int(round((done_w / total_w) * 100)) if total_w else 0
+        return {"total": total, "done": done, "percent": percent, "total_weight": total_w, "done_weight": done_w}
+
+    def all_subtasks_done(self):
+        self._coerce_subtasks()
+        return all(s.get("done") for s in (self.subtasks or []))
+
+    def can_finish(self):
+        """Regra simples: só conclui se TODAS as subtasks estiverem 'done'."""
+        return self.all_subtasks_done()

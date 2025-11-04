@@ -1,0 +1,223 @@
+/* Variáveis de Design (Baseado no TaskFormPage) */
+:root {
+  --primary: #2563eb; /* Azul principal */
+  --primary-light: #eff6ff; /* Fundo leve */
+  --primary-dark: #1e40af; /* Azul escuro para hover */
+  --text-primary: #1f2937; /* Texto escuro */
+  --text-secondary: #6b7280; /* Texto secundário/dica */
+  --border-color: #e5e7eb; /* Linha de borda */
+  --bg-light: #f9fafb; /* Fundo de componentes */
+  --danger: #ef4444; /* Vermelho para exclusão */
+  --danger-light: #fee2e2;
+  --radius-lg: 12px;
+  --radius-md: 8px;
+}
+
+/* Wrapper "flat" */
+.wrapper {
+  padding: 0;
+  background: transparent;
+  border: 0;
+}
+
+/* Header */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.title {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.titleLabel {
+  font-weight: 600;
+  font-size: 1.1rem;
+  color: var(--text-primary);
+}
+
+.hint {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+/* Botão adicionar */
+.addBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--border-color);
+  background: #fff;
+  color: var(--text-primary);
+  border-radius: var(--radius-md);
+  padding: 8px 16px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+.addBtn:hover {
+  border-color: var(--primary);
+  background: var(--primary-light);
+  color: var(--primary-dark);
+}
+
+/* Barra de progresso */
+.progressWrap {
+  margin: 6px 0 20px 0;
+}
+.progressTrack {
+  width: 100%;
+  height: 8px; /* Mais fino */
+  background: var(--bg-light);
+  border-radius: 999px;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+}
+.progressBar {
+  height: 100%;
+  background: var(--primary);
+  width: 0%;
+  border-radius: 999px;
+  transition: width 0.4s cubic-bezier(0.25, 0.8, 0.25, 1); /* Animação suave */
+}
+
+/* Lista de subtarefas */
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Linha da subtarefa */
+.row {
+  display: flex;
+  align-items: center;
+  padding: 10px 12px;
+  background: #fff;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.row:focus-within {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 1px var(--primary);
+}
+
+/* Checkbox */
+.doneCell {
+  flex-shrink: 0;
+  margin-right: 12px;
+}
+
+/* Input de título */
+.titleInput {
+  flex-grow: 1;
+  min-width: 0; /* <- chave */
+  border: none;
+  padding: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 1rem;
+  line-height: 1.5;
+  transition: all 0.2s ease;
+}
+.titleInput:focus {
+  outline: none;
+}
+.titleInput::placeholder {
+  color: var(--text-secondary);
+}
+
+/* Estilo para subtarefa concluída */
+.done .titleInput {
+  text-decoration: line-through;
+  color: var(--text-secondary);
+}
+
+/* Botão remover */
+.removeBtn {
+  flex-shrink: 0;
+  margin-left: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  color: var(--danger);
+  background: var(--danger-light);
+  height: 32px;
+  width: 32px;
+  padding: 0;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: var(--radius-md);
+  transition: transform 0.15s ease, background 0.15s ease, color 0.15s ease;
+  opacity: 1;
+}
+
+.removeBtn svg {
+  display: block;
+}
+
+
+.row:hover .removeBtn,
+.row:focus-within .removeBtn {
+  opacity: 1; /* Mostrar no hover/focus */
+  color: var(--danger);
+}
+
+.removeBtn:hover {
+  background: var(--danger-light);
+  border: 1px solid #ec0f0f;
+  color: var(--danger);
+  transform: scale(1.0);
+}
+
+/* Estado vazio */
+.empty {
+  padding: 20px;
+  border: 2px dashed var(--border-color);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  background: var(--bg-light);
+  text-align: center;
+  font-style: italic;
+}
+
+/* Animações de entrada/saída (usando React Transition Group ou similar) */
+/* Para fins de demonstração, definiremos classes de transição */
+.list-enter {
+  opacity: 0;
+  transform: translateY(-10px);
+}
+.list-enter-active {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 300ms ease-out, transform 300ms ease-out;
+}
+.list-exit {
+  opacity: 1;
+  transform: translateX(0);
+}
+.list-exit-active {
+  opacity: 0;
+  transform: translateX(20px);
+  transition: opacity 300ms ease-out, transform 300ms ease-out;
+}
+
+@media (max-width: 768px) {
+  .row {
+    padding: 8px 10px;
+  }
+  .addBtn {
+    padding: 6px 12px;
+    font-size: 0.9rem;
+  }
+}

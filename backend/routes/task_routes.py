@@ -17,6 +17,7 @@ from models.audit_log_model import AuditLog
 from models.notification_outbox_model import NotificationOutbox
 from services.task_calendar_service import schedule_task_event_for_creator
 from services.task_calendar_service import ensure_event_for_task, delete_event_for_task
+from uuid import uuid4
 
 task_bp = Blueprint("tasks", __name__, url_prefix="/api")
 
@@ -105,12 +106,30 @@ def _normalize_user(obj):
     if "name" in obj: base["name"] = obj["name"]
     return base or obj
 
+def _normalize_subtasks_list(lst):
+    out = []
+    for s in lst or []:
+        if not isinstance(s, dict):
+            continue
+        out.append({
+            "id": s.get("id"),
+            "title": s.get("title"),
+            "done": bool(s.get("done", False)),
+            "required": bool(s.get("required", False)),
+            "weight": int(s.get("weight", 1)) if s.get("weight") is not None else 1,
+            "order": int(s.get("order", 0)) if s.get("order") is not None else 0,
+            "assignee_id": s.get("assignee_id"),
+            "due_date": s.get("due_date"),
+        })
+    return sorted(out, key=lambda x: (x["order"], str(x.get("id"))))
+
+
 def normalize_task_snapshot(d: dict) -> dict:
     """
     Reduz o snapshot da task para campos relevantes e comparáveis.
     """
     snap = deepcopy(d or {})
-
+    snap["subtasks"] = _normalize_subtasks_list(snap.get("subtasks") or [])
     # Remover ruídos de data/derivados
     snap.pop("created_at", None)
     snap.pop("updated_at", None)
@@ -171,6 +190,118 @@ def diff_snapshots(before: dict, after: dict) -> dict:
         }
 
     return changes
+
+# ====== TAG COLORS ======
+_DEFAULT_TAG_COLORS = [
+    "#2563eb", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6",
+    "#06b6d4", "#84cc16", "#f97316", "#ec4899", "#14b8a6",
+]
+
+def _hex_contrast_color(hex_color: str) -> str:
+    try:
+        c = hex_color.lstrip("#")
+        r, g, b = int(c[0:2], 16), int(c[2:4], 16), int(c[4:6], 16)
+        # luminância simples
+        y = (r*299 + g*587 + b*114) / 1000
+        return "#000000" if y > 150 else "#ffffff"
+    except Exception:
+        return "#ffffff"
+
+def _stable_color_for_name(name: str) -> str:
+    # hash determinístico -> escolhe da paleta padrão
+    if not name:
+        return _DEFAULT_TAG_COLORS[0]
+    h = 0
+    for ch in name.lower():
+        h = (h * 31 + ord(ch)) & 0xFFFFFFFF
+    return _DEFAULT_TAG_COLORS[h % len(_DEFAULT_TAG_COLORS)]
+
+def _collect_team_tag_colors(team_id: int | None) -> dict[str, str]:
+    """
+    Varrendo tasks da equipe (ou pessoais se team_id None), pega a cor 'mais comum' por nome de tag.
+    Não é perfeito, mas evita criar tabela já agora.
+    """
+    from sqlalchemy import func
+    results = {}
+    try:
+        # pega só tasks visíveis da equipe
+        base = Task.query.filter(Task.deleted_at.is_(None))
+        if team_id is None:
+            base = base.filter(Task.team_id.is_(None))
+        else:
+            base = base.filter(Task.team_id == team_id)
+
+        # carrega tags de todas essas tasks (cuidado com volume)
+        for t in base.with_entities(Task.tags).all():
+            tags = t[0] or []
+            for item in tags:
+                if isinstance(item, str):
+                    name = item.strip()
+                    color = None
+                elif isinstance(item, dict):
+                    name = (item.get("name") or item.get("label") or "").strip()
+                    color = (item.get("color") or "").strip() or None
+                else:
+                    continue
+                if not name:
+                    continue
+                bucket = results.setdefault(name, {})
+                key = color or "__none__"
+                bucket[key] = bucket.get(key, 0) + 1
+
+        # escolhe cor mais frequente (se tiver), senão hash estável
+        final = {}
+        for name, counts in results.items():
+            best_color, best_count = None, -1
+            for c, n in counts.items():
+                if c == "__none__":
+                    continue
+                if n > best_count:
+                    best_color, best_count = c, n
+            final[name] = best_color or _stable_color_for_name(name)
+        return final
+    except Exception:
+        # fallback vazio
+        return {}
+
+def _normalize_tag_item(item, team_id: int | None, cache_colors: dict[str, str]) -> dict:
+    """
+    item pode ser "Rivatti" ou {"name":"Rivatti","color":"#..."} ou {"label": "..."}
+    """
+    if isinstance(item, str):
+        name = item.strip()
+        color = None
+    elif isinstance(item, dict):
+        name = (item.get("name") or item.get("label") or "").strip()
+        color = (item.get("color") or "").strip() or None
+    else:
+        return None
+
+    if not name:
+        return None
+
+    # prioridade: cor explícita > cor do cache (histórico equipe) > cor estável pelo nome
+    if not color:
+        color = cache_colors.get(name) or _stable_color_for_name(name)
+
+    return {"name": name, "color": color}
+
+def _normalize_tags_any(input_tags, team_id: int | None) -> list[dict]:
+    if not isinstance(input_tags, list):
+        return []
+    cache_colors = _collect_team_tag_colors(team_id)
+    norm = []
+    seen = set()
+    for it in input_tags:
+        obj = _normalize_tag_item(it, team_id, cache_colors)
+        if not obj:
+            continue
+        key = obj["name"].lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        norm.append(obj)
+    return norm
 
 
 def format_changes_for_description(changes: dict) -> str:
@@ -661,6 +792,7 @@ def add_task():
         except Exception:
             tags = []
 
+        tags = _normalize_tags_any(tags, team_id)
         # Criar a task
         new_task = Task(
             title=data["title"],
@@ -988,7 +1120,7 @@ def update_task(task_id):
                         "url": f"{request.scheme}://{request.host}/uploads/{filename}"
                     })
 
-    # ----------------------------------------------------
+        # ----------------------------------------------------
     # Tags / Lembretes
     # ----------------------------------------------------
     try:
@@ -997,13 +1129,30 @@ def update_task(task_id):
             task.lembretes = lembretes
     except Exception:
         pass
+
     try:
-        tags = json.loads(data.get("tags", "[]"))
-        if isinstance(tags, list):
-            task.tags = tags
+        raw_tags = json.loads(data.get("tags", "[]"))
+        if isinstance(raw_tags, list):
+            task.tags = _normalize_tags_any(raw_tags, task.team_id)
     except Exception:
         pass
 
+     # ----------------------------------------------------
+    # Subtasks (bulk update)
+    # ----------------------------------------------------
+    if data.get("subtasks") is not None:
+        try:
+            incoming = data["subtasks"]
+            if isinstance(incoming, str):
+                incoming = json.loads(incoming)
+            if isinstance(incoming, list):
+                task.subtasks = incoming
+                try:
+                    task._coerce_subtasks()
+                except Exception:
+                    pass
+        except Exception:
+            return jsonify({"error": "Formato inválido para subtasks"}), 400   
     # ----------------------------------------------------
     # Validação final para calendário (depois de possível update da due_date)
     # ----------------------------------------------------
@@ -1642,3 +1791,162 @@ def reject_task(task_id):
     )
 
     return jsonify(task.to_dict()), 200
+
+@task_bp.route("/tags/suggestions", methods=["GET"])
+@jwt_required()
+def tag_suggestions():
+    """
+    Retorna lista de {name,color} sugeridos para a equipe (ou pessoais se team_id ausente).
+    Útil pro autocomplete com cor padrão.
+    """
+    user_id = int(get_jwt_identity())
+    user = User.query.get(user_id)
+
+    team_id_param = request.args.get("team_id")
+    team_id = None
+    if team_id_param not in (None, "", "null"):
+        try:
+            team_id = int(team_id_param)
+        except ValueError:
+            return jsonify({"error": "team_id inválido."}), 400
+
+        # permissão básica: precisa ser admin ou membro da equipe
+        if not user.is_admin:
+            user_team_ids = [assoc.team_id for assoc in user.teams]
+            if team_id not in user_team_ids:
+                return jsonify({"error": "Acesso negado para esta equipe."}), 403
+
+    mapping = _collect_team_tag_colors(team_id)
+    # devolve como lista
+    out = [{"name": n, "color": c} for n, c in sorted(mapping.items(), key=lambda x: x[0].lower())]
+    return jsonify(out), 200
+
+@task_bp.route("/tasks/<int:task_id>/subtasks", methods=["GET"])
+@jwt_required()
+def list_subtasks(task_id):
+    user_id = int(get_jwt_identity())
+    user = User.query.get(user_id)
+    task = Task.query.get(task_id)
+    if not task: 
+        return jsonify({"error": "Tarefa não encontrada"}), 404
+    if not task.can_be_viewed_by(user):
+        return jsonify({"error": "Acesso negado"}), 403
+    task._coerce_subtasks()
+    counts = task.subtask_counts()
+    return jsonify({"items": task.subtasks, "counts": counts}), 200
+
+@task_bp.route("/tasks/<int:task_id>/subtasks", methods=["POST"])
+@jwt_required()
+def create_subtask(task_id):
+    user_id = int(get_jwt_identity())
+    user = User.query.get(user_id)
+    task = Task.query.get(task_id)
+    if not task: 
+        return jsonify({"error": "Tarefa não encontrada"}), 404
+    if not (user.is_admin or task.can_be_assigned_by(user)):
+        return jsonify({"error": "Sem permissão para alterar subtarefas"}), 403
+
+    data = request.get_json(force=True)
+    title = (data.get("title") or "").strip()
+    if not title:
+        return jsonify({"error": "title é obrigatório"}), 400
+
+    task._coerce_subtasks()
+    new_st = {
+        "id": data.get("id") or f"st-{uuid4().hex}",
+        "title": title,
+        "done": bool(data.get("done", False)),
+        "assignee_id": data.get("assignee_id"),
+        "due_date": data.get("due_date"),
+        "required": bool(data.get("required", False)),
+        "weight": int(data.get("weight", 1)),
+        "order": int(data.get("order", len(task.subtasks))),
+    }
+    task.subtasks.append(new_st)
+    task.updated_at = datetime.utcnow()
+    db.session.commit()
+    return jsonify({"item": new_st, "counts": task.subtask_counts()}), 201
+
+@task_bp.route("/tasks/<int:task_id>/subtasks/<string:sub_id>", methods=["PATCH"])
+@jwt_required()
+def update_subtask(task_id, sub_id):
+    user_id = int(get_jwt_identity())
+    user = User.query.get(user_id)
+    task = Task.query.get(task_id)
+    if not task: 
+        return jsonify({"error":"Tarefa não encontrada"}), 404
+    if not (user.is_admin or task.can_be_assigned_by(user) or user.id in (task.collaborators or [])):
+        return jsonify({"error":"Sem permissão para alterar subtarefas"}), 403
+
+    data = request.get_json(force=True)
+    task._coerce_subtasks()
+    found = False
+    for st in task.subtasks:
+        if st.get("id") == sub_id:
+            found = True
+            for k in ["title","done","assignee_id","due_date","required","weight","order"]:
+                if k in data:
+                    st[k] = data[k] if k not in ("weight","order") else int(data[k])
+            break
+    if not found:
+        return jsonify({"error": "Subtask não encontrada"}), 404
+
+    # Se desmarcou subtask e a tarefa estava done -> reabrir
+    if task.status == "done" and not task.can_finish():
+        task.status = "in_progress"
+        task.completed_at = None
+
+    task._coerce_subtasks()
+    task.updated_at = datetime.utcnow()
+    db.session.commit()
+    return jsonify({"items": task.subtasks, "counts": task.subtask_counts()}), 200
+
+@task_bp.route("/tasks/<int:task_id>/subtasks/<string:sub_id>", methods=["DELETE"])
+@jwt_required()
+def delete_subtask(task_id, sub_id):
+    user_id = int(get_jwt_identity())
+    user = User.query.get(user_id)
+    task = Task.query.get(task_id)
+    if not task: 
+        return jsonify({"error":"Tarefa não encontrada"}), 404
+    if not (user.is_admin or task.can_be_assigned_by(user)):
+        return jsonify({"error":"Sem permissão para alterar subtarefas"}), 403
+
+    task._coerce_subtasks()
+    before = len(task.subtasks)
+    task.subtasks = [s for s in task.subtasks if s.get("id") != sub_id]
+    if len(task.subtasks) == before:
+        return jsonify({"error":"Subtask não encontrada"}), 404
+
+    if task.status == "done" and not task.can_finish():
+        task.status = "in_progress"
+        task.completed_at = None
+
+    task._coerce_subtasks()
+    task.updated_at = datetime.utcnow()
+    db.session.commit()
+    return jsonify({"items": task.subtasks, "counts": task.subtask_counts()}), 200
+
+@task_bp.route("/tasks/<int:task_id>/subtasks/reorder", methods=["PATCH"])
+@jwt_required()
+def reorder_subtasks(task_id):
+    user_id = int(get_jwt_identity())
+    user = User.query.get(user_id)
+    task = Task.query.get(task_id)
+    if not task: 
+        return jsonify({"error":"Tarefa não encontrada"}), 404
+    if not (user.is_admin or task.can_be_assigned_by(user)):
+        return jsonify({"error":"Sem permissão"}), 403
+
+    data = request.get_json(force=True)
+    order_list = data.get("order") or []  # ["st-1", "st-2", ...]
+    task._coerce_subtasks()
+    idx = {sid: i for i, sid in enumerate(order_list)}
+    for s in task.subtasks:
+        sid = s.get("id")
+        if sid in idx:
+            s["order"] = idx[sid]
+    task._coerce_subtasks()
+    task.updated_at = datetime.utcnow()
+    db.session.commit()
+    return jsonify({"items": task.subtasks}), 200

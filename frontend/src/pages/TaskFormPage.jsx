@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import Header from "../components/Header";
 import Sidebar from "../components/Sidebar";
@@ -12,6 +12,7 @@ import CollaboratorSelector from "../components/forms/CollaboratorSelector";
 import CustomDateTimePicker from "../components/forms/CustomDateTimePicker";
 import Checkbox from "../components/Checkbox/Checkbox";
 import styles from "./TaskFormPage.module.css";
+import SubtasksEditor from "../components/forms/SubtasksEditor";
 import api from "../services/axiosInstance";
 import useFormAutosave from "../hooks/useFormAutosave";
 import { openMsPopup } from "../utils/oauthPopup";
@@ -44,7 +45,12 @@ function TaskFormPage() {
   const [currentUser, setCurrentUser] = useState(null);
   const [errors, setErrors] = useState({});
   const [requiresApproval, setRequiresApproval] = useState(false);
-
+  const [tagSuggestions, setTagSuggestions] = useState([
+    // fallback se API falhar
+    { name: "urgente", color: "#ef4444" },
+    { name: "cliente", color: "#2563eb" },
+    { name: "revisão", color: "#f59e0b" },
+  ]);
   // Refs para campos obrigatórios
   const titleRef = useRef(null);
   const dueDateRef = useRef(null);
@@ -70,6 +76,7 @@ function TaskFormPage() {
     assigned_to_user_ids: [], // Alterado para array
     collaborator_ids: [],
     team_id: "",
+    subtasks: [],
   });
 
   // Opções para os selects
@@ -108,18 +115,6 @@ function TaskFormPage() {
     { value: "1w", label: "1 semana antes" },
   ];
 
-  const tagSuggestions = [
-    "urgente",
-    "importante",
-    "revisão",
-    "aprovação",
-    "cliente",
-    "interno",
-    "externo",
-    "documentação",
-    "análise",
-    "desenvolvimento",
-  ];
   const autosaveKey = "task:new"; // chave do rascunho da criação
   const { clearAutosave } = useFormAutosave(formData, setFormData, autosaveKey);
 
@@ -142,6 +137,20 @@ function TaskFormPage() {
         }
     });
   };
+  useEffect(() => {
+    const fetchTagSuggestions = async () => {
+      try {
+        const url = formData.team_id
+          ? `/tags/suggestions?team_id=${parseInt(formData.team_id)}`
+          : `/tags/suggestions`; // pessoais
+        const { data } = await api.get(url);
+        if (Array.isArray(data)) setTagSuggestions(data);
+      } catch (e) {
+        // ok manter fallback
+      }
+    };
+    fetchTagSuggestions();
+  }, [formData.team_id]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -294,6 +303,7 @@ function TaskFormPage() {
       // Campos básicos
       formDataToSend.append("title", formData.title);
       formDataToSend.append("description", formData.description);
+      formDataToSend.append("subtasks", JSON.stringify(formData.subtasks || []));
       formDataToSend.append("status", formData.status);
       formDataToSend.append("prioridade", formData.prioridade);
       formDataToSend.append("categoria", formData.categoria);
@@ -385,6 +395,10 @@ function TaskFormPage() {
       )
     );
   };
+  const canManageTags = isManagerOfAnyTeam() || isManagerOfSelectedTeam();
+  const canManageTagsMemo = useMemo(() => {
+    return isManagerOfAnyTeam() || isManagerOfSelectedTeam();
+  }, [teams, currentUser, formData.team_id]);
   const isTeamTask = !!formData.team_id;
   const canSeeApprovalControls = isManagerOfAnyTeam() || isTeamTask;
   return (
@@ -441,6 +455,12 @@ function TaskFormPage() {
                           }
                           placeholder="Descreva os detalhes da tarefa"
                           rows={4}
+                        />
+                      </div>
+                      <div className={styles.fullWidth}>
+                        <SubtasksEditor
+                          value={formData.subtasks}
+                          onChange={(list) => updateField("subtasks", list)}
                         />
                       </div>
                     </div>
@@ -633,7 +653,8 @@ function TaskFormPage() {
                           label="Tags"
                           value={formData.tags}
                           onChange={(tags) => updateField("tags", tags)}
-                          suggestions={tagSuggestions}
+                          suggestions={tagSuggestions} 
+                          allowColorPick={canManageTags} 
                           placeholder="Digite uma tag e pressione Enter"
                         />
                       </div>

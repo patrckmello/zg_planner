@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import styles from "./TaskModal.module.css";
@@ -22,6 +22,7 @@ import {
   FiEye,
   FiFileText,
   FiUserCheck,
+  FiClipboard,
 } from "react-icons/fi";
 
 const TaskModal = ({ task, isOpen, onClose, onTaskUpdate }) => {
@@ -29,6 +30,7 @@ const TaskModal = ({ task, isOpen, onClose, onTaskUpdate }) => {
   const [comment, setComment] = useState("");
   const [comments, setComments] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
@@ -37,9 +39,11 @@ const TaskModal = ({ task, isOpen, onClose, onTaskUpdate }) => {
       fetchTaskDetails();
       fetchCurrentUser();
     } else if (!isOpen) {
-      setShowDeleteModal(false); // Resetar o estado do modal de exclusão ao fechar o modal da task
+      setShowDeleteModal(false);
+      setComment("");
+      setComments([]);
     }
-  }, [isOpen, task]);
+  }, [isOpen, task?.id]);
 
   const fetchCurrentUser = async () => {
     try {
@@ -52,12 +56,11 @@ const TaskModal = ({ task, isOpen, onClose, onTaskUpdate }) => {
 
   const fetchTaskDetails = async () => {
     try {
-      // Buscar comentários da tarefa
       const response = await api.get(`/tasks/${task.id}/comments`);
-      setComments(response.data);
+      setComments(response.data || []);
     } catch (error) {
       console.error("Erro ao buscar detalhes da tarefa:", error);
-      setComments([]); // Em caso de erro, lista vazia
+      setComments([]);
     }
   };
 
@@ -70,10 +73,8 @@ const TaskModal = ({ task, isOpen, onClose, onTaskUpdate }) => {
       const response = await api.post(`/tasks/${task.id}/comments`, {
         content: comment,
       });
-
       setComments((prev) => [...prev, response.data]);
       setComment("");
-      console.log("Comentário adicionado:", response.data);
     } catch (error) {
       console.error("Erro ao adicionar comentário:", error);
       toast.error("Erro ao adicionar comentário. Tente novamente.", {
@@ -87,27 +88,22 @@ const TaskModal = ({ task, isOpen, onClose, onTaskUpdate }) => {
 
   const handleEdit = () => {
     navigate(`/tasks/${task.id}/edit`);
-    onClose();
+    onClose?.();
   };
 
-  const handleDeleteClick = () => {
-    setShowDeleteModal(true);
-  };
-
-  const handleCancelDelete = () => {
-    setShowDeleteModal(false);
-  };
+  const handleDeleteClick = () => setShowDeleteModal(true);
 
   const handleDelete = async () => {
     try {
+      setDeleting(true);
       await api.delete(`/tasks/${task.id}`);
-      onTaskUpdate(task.id, { deleted: true });
-      setShowDeleteModal(false);
-      onClose();
+      onTaskUpdate?.(task.id, { deleted: true });
       toast.success("Tarefa excluída com sucesso!", {
         position: "top-right",
         autoClose: 3000,
       });
+      setShowDeleteModal(false);
+      onClose?.();
     } catch (error) {
       console.error("Erro ao excluir tarefa:", error);
       toast.error("Erro ao excluir tarefa. Tente novamente.", {
@@ -115,23 +111,23 @@ const TaskModal = ({ task, isOpen, onClose, onTaskUpdate }) => {
         autoClose: 5000,
       });
       setShowDeleteModal(false);
+    } finally {
+      setDeleting(false);
     }
   };
 
   const downloadAttachment = (anexo) => {
-    if (anexo.url) {
-      window.open(anexo.url, "_blank");
-    }
+    const url =
+      anexo?.url ||
+      (typeof anexo === "string" ? anexo : "") ||
+      (anexo?.name ? `/uploads/${anexo.name}` : "");
+    if (url) window.open(url, "_blank");
   };
 
+  // === Utils ===
   const formatDate = (dateString) => {
     if (!dateString) return "Não definida";
-    const date = new Date(dateString);
-    // Corrigir para fuso horário local
-    const localDate = new Date(
-      date.getTime() - date.getTimezoneOffset() * 60000
-    );
-    return localDate.toLocaleDateString("pt-BR", {
+    return new Date(dateString).toLocaleString("pt-BR", {
       day: "2-digit",
       month: "2-digit",
       year: "numeric",
@@ -176,65 +172,60 @@ const TaskModal = ({ task, isOpen, onClose, onTaskUpdate }) => {
     return labels[category] || category;
   };
 
-// --- APROVAÇÃO ---
+  // --- APROVAÇÃO ---
+  const canManageApproval = () => {
+    if (!currentUser || !task) return false;
+    return currentUser.is_admin || task.assigned_by_user?.id === currentUser.id;
+  };
 
-const canManageApproval = () => {
-  if (!currentUser || !task) return false;
-  // regra simples: admin OU quem atribuiu (tarefas pessoais) — e funciona bem porque no backend já valida time também
-  return currentUser.is_admin || task.assigned_by_user?.id === currentUser.id;
-};
+  const canSubmitForApproval = () => {
+    if (!task?.requires_approval) return false;
+    return !task.approval_status || task.approval_status === "rejected";
+  };
 
-const canSubmitForApproval = () => {
-  if (!task?.requires_approval) return false;
-  // Pode enviar se nunca enviou ou se foi rejeitada
-  return !task.approval_status || task.approval_status === "rejected";
-};
+  const canApproveReject = () => {
+    if (!task?.requires_approval) return false;
+    if (task.approval_status !== "pending") return false;
+    return canManageApproval();
+  };
 
-const canApproveReject = () => {
-  if (!task?.requires_approval) return false;
-  if (task.approval_status !== "pending") return false;
-  return canManageApproval();
-};
+  const submitForApproval = async () => {
+    try {
+      await api.post(`/tasks/${task.id}/submit_for_approval`);
+      toast.success("Tarefa enviada para aprovação.");
+      onTaskUpdate?.(task.id, { approval_status: "pending" });
+      onClose?.();
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.error || "Falha ao enviar para aprovação.");
+    }
+  };
 
-// Chamadas à API
-const submitForApproval = async () => {
-  try {
-    await api.post(`/tasks/${task.id}/submit_for_approval`);
-    toast.success("Tarefa enviada para aprovação.");
-    onTaskUpdate?.(task.id, { approval_status: "pending" });
-    onClose();
-  } catch (err) {
-    console.error(err);
-    toast.error(err.response?.data?.error || "Falha ao enviar para aprovação.");
-  }
-};
+  const approveTask = async () => {
+    try {
+      await api.post(`/tasks/${task.id}/approve`);
+      toast.success("Tarefa aprovada e concluída.");
+      onTaskUpdate?.(task.id, { approval_status: "approved", status: "done" });
+      onClose?.();
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.error || "Falha ao aprovar tarefa.");
+    }
+  };
 
-const approveTask = async () => {
-  try {
-    await api.post(`/tasks/${task.id}/approve`);
-    toast.success("Tarefa aprovada e concluída.");
-    onTaskUpdate?.(task.id, { approval_status: "approved", status: "done" });
-    onClose();
-  } catch (err) {
-    console.error(err);
-    toast.error(err.response?.data?.error || "Falha ao aprovar tarefa.");
-  }
-};
+  const rejectTask = async () => {
+    try {
+      await api.post(`/tasks/${task.id}/reject`);
+      toast.info("Tarefa rejeitada.");
+      onTaskUpdate?.(task.id, { approval_status: "rejected" });
+      onClose?.();
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.error || "Falha ao rejeitar tarefa.");
+    }
+  };
 
-const rejectTask = async () => {
-  try {
-    await api.post(`/tasks/${task.id}/reject`);
-    toast.info("Tarefa rejeitada.");
-    onTaskUpdate?.(task.id, { approval_status: "rejected" });
-    onClose();
-  } catch (err) {
-    console.error(err);
-    toast.error(err.response?.data?.error || "Falha ao rejeitar tarefa.");
-  }
-};
-
-
-  // Função para renderizar usuário individual
+  // Render user card helper
   const renderUserCard = (user, role, icon) => (
     <div key={user.id || user.name} className={styles.userCard}>
       <div className={styles.userAvatar}>{icon}</div>
@@ -245,12 +236,26 @@ const rejectTask = async () => {
     </div>
   );
 
+  // === Andamento (subtasks) ===
+  const progress = useMemo(() => {
+    const list = Array.isArray(task?.subtasks) ? task.subtasks : [];
+    const total = list.length;
+    const finished = list.filter((s) => s?.done).length;
+    const percent = total === 0 ? 0 : Math.round((finished / total) * 100);
+    return { total, finished, percent };
+  }, [task?.subtasks]);
+
   if (!isOpen || !task) return null;
 
   return (
-    <div className={styles.modalOverlay} onClick={onClose}>
+    <div
+      className={styles.modalOverlay}
+      onClick={() => {
+        if (!showDeleteModal) onClose?.();
+      }}
+    >
       <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
-        {/* Header do Modal */}
+        {/* Header */}
         <div className={styles.modalHeader}>
           <div className={styles.headerLeft}>
             <div
@@ -259,14 +264,35 @@ const rejectTask = async () => {
             />
             <h2 className={styles.taskTitle}>{task.title}</h2>
           </div>
-          <button className={styles.closeButton} onClick={onClose}>
+          <button className={styles.closeButton} onClick={onClose} title="Fechar">
             <FiX />
           </button>
         </div>
 
-        {/* Conteúdo do Modal */}
+        {/* Body */}
         <div className={styles.modalBody}>
-          {/* Informações Básicas */}
+          {/* === ANDAMENTO === */}
+          {progress.total > 0 && (
+            <div className={styles.section}>
+              <div className={styles.sectionHeader}>
+                <FiClipboard className={styles.sectionIcon} />
+                <h3>Andamento</h3>
+                <span className={styles.progressLabel}>
+                  {progress.finished}/{progress.total} • {progress.percent}%
+                </span>
+              </div>
+              <div className={styles.sectionContent}>
+                <div className={styles.progressTrack} aria-label="Andamento">
+                  <div
+                    className={styles.progressBar}
+                    style={{ width: `${progress.percent}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Básicas */}
           <div className={styles.section}>
             <div className={styles.sectionHeader}>
               <FiFileText className={styles.sectionIcon} />
@@ -285,9 +311,7 @@ const rejectTask = async () => {
                   <span className={styles.infoLabel}>Prioridade:</span>
                   <span
                     className={styles.priorityBadge}
-                    style={{
-                      backgroundColor: getPriorityColor(task.prioridade),
-                    }}
+                    style={{ backgroundColor: getPriorityColor(task.prioridade) }}
                   >
                     {task.prioridade?.toUpperCase()}
                   </span>
@@ -308,19 +332,23 @@ const rejectTask = async () => {
                     {getCategoryLabel(task.categoria)}
                   </span>
                 </div>
-                
+
                 {task.requires_approval && (
                   <div className={styles.infoItem}>
                     <FiUsers className={styles.infoIcon} />
                     <span className={styles.infoLabel}>Aprovação:</span>
                     <span className={styles.infoValue}>
                       {task.approval_status
-                        ? (task.approval_status === "pending" && "Pendente")
-                          || (task.approval_status === "approved" && "Aprovada")
-                          || (task.approval_status === "rejected" && "Rejeitada")
+                        ? (task.approval_status === "pending" && "Pendente") ||
+                          (task.approval_status === "approved" && "Aprovada") ||
+                          (task.approval_status === "rejected" && "Rejeitada")
                         : "Necessária"}
                       {task.approved_by_user && (
-                        <> • por {task.approved_by_user.name} em {formatDate(task.approved_at)}</>
+                        <>
+                          {" "}
+                          • por {task.approved_by_user.name} em{" "}
+                          {formatDate(task.approved_at)}
+                        </>
                       )}
                     </span>
                   </div>
@@ -338,10 +366,7 @@ const rejectTask = async () => {
                   <FiClock className={styles.infoIcon} />
                   <span className={styles.infoLabel}>Tempo estimado:</span>
                   <span className={styles.infoValue}>
-                    {formatEstimatedTime(
-                      task.tempo_estimado,
-                      task.tempo_unidade
-                    )}
+                    {formatEstimatedTime(task.tempo_estimado, task.tempo_unidade)}
                   </span>
                 </div>
 
@@ -349,16 +374,14 @@ const rejectTask = async () => {
                   <div className={styles.infoItem}>
                     <FiFileText className={styles.infoIcon} />
                     <span className={styles.infoLabel}>Relacionado a:</span>
-                    <span className={styles.infoValue}>
-                      {task.relacionado_a}
-                    </span>
+                    <span className={styles.infoValue}>{task.relacionado_a}</span>
                   </div>
                 )}
               </div>
             </div>
           </div>
 
-          {/* Responsável e Colaboradores */}
+          {/* Pessoas */}
           <div className={styles.section}>
             <div className={styles.sectionHeader}>
               <FiUsers className={styles.sectionIcon} />
@@ -366,9 +389,7 @@ const rejectTask = async () => {
             </div>
             <div className={styles.sectionContent}>
               <div className={styles.usersContainer}>
-                {/* Responsáveis da tarefa */}
-                {task.assigned_users_info &&
-                task.assigned_users_info.length > 0 ? (
+                {task.assigned_users_info && task.assigned_users_info.length > 0 ? (
                   <div className={styles.userGroup}>
                     <div className={styles.userGroupHeader}>
                       <FiUserCheck className={styles.groupIcon} />
@@ -382,8 +403,7 @@ const rejectTask = async () => {
                       )}
                     </div>
                   </div>
-                ) : // Fallback para responsável único
-                task.assigned_to_user?.name || task.user?.name ? (
+                ) : task.assigned_to_user?.name || task.user?.name ? (
                   <div className={styles.userGroup}>
                     <div className={styles.userGroupHeader}>
                       <FiUser className={styles.groupIcon} />
@@ -412,7 +432,6 @@ const rejectTask = async () => {
                   </div>
                 )}
 
-                {/* Atribuído por */}
                 {task.assigned_by_user && (
                   <div className={styles.userGroup}>
                     <div className={styles.userGroupHeader}>
@@ -420,38 +439,32 @@ const rejectTask = async () => {
                       <span className={styles.groupTitle}>Atribuído por</span>
                     </div>
                     <div className={styles.userCards}>
-                      {renderUserCard(
-                        task.assigned_by_user,
-                        "Gestor",
-                        <FiUsers />
-                      )}
+                      {renderUserCard(task.assigned_by_user, "Gestor", <FiUsers />)}
                     </div>
                   </div>
                 )}
 
-                {/* Colaboradores */}
-                {task.collaborators_info &&
-                  task.collaborators_info.length > 0 && (
-                    <div className={styles.userGroup}>
-                      <div className={styles.userGroupHeader}>
-                        <FiEye className={styles.groupIcon} />
-                        <span className={styles.groupTitle}>
-                          Colaboradores ({task.collaborators_info.length})
-                        </span>
-                      </div>
-                      <div className={styles.userCards}>
-                        {task.collaborators_info.map((collaborator) =>
-                          renderUserCard(collaborator, "Colaborador", <FiEye />)
-                        )}
-                      </div>
+                {task.collaborators_info && task.collaborators_info.length > 0 && (
+                  <div className={styles.userGroup}>
+                    <div className={styles.userGroupHeader}>
+                      <FiEye className={styles.groupIcon} />
+                      <span className={styles.groupTitle}>
+                        Colaboradores ({task.collaborators_info.length})
+                      </span>
                     </div>
-                  )}
+                    <div className={styles.userCards}>
+                      {task.collaborators_info.map((collaborator) =>
+                        renderUserCard(collaborator, "Colaborador", <FiEye />)
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
 
           {/* Tags */}
-          {task.tags && task.tags.length > 0 && (
+          {Array.isArray(task.tags) && task.tags.length > 0 && (
             <div className={styles.section}>
               <div className={styles.sectionHeader}>
                 <FiTag className={styles.sectionIcon} />
@@ -459,11 +472,28 @@ const rejectTask = async () => {
               </div>
               <div className={styles.sectionContent}>
                 <div className={styles.tags}>
-                  {task.tags.map((tag, index) => (
-                    <span key={index} className={styles.tag}>
-                      {tag}
-                    </span>
-                  ))}
+                  {task.tags.map((tag, index) => {
+                    const isObj = typeof tag === "object" && tag !== null;
+                    const name = isObj ? tag.name : tag;
+                    const color = isObj ? tag.color : undefined;
+                    return (
+                      <span
+                        key={`${name}-${index}`}
+                        className={styles.tag}
+                        style={
+                          color
+                            ? {
+                                backgroundColor: color,
+                                color: "#fff",
+                                borderColor: "rgba(0,0,0,.08)",
+                              }
+                            : undefined
+                        }
+                      >
+                        {name}
+                      </span>
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -482,9 +512,9 @@ const rejectTask = async () => {
                     <div key={index} className={styles.attachment}>
                       <div className={styles.attachmentInfo}>
                         <span className={styles.attachmentName}>
-                          {anexo.name || anexo.filename || `anexo_${index + 1}`}
+                          {anexo?.name || anexo?.filename || `anexo_${index + 1}`}
                         </span>
-                        {anexo.size && (
+                        {anexo?.size && (
                           <span className={styles.attachmentSize}>
                             {(anexo.size / 1024).toFixed(1)} KB
                           </span>
@@ -511,32 +541,27 @@ const rejectTask = async () => {
               <h3>Comentários</h3>
             </div>
             <div className={styles.sectionContent}>
-              {/* Lista de comentários */}
               <div className={styles.commentsList}>
                 {comments.length === 0 ? (
                   <p className={styles.noComments}>Nenhum comentário ainda.</p>
                 ) : (
-                  comments.map((comment) => (
-                    <div key={comment.id} className={styles.comment}>
+                  comments.map((c) => (
+                    <div key={c.id} className={styles.comment}>
                       <div className={styles.commentHeader}>
                         <span className={styles.commentAuthor}>
-                          {comment.user?.name || "Usuário"}
+                          {c.user?.name || "Usuário"}
                         </span>
                         <span className={styles.commentDate}>
-                          {formatDate(comment.created_at)}
+                          {formatDate(c.created_at)}
                         </span>
                       </div>
-                      <p className={styles.commentContent}>{comment.content}</p>
+                      <p className={styles.commentContent}>{c.content}</p>
                     </div>
                   ))
                 )}
               </div>
 
-              {/* Formulário de novo comentário */}
-              <form
-                onSubmit={handleCommentSubmit}
-                className={styles.commentForm}
-              >
+              <form onSubmit={handleCommentSubmit} className={styles.commentForm}>
                 <textarea
                   value={comment}
                   onChange={(e) => setComment(e.target.value)}
@@ -557,9 +582,8 @@ const rejectTask = async () => {
           </div>
         </div>
 
-        {/* Footer do Modal */}
+        {/* Footer */}
         <div className={styles.modalFooter}>
-
           {/* Colaborador: enviar para aprovação */}
           {canSubmitForApproval() && (
             <button
@@ -594,11 +618,11 @@ const rejectTask = async () => {
             </>
           )}
 
-          {/* Ações padrão */}
           <div className={styles.footerRight}>
             <button
               className={`${styles.actionButton} ${styles.editButton}`}
               onClick={handleEdit}
+              title="Editar tarefa"
             >
               <FiEdit />
               Editar
@@ -606,6 +630,7 @@ const rejectTask = async () => {
             <button
               className={`${styles.actionButton} ${styles.deleteButton}`}
               onClick={handleDeleteClick}
+              title="Excluir tarefa"
             >
               <FiTrash2 />
               Excluir
@@ -615,13 +640,16 @@ const rejectTask = async () => {
       </div>
 
       {/* Modal de confirmação de exclusão */}
-      <DeleteConfirmModal
-        isOpen={showDeleteModal}
-        onCancel={handleCancelDelete}
-        onConfirm={handleDelete}
-        taskTitle={task.title}
-        message={`Tem certeza que deseja excluir a tarefa "${task?.title}"?`}
-      />
+      {showDeleteModal && (
+        <DeleteConfirmModal
+          isOpen={showDeleteModal}
+          onClose={() => setShowDeleteModal(false)}
+          onConfirm={handleDelete}
+          isDeleting={deleting}
+          title="Confirmar Exclusão"
+          message={`Tem certeza que deseja excluir a tarefa "${task?.title}"? Esta ação não pode ser desfeita.`}
+        />
+      )}
     </div>
   );
 };
