@@ -52,6 +52,95 @@ def _coerce_item(x):
     s = str(x)
     return int(s) if s.isdigit() else s
 
+import re
+from models.tag_model import Tag
+from extensions import db
+
+HEX_RE = re.compile(r"^#([0-9A-Fa-f]{6})$")
+
+_DEFAULT_TAG_COLORS = [
+    "#2563eb", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6",
+    "#06b6d4", "#84cc16", "#f97316", "#ec4899", "#14b8a6",
+]
+
+def _norm_tag_name(s: str) -> str:
+    return re.sub(r"\s+", " ", (s or "").strip())
+
+def _stable_color_for_name(name: str) -> str:
+    if not name:
+        return _DEFAULT_TAG_COLORS[0]
+    h = 0
+    for ch in name.lower():
+        h = (h * 31 + ord(ch)) & 0xFFFFFFFF
+    return _DEFAULT_TAG_COLORS[h % len(_DEFAULT_TAG_COLORS)]
+
+def _extract_name_and_color(item) -> tuple[str, str|None]:
+    # aceita "Projeto" ou {"name":"Projeto","color":"#RRGGBB"} ou {"label":"Projeto"}
+    if isinstance(item, str):
+        n = _norm_tag_name(item)
+        c = None
+    elif isinstance(item, dict):
+        n = _norm_tag_name(item.get("name") or item.get("label") or "")
+        raw = (item.get("color") or "").strip() or None
+        c = raw if (raw and HEX_RE.match(raw)) else None
+    else:
+        return "", None
+    return n, c
+
+def get_or_create_tag(name: str, requested_color: str|None, created_by_user_id: int|None):
+    n = _norm_tag_name(name)
+    if not n:
+        return None, False
+    slug = n.lower()
+
+    tag = Tag.query.filter_by(slug=slug).first()
+    if tag:
+        # já existe -> cor é IMUTÁVEL, ignora requested_color
+        return tag, False
+
+    color = requested_color or _stable_color_for_name(n)
+    tag = Tag(name=n, slug=slug, color=color, created_by_user_id=created_by_user_id)
+    db.session.add(tag)
+    # não commit aqui; quem chama comita junto da task
+    return tag, True
+
+def resolve_tags_from_payload(input_tags, created_by_user_id: int|None):
+    """
+    Recebe lista heterogênea e retorna:
+    - tag_names: lista única e ordenada de nomes (para gravar na Task)
+    - color_map: dict {name: color} (pra responder na API)
+    """
+    if not isinstance(input_tags, list):
+        return [], {}
+
+    seen = set()
+    names = []
+    color_map = {}
+
+    for it in input_tags:
+        name, req_color = _extract_name_and_color(it)
+        if not name:
+            continue
+        tag, _created = get_or_create_tag(name, req_color, created_by_user_id)
+        key = tag.name.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        names.append(tag.name)         # grava “nome bonito”
+        color_map[tag.name] = tag.color
+
+    return names, color_map
+
+def get_color_map_for_names(names: list[str]) -> dict[str, str]:
+    if not names: 
+        return {}
+    slugs = [ _norm_tag_name(n).lower() for n in names if _norm_tag_name(n) ]
+    if not slugs:
+        return {}
+    rows = Tag.query.filter(Tag.slug.in_(slugs)).all()
+    return { r.name: r.color for r in rows }
+
+
 def _is_manager_for_task(user: User, task: Task) -> bool:
     """
     Regra de quem pode APROVAR/REJEITAR:
@@ -123,6 +212,12 @@ def _normalize_subtasks_list(lst):
         })
     return sorted(out, key=lambda x: (x["order"], str(x.get("id"))))
 
+def _decorate_task_with_tag_colors(task: Task) -> dict:
+    payload = task.to_dict()
+    names = payload.get("tags") or []
+    cmap = get_color_map_for_names(names)
+    payload["tags"] = [{"name": n, "color": cmap.get(n) or _stable_color_for_name(n)} for n in names]
+    return payload
 
 def normalize_task_snapshot(d: dict) -> dict:
     """
@@ -580,7 +675,8 @@ def get_tasks():
     # enrich anexos
     tasks_data = []
     for task in tasks:
-        task_dict = task.to_dict()
+        # inclui cores canônicas das tags
+        task_dict = _decorate_task_with_tag_colors(task)
         task_dict["assigned_users"] = [int(uid) for uid in task_dict.get("assigned_users", [])]
         task_dict["collaborators"] = [int(uid) for uid in task_dict.get("collaborators", [])]
 
@@ -656,7 +752,7 @@ def get_task_counts():
 @task_bp.route("/tasks", methods=["POST"])
 @jwt_required()
 def add_task():
-    from datetime import datetime 
+    from datetime import datetime
     try:
         user_id = get_jwt_identity()
         user = User.query.get(user_id)
@@ -670,6 +766,7 @@ def add_task():
         if not data.get("title"):
             return jsonify({"error": "O campo título é obrigatório."}), 400
 
+        # --- due_date ---
         due_date = None
         if data.get("due_date"):
             try:
@@ -681,7 +778,7 @@ def add_task():
             except ValueError:
                 return jsonify({"error": "Formato inválido para due_date. Use ISO 8601."}), 400
 
-        # Verifica se a task é de equipe
+        # --- team ---
         team_id = data.get("team_id")
         if team_id:
             try:
@@ -699,14 +796,14 @@ def add_task():
         else:
             team_id = None
 
-        # 🚧 Blindagem do requires_approval (anti-bypass)
+        # --- requires_approval blindagem ---
         req_approval_flag = str(data.get("requires_approval", "false")).lower() in ("1","true","yes")
         is_manager_or_admin = bool(user.is_admin or any(assoc.is_manager for assoc in user.teams))
         is_team_task = bool(team_id)
         if req_approval_flag and not (is_team_task or is_manager_or_admin):
             return jsonify({"error": "Aprovação do gestor só é permitida para gestores ou tarefas de equipe."}), 403
 
-        # Processar usuários atribuídos
+        # --- assigned_to ---
         assigned_to_user_ids = data.get("assigned_to_user_ids")
         if assigned_to_user_ids:
             try:
@@ -721,7 +818,6 @@ def add_task():
                     if not isinstance(assigned_to_user_ids, list):
                         raise ValueError("assigned_to_user_ids deve ser uma lista de IDs ou 'all'.")
 
-                # Valida atribuição
                 if team_id:
                     for assigned_user_id in assigned_to_user_ids:
                         assigned_user = User.query.get(assigned_user_id)
@@ -736,16 +832,15 @@ def add_task():
             except (json.JSONDecodeError, ValueError) as e:
                 return jsonify({"error": f"Formato inválido para assigned_to_user_ids: {str(e)}"}), 400
 
-        # Definir usuário principal da tarefa
+        # --- define responsável principal ---
         if assigned_to_user_ids:
             task_user_id = assigned_to_user_ids[0]
         else:
-            task_user_id = user_id  # garante sempre um responsável
-
+            task_user_id = user_id
         assigned_by_user_id = user_id if task_user_id != user_id else None
         assigned_users = assigned_to_user_ids if assigned_to_user_ids else [task_user_id]
 
-        # Processar colaboradores
+        # --- collaborators ---
         collaborators = []
         if data.get("collaborator_ids"):
             try:
@@ -766,7 +861,7 @@ def add_task():
             except (json.JSONDecodeError, ValueError):
                 return jsonify({"error": "Formato inválido para collaborator_ids."}), 400
 
-        # Processar anexos
+        # --- anexos ---
         anexos_data = []
         for file in files:
             if file.filename:
@@ -781,19 +876,20 @@ def add_task():
                     "url": f"{request.scheme}://{request.host}/uploads/{filename}"
                 })
 
-        # Lembretes e tags
+        # --- lembretes ---
         try:
             lembretes = json.loads(data.get("lembretes", "[]"))
         except Exception:
             lembretes = []
 
+        # --- TAGS (catálogo canônico) ---
         try:
-            tags = json.loads(data.get("tags", "[]"))
+            raw_tags = json.loads(data.get("tags", "[]"))
         except Exception:
-            tags = []
+            raw_tags = []
+        tag_names, _color_map = resolve_tags_from_payload(raw_tags, created_by_user_id=user_id)
 
-        tags = _normalize_tags_any(tags, team_id)
-        # Criar a task
+        # --- cria task ---
         new_task = Task(
             title=data["title"],
             description=data.get("description"),
@@ -811,14 +907,15 @@ def add_task():
             tempo_unidade=data.get("tempo_unidade"),
             relacionado_a=data.get("relacionado_a"),
             lembretes=lembretes,
-            tags=tags,
+            tags=tag_names,           # <— grava SÓ nomes
             anexos=anexos_data,
             requires_approval=req_approval_flag
         )
 
         db.session.add(new_task)
-        db.session.commit()
+        db.session.commit()  # também persiste tags criadas
 
+        # --- calendário (opcional) ---
         try:
             create_cal = str(request.form.get("create_calendar_event", "false")).lower() in ("1", "true", "yes", "on")
             if create_cal and new_task.due_date:
@@ -829,7 +926,7 @@ def add_task():
         except Exception:
             current_app.logger.exception("[CAL] Falha ao criar/atualizar evento da task %s", new_task.id)
 
-        # Registrar auditoria
+        # --- auditoria ---
         AuditLog.log_action(
             user_id=user_id,
             action="CREATE",
@@ -840,11 +937,12 @@ def add_task():
             user_agent=request.headers.get("User-Agent")
         )
 
-        # Agendar lembretes se configurados
+        # --- lembretes ---
         if new_task.lembretes and new_task.due_date:
             schedule_task_reminders_safe(new_task)
 
-        return jsonify(new_task.to_dict()), 201
+        # responde já decorado com cores
+        return jsonify(_decorate_task_with_tag_colors(new_task)), 201
 
     except Exception as e:
         import traceback
@@ -868,7 +966,7 @@ def get_task(task_id):
     if not task.can_be_viewed_by(user):
         return jsonify({"error": "Acesso negado"}), 403
 
-    task_dict = task.to_dict()
+    task_dict = _decorate_task_with_tag_colors(task)
     
     # Enriquecer anexos com URLs completas
     if task_dict.get("anexos"):
@@ -898,14 +996,14 @@ def get_task(task_id):
 def update_task(task_id):
     """
     Atualiza tarefa mantendo coerência entre status, completed_at e archived_at.
-    Observação: quaisquer valores enviados de completed_at/archived_at no payload são ignorados.
+    Ignora qualquer tentativa de mudar cor de tag existente (imutável no catálogo).
     """
     from models.audit_log_model import AuditLog
     from sqlalchemy import desc
     from werkzeug.utils import secure_filename
     import os
 
-    # (debug) últimos logs
+    # debug: últimos logs
     last = AuditLog.query.order_by(desc(AuditLog.id)).limit(5).all()
     try:
         print([(l.id, l.action, l.resource_type, l.resource_id, l.created_at) for l in last])
@@ -926,31 +1024,24 @@ def update_task(task_id):
     if not (can_basic_edit or can_reassign):
         return jsonify({"error": "Acesso negado"}), 403
 
-    # ----------------------------------------------------
-    # Payload + leitura da flag create_calendar_event
-    # ----------------------------------------------------
-    create_cal_flag = False  # garante existência em todos os fluxos
-
+    # --- payload + calendar flag ---
+    create_cal_flag = False
     if request.is_json:
         data = request.get_json()
         files = []
         val = data.get("create_calendar_event")
         if val is not None:
             create_cal_flag = str(val).lower() in ("1", "true", "yes", "on")
-
     elif request.content_type and request.content_type.startswith("multipart/form-data"):
         data = request.form
         files = request.files.getlist("new_files")
         val = data.get("create_calendar_event")
         if val is not None:
             create_cal_flag = str(val).lower() in ("1", "true", "yes", "on")
-
     else:
         return jsonify({"error": "Content-Type inválido. Use application/json ou multipart/form-data."}), 400
 
-    # ----------------------------------------------------
-    # due_date (pode vir no update; valida só depois de aplicar)
-    # ----------------------------------------------------
+    # --- due_date ---
     if data.get("due_date"):
         try:
             due_date = datetime.fromisoformat(data["due_date"])
@@ -962,9 +1053,7 @@ def update_task(task_id):
         except ValueError:
             return jsonify({"error": "Formato inválido para due_date. Use ISO 8601."}), 400
 
-    # ----------------------------------------------------
-    # Campos básicos
-    # ----------------------------------------------------
+    # --- básicos ---
     if data.get("title") is not None:
         task.title = data["title"]
     if data.get("description") is not None:
@@ -982,9 +1071,7 @@ def update_task(task_id):
     if data.get("relacionado_a") is not None:
         task.relacionado_a = data["relacionado_a"]
 
-    # ----------------------------------------------------
-    # Blindagem do requires_approval (anti-bypass)
-    # ----------------------------------------------------
+    # --- requires_approval blindagem ---
     if data.get("requires_approval") is not None:
         ra_flag = str(data.get("requires_approval")).lower() in ("1", "true", "yes")
         is_manager_or_admin = bool(user.is_admin or any(assoc.is_manager for assoc in user.teams))
@@ -995,7 +1082,6 @@ def update_task(task_id):
 
         task.requires_approval = ra_flag
 
-        # Se passou a exigir aprovação e já está 'done', força revisão até aprovar
         if ra_flag and task.status == 'done' and not task.is_approved():
             task.status = 'in_progress'
             task.completed_at = None
@@ -1003,9 +1089,7 @@ def update_task(task_id):
             task.approved_by_user_id = None
             task.approved_at = None
 
-    # ----------------------------------------------------
-    # Status & timestamps coerentes
-    # ----------------------------------------------------
+    # --- status + timestamps coerentes ---
     ALLOWED_STATUSES = {"pending", "in_progress", "done", "cancelled", "archived"}
     prev_status = task.status
     if "status" in data:
@@ -1016,24 +1100,20 @@ def update_task(task_id):
 
         now = datetime.utcnow()
 
-        # Bloqueia conclusão se faltar aprovação
         if new_status == "done":
             try:
-                task.mark_done()  # aplica regra de aprovação internamente
+                task.mark_done()
             except ValueError as ve:
                 return jsonify({"error": str(ve)}), 409
         else:
-            # transições normais
             task.status = new_status
 
-            # saiu de done?
             if prev_status == "done" and new_status != "done":
                 task.completed_at = None
                 if new_status != "archived":
                     task.archived_at = None
                     task.archived_by_user_id = None
 
-            # indo para arquivado?
             if new_status == "archived" and prev_status != "archived":
                 task.archived_at = now
                 task.archived_by_user_id = user_id
@@ -1043,9 +1123,7 @@ def update_task(task_id):
                 task.archived_at = None
                 task.archived_by_user_id = None
 
-    # ----------------------------------------------------
-    # Reatribuição (se pode e se mudou)
-    # ----------------------------------------------------
+    # --- reassign ---
     def _reassign_to(new_user_id: int):
         nonlocal task, user_id
         if new_user_id != task.user_id:
@@ -1067,9 +1145,7 @@ def update_task(task_id):
             except ValueError:
                 return jsonify({"error": "assigned_to_user_id inválido"}), 400
 
-    # ----------------------------------------------------
-    # Colaboradores (se pode reatribuir)
-    # ----------------------------------------------------
+    # --- collaborators ---
     if data.get("collaborator_ids") is not None and can_reassign:
         try:
             collaborators = json.loads(data["collaborator_ids"])
@@ -1078,9 +1154,7 @@ def update_task(task_id):
         except (json.JSONDecodeError, ValueError):
             return jsonify({"error": "Formato inválido para collaborator_ids."}), 400
 
-    # ----------------------------------------------------
-    # Anexos (multipart)
-    # ----------------------------------------------------
+    # --- anexos (multipart) ---
     if request.content_type and request.content_type.startswith("multipart/form-data"):
         existing_files_data = data.get("existing_files")
         if existing_files_data:
@@ -1120,9 +1194,7 @@ def update_task(task_id):
                         "url": f"{request.scheme}://{request.host}/uploads/{filename}"
                     })
 
-        # ----------------------------------------------------
-    # Tags / Lembretes
-    # ----------------------------------------------------
+    # --- lembretes ---
     try:
         lembretes = json.loads(data.get("lembretes", "[]"))
         if isinstance(lembretes, list):
@@ -1130,16 +1202,7 @@ def update_task(task_id):
     except Exception:
         pass
 
-    try:
-        raw_tags = json.loads(data.get("tags", "[]"))
-        if isinstance(raw_tags, list):
-            task.tags = _normalize_tags_any(raw_tags, task.team_id)
-    except Exception:
-        pass
-
-     # ----------------------------------------------------
-    # Subtasks (bulk update)
-    # ----------------------------------------------------
+    # --- SUBTASKS ---
     if data.get("subtasks") is not None:
         try:
             incoming = data["subtasks"]
@@ -1152,16 +1215,22 @@ def update_task(task_id):
                 except Exception:
                     pass
         except Exception:
-            return jsonify({"error": "Formato inválido para subtasks"}), 400   
-    # ----------------------------------------------------
-    # Validação final para calendário (depois de possível update da due_date)
-    # ----------------------------------------------------
+            return jsonify({"error": "Formato inválido para subtasks"}), 400
+
+    # --- TAGS (catálogo canônico) ---
+    try:
+        raw_tags = json.loads(data.get("tags", "[]"))
+        if isinstance(raw_tags, list):
+            tag_names, _ = resolve_tags_from_payload(raw_tags, created_by_user_id=user_id)
+            task.tags = tag_names         # <— grava SÓ nomes (cor imutável no catálogo)
+    except Exception:
+        pass
+
+    # --- valida calendário ---
     if create_cal_flag and not task.due_date:
         return jsonify({"error": "Para adicionar ao Outlook, defina a Data de Vencimento."}), 400
 
-    # ----------------------------------------------------
-    # Salvar e auditoria
-    # ----------------------------------------------------
+    # --- salvar + calendário ---
     task.updated_at = datetime.utcnow()
     db.session.commit()
 
@@ -1170,19 +1239,16 @@ def update_task(task_id):
             ensure_event_for_task(task, actor_user_id=user_id)
             db.session.commit()
         elif not create_cal_flag and task.ms_event_id:
-            # usuário desmarcou o toggle no update -> apagar no Outlook
             delete_event_for_task(task, actor_user_id=user_id)
             db.session.commit()
     except Exception:
         current_app.logger.exception("[CAL] Falha ao sincronizar evento (update) task %s", task.id)
 
-
-    # Auditoria (diff)
+    # --- auditoria (diff) ---
     try:
         after_state = task.to_dict()
         changes = diff_snapshots(before_state, after_state)
         desc = f"Mudanças:\n{format_changes_for_description(changes)}"
-
         created = None
         try:
             created = AuditLog.log_action(
@@ -1211,15 +1277,15 @@ def update_task(task_id):
             current_app.logger.info(f"[AUDIT] UPDATE task={task.id} audit_id={getattr(created, 'id', None)}")
         except Exception:
             pass
-
     except Exception:
         current_app.logger.exception("Falha ao registrar auditoria (UPDATE)")
 
-    # Reagendar lembretes (apenas se ainda houver due_date)
+    # --- lembretes ---
     if task.lembretes and task.due_date:
         schedule_task_reminders_safe(task)
 
-    return jsonify(task.to_dict())
+    # responde já decorado com cores
+    return jsonify(_decorate_task_with_tag_colors(task))
 
 @task_bp.route("/tasks/<int:task_id>", methods=["DELETE"])
 @jwt_required()
@@ -1796,30 +1862,67 @@ def reject_task(task_id):
 @jwt_required()
 def tag_suggestions():
     """
-    Retorna lista de {name,color} sugeridos para a equipe (ou pessoais se team_id ausente).
-    Útil pro autocomplete com cor padrão.
+    Sugere tags do catálogo canônico.
+    Sem ?q= -> retorna [] (nada de sugestão no foco).
     """
+    from models.tag_model import Tag
+    q = (request.args.get("q") or "").strip()
+    if not q:
+        return jsonify([]), 200
+
+    like = f"%{q}%"
+    rows = (Tag.query
+                .filter(Tag.name.ilike(like))
+                .order_by(Tag.name.asc())
+                .limit(20)
+                .all())
+    return jsonify([{"name": r.name, "color": r.color} for r in rows]), 200
+
+@task_bp.route("/tags/colors", methods=["GET"])
+@jwt_required()
+def tag_colors():
+    """
+    GET /api/tags/colors?names=Projeto,Financeiro,URGENTE
+    Retorna a cor canônica e se a tag existe no catálogo.
+    """
+    names_param = request.args.get("names") or ""
+    names = [n.strip() for n in names_param.split(",") if n.strip()]
+    cmap = get_color_map_for_names(names)
+    existing = set(cmap.keys())
+    return jsonify([
+        {
+            "name": n,
+            "color": cmap.get(n) or _stable_color_for_name(n),
+            "exists": n in existing,
+        }
+        for n in names
+    ]), 200
+
+@task_bp.route("/tags", methods=["POST"])
+@jwt_required()
+def create_tag():
+    """
+    Cria tag nova. Se já existir (case-insensitive), retorna 409 com os dados da existente.
+    """
+    data = request.get_json(force=True)
+    name = _norm_tag_name(data.get("name") or "")
+    color = (data.get("color") or "").strip() or None
+
+    if not name:
+        return jsonify({"error": "name é obrigatório"}), 400
+
     user_id = int(get_jwt_identity())
-    user = User.query.get(user_id)
+    tag = Tag.query.filter_by(slug=name.lower()).first()
+    if tag:
+        return jsonify({"message": "Tag já existe", "tag": {"name": tag.name, "color": tag.color}}), 409
 
-    team_id_param = request.args.get("team_id")
-    team_id = None
-    if team_id_param not in (None, "", "null"):
-        try:
-            team_id = int(team_id_param)
-        except ValueError:
-            return jsonify({"error": "team_id inválido."}), 400
+    if color and not HEX_RE.match(color):
+        return jsonify({"error": "Cor inválida. Use #RRGGBB."}), 400
 
-        # permissão básica: precisa ser admin ou membro da equipe
-        if not user.is_admin:
-            user_team_ids = [assoc.team_id for assoc in user.teams]
-            if team_id not in user_team_ids:
-                return jsonify({"error": "Acesso negado para esta equipe."}), 403
+    tag, _ = get_or_create_tag(name, color, user_id)
+    db.session.commit()
+    return jsonify({"name": tag.name, "color": tag.color}), 201
 
-    mapping = _collect_team_tag_colors(team_id)
-    # devolve como lista
-    out = [{"name": n, "color": c} for n, c in sorted(mapping.items(), key=lambda x: x[0].lower())]
-    return jsonify(out), 200
 
 @task_bp.route("/tasks/<int:task_id>/subtasks", methods=["GET"])
 @jwt_required()

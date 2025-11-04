@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import styles from './TagInput.module.css';
+import api from '../../services/axiosInstance';
 
 // ===== helpers de cor =====
 const DEFAULT_TAG_COLORS = [
@@ -60,18 +61,21 @@ const TagInput = ({
   const inputRef = useRef(null);
   const containerRef = useRef(null);
   const popoverRef = useRef(null);
+  const [remoteSuggestions, setRemoteSuggestions] = useState([]);
+  const [lockedNames, setLockedNames] = useState(new Set());
 
   // mapa de sugestões
   const suggestionsMap = useMemo(() => {
     const map = new Map();
-    for (const s of suggestions || []) {
+    const source = (remoteSuggestions && Array.isArray(remoteSuggestions)) ? remoteSuggestions : (suggestions || []);
+    for (const s of source) {
       const obj = typeof s === 'string' ? { name: s, color: stableColorFor(s) } : { name: s?.name || s?.label || '', color: s?.color };
       if (!obj.name) continue;
       if (!obj.color) obj.color = stableColorFor(obj.name);
       map.set(obj.name.toLowerCase(), obj);
     }
     return map;
-  }, [suggestions]);
+  }, [remoteSuggestions, suggestions]);
 
   // value normalizado
   const normalizedValue = useMemo(() => {
@@ -90,7 +94,7 @@ const TagInput = ({
     const term = inputValue.trim().toLowerCase();
     const selected = new Set(normalizedValue.map(t => t.name.toLowerCase()));
     const list = Array.from(suggestionsMap.values())
-      .filter(s => !selected.has(s.name.toLowerCase()) && (term ? s.name.toLowerCase().includes(term) : true));
+      .filter(s => !selected.has(s.name.toLowerCase()) && (term ? s.name.toLowerCase().includes(term) : false));
     if (term && !selected.has(term) && !suggestionsMap.has(term)) {
       list.unshift({ name: inputValue.trim(), color: stableColorFor(inputValue.trim()), __new: true });
     }
@@ -112,6 +116,48 @@ const TagInput = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // Buscar sugestões remotas conforme digita
+  useEffect(() => {
+    let active = true;
+    const term = inputValue.trim();
+    if (!term) {
+      setRemoteSuggestions([]);
+      return;
+    }
+    const ctrl = new AbortController();
+    const timer = setTimeout(async () => {
+      try {
+        const { data } = await api.get(`/tags/suggestions`, { params: { q: term }, signal: ctrl.signal });
+        if (active) setRemoteSuggestions(Array.isArray(data) ? data : []);
+      } catch {
+        if (active) setRemoteSuggestions([]);
+      }
+    }, 200);
+    return () => { active = false; clearTimeout(timer); ctrl.abort(); };
+  }, [inputValue]);
+
+  // Travar cor das tags já existentes no catálogo
+  useEffect(() => {
+    const names = (normalizedValue || []).map(t => t.name).filter(Boolean);
+    if (names.length === 0) { setLockedNames(new Set()); return; }
+    const qs = names.join(',');
+    let active = true;
+    (async () => {
+      try {
+        const { data } = await api.get(`/tags/colors`, { params: { names: qs } });
+        if (!active) return;
+        const next = new Set();
+        (Array.isArray(data) ? data : []).forEach(row => {
+          if (row && row.name && row.exists) next.add(String(row.name).toLowerCase());
+        });
+        setLockedNames(next);
+      } catch {
+        // silêncio: mantém estado atual
+      }
+    })();
+    return () => { active = false; };
+  }, [JSON.stringify((normalizedValue || []).map(t => t.name).sort())]);
+
   const emit = (arr) => onChange?.(normOut(arr));
 
   const addTag = (raw) => {
@@ -119,6 +165,15 @@ const TagInput = ({
     if (!obj) return;
     const exists = normalizedValue.some(t => t.name.toLowerCase() === obj.name.toLowerCase());
     if (exists || normalizedValue.length >= maxTags) return;
+
+    const key = obj.name.toLowerCase();
+    const existsInCatalog = (typeof raw === 'object' && raw.__new === true) ? false : suggestionsMap.has(key);
+    setLockedNames((prev) => {
+      const next = new Set(prev);
+      if (existsInCatalog) next.add(key);
+      return next;
+    });
+
     emit([...normalizedValue, obj]);
     setInputValue('');
     setShowSuggestions(false);
@@ -131,7 +186,9 @@ const TagInput = ({
   };
 
   const updateColor = (name, color) => {
-    const next = normalizedValue.map(t => t.name.toLowerCase() === name.toLowerCase() ? { ...t, color } : t);
+    const key = name.toLowerCase();
+    if (lockedNames.has(key)) return;
+    const next = normalizedValue.map(t => t.name.toLowerCase() === key ? { ...t, color } : t);
     emit(next);
   };
 
@@ -152,6 +209,7 @@ const TagInput = ({
 
   const openPopover = (tag) => {
     if (!allowColorPick) return;
+    if (lockedNames.has((tag.name || '').toLowerCase())) return;
     setTempHex(tag.color || stableColorFor(tag.name));
     setPopoverFor(tag.name);
   };
@@ -183,7 +241,7 @@ const TagInput = ({
               <div key={t.name} className={styles.tagShell}>
                 <div className={styles.tag} style={{ backgroundColor: bg, color: fg }}>
                   {/* swatch + nome */}
-                  {allowColorPick && (
+                  {allowColorPick && !lockedNames.has((t.name || '').toLowerCase()) && (
                     <button
                       type="button"
                       className={styles.colorDot}
@@ -243,9 +301,13 @@ const TagInput = ({
             type="text"
             className={styles.tagInput}
             value={inputValue}
-            onChange={(e) => { setInputValue(e.target.value); setShowSuggestions(true); }}
+            onChange={(e) => {
+              const v = e.target.value;
+              setInputValue(v);
+              setShowSuggestions(!!v.trim());
+            }}
             onKeyDown={handleKeyDown}
-            onFocus={() => setShowSuggestions(true)}
+            onFocus={() => { /* sem sugestões no foco; só ao digitar */ }}
             placeholder={normalizedValue.length === 0 ? placeholder : ''}
             disabled={normalizedValue.length >= maxTags}
           />

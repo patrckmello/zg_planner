@@ -459,20 +459,12 @@ function EditTaskFormPage() {
       // —— Arrays JSON
       formDataToSend.append("lembretes", JSON.stringify(formData.lembretes || []));
 
-      // ===== TAGS: enviando apenas os nomes (compatível com backend atual) =====
-      const tagsPayloadNamesOnly = (formData.tags || []).map((t) =>
-        typeof t === "string" ? t : t.name
-      );
-      formDataToSend.append("tags", JSON.stringify(tagsPayloadNamesOnly));
-
-      // --- Se o backend aceitar cor, troque pelo bloco abaixo e remova o de cima:
-      /*
+      // ===== TAGS: enviar nome + cor (backend resolve cor canônica e ignora alteração em existentes) =====
       const tagsPayloadWithColor = (formData.tags || []).map((t) => {
         if (typeof t === "string") return { name: t };
         return { name: t.name, color: t.color || undefined };
       });
       formDataToSend.append("tags", JSON.stringify(tagsPayloadWithColor));
-      */
 
       formDataToSend.append(
         "collaborator_ids",

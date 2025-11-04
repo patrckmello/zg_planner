@@ -231,26 +231,6 @@ const TaskCard = ({ task, isDragging = false, onTaskUpdate }) => {
           </div>
         )}
 
-        <div className={styles.taskIndicators}>
-          {task.tags && task.tags.length > 0 && (
-            <div className={styles.indicator} title={`${task.tags.length} tag(s)`}>
-              <FiTag />
-              <span>{task.tags.length}</span>
-            </div>
-          )}
-          {task.anexos && task.anexos.length > 0 && (
-            <div className={styles.indicator} title={`${task.anexos.length} anexo(s)`}>
-              <FiPaperclip />
-              <span>{task.anexos.length}</span>
-            </div>
-          )}
-          {task.collaborators && task.collaborators.length > 0 && (
-            <div className={styles.indicator} title={`${task.collaborators.length} colaborador(es)`}>
-              <FiEye />
-              <span>{task.collaborators.length}</span>
-            </div>
-          )}
-        </div>
       </div>
 
       <TaskModal
