@@ -4,6 +4,7 @@ import { toast } from "react-toastify";
 import styles from "./TaskModal.module.css";
 import api from "../services/axiosInstance";
 import DeleteConfirmModal from "./DeleteConfirmModal";
+import Checkbox from "./Checkbox/Checkbox";
 import {
   FiX,
   FiEdit,
@@ -23,6 +24,7 @@ import {
   FiFileText,
   FiUserCheck,
   FiClipboard,
+  FiCheckCircle,
 } from "react-icons/fi";
 
 const TaskModal = ({ task, isOpen, onClose, onTaskUpdate }) => {
@@ -34,14 +36,19 @@ const TaskModal = ({ task, isOpen, onClose, onTaskUpdate }) => {
   const [currentUser, setCurrentUser] = useState(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
+  // === Subtasks state (local p/ update otimista) ===
+  const [subtasks, setSubtasks] = useState(Array.isArray(task?.subtasks) ? task.subtasks : []);
+
   useEffect(() => {
     if (isOpen && task) {
       fetchTaskDetails();
       fetchCurrentUser();
+      setSubtasks(Array.isArray(task?.subtasks) ? task.subtasks : []);
     } else if (!isOpen) {
       setShowDeleteModal(false);
       setComment("");
       setComments([]);
+      setSubtasks([]);
     }
   }, [isOpen, task?.id]);
 
@@ -238,12 +245,79 @@ const TaskModal = ({ task, isOpen, onClose, onTaskUpdate }) => {
 
   // === Andamento (subtasks) ===
   const progress = useMemo(() => {
-    const list = Array.isArray(task?.subtasks) ? task.subtasks : [];
+    const list = Array.isArray(subtasks) ? subtasks : [];
     const total = list.length;
     const finished = list.filter((s) => s?.done).length;
     const percent = total === 0 ? 0 : Math.round((finished / total) * 100);
     return { total, finished, percent };
-  }, [task?.subtasks]);
+  }, [subtasks]);
+
+  const patchSubtaskDone = async (subtaskId, newDone) => {
+    // Ajuste o endpoint conforme teu backend:
+    // opção A (id direto): PATCH /tasks/:taskId/subtasks/:subtaskId { done }
+    // opção B (corpo genérico): PATCH /tasks/:taskId/subtasks { id, done }
+    return api.patch(`/tasks/${task.id}/subtasks/${subtaskId}`, { done: newDone });
+  };
+
+  const handleToggleSubtask = async (sub, forcedDone) => {
+    const newDone = typeof forcedDone === "boolean" ? forcedDone : !sub.done;
+
+    // Update otimista
+    setSubtasks((prev) =>
+      prev.map((s) =>
+        s.id === sub.id
+          ? {
+              ...s,
+              done: newDone,
+              done_at: newDone ? new Date().toISOString() : null,
+              done_by_user: newDone
+                ? { id: currentUser?.id, name: currentUser?.name }
+                : null,
+            }
+          : s
+      )
+    );
+
+    try {
+      await patchSubtaskDone(sub.id, newDone);
+      // Reflete para o pai, se quiser sincronizar
+      onTaskUpdate?.(task.id, { subtasks: subtasks.map((s) => (s.id === sub.id ? { ...s, done: newDone } : s)) });
+    } catch (err) {
+      // Reverte em falha
+      setSubtasks((prev) =>
+        prev.map((s) => (s.id === sub.id ? { ...s, done: !newDone } : s))
+      );
+      console.error("Falha ao atualizar subtask:", err);
+      toast.error("Não foi possível atualizar a subtask.");
+    }
+  };
+
+  const handleCompleteAll = async () => {
+    if (!subtasks.length) return;
+    const allDone = subtasks.every((s) => s.done);
+    const target = !allDone; // se todas feitas, o botão vira "reabrir tudo"
+
+    // Otimista
+    const before = subtasks;
+    setSubtasks((prev) => prev.map((s) => ({ ...s, done: target })));
+
+    try {
+      // Endpoint em lote, se tiver. Senão faz Promise.all:
+      // await api.patch(`/tasks/${task.id}/subtasks/bulk`, { done: target });
+      await Promise.all(
+        before.map((s) => patchSubtaskDone(s.id, target))
+      );
+      onTaskUpdate?.(task.id, {
+        subtasks: before.map((s) => ({ ...s, done: target })),
+      });
+      toast.success(target ? "Todas subtasks concluídas." : "Subtasks reabertas.");
+    } catch (err) {
+      // Reverte
+      setSubtasks(before);
+      console.error("Falha no concluir tudo:", err);
+      toast.error("Não foi possível atualizar todas as subtasks.");
+    }
+  };
 
   if (!isOpen || !task) return null;
 
@@ -271,26 +345,7 @@ const TaskModal = ({ task, isOpen, onClose, onTaskUpdate }) => {
 
         {/* Body */}
         <div className={styles.modalBody}>
-          {/* === ANDAMENTO === */}
-          {progress.total > 0 && (
-            <div className={styles.section}>
-              <div className={styles.sectionHeader}>
-                <FiClipboard className={styles.sectionIcon} />
-                <h3>Andamento</h3>
-                <span className={styles.progressLabel}>
-                  {progress.finished}/{progress.total} • {progress.percent}%
-                </span>
-              </div>
-              <div className={styles.sectionContent}>
-                <div className={styles.progressTrack} aria-label="Andamento">
-                  <div
-                    className={styles.progressBar}
-                    style={{ width: `${progress.percent}%` }}
-                  />
-                </div>
-              </div>
-            </div>
-          )}
+          {/* === (REMOVIDO do topo) ANDAMENTO foi movido para perto dos comentários === */}
 
           {/* Básicas */}
           <div className={styles.section}>
@@ -530,6 +585,82 @@ const TaskModal = ({ task, isOpen, onClose, onTaskUpdate }) => {
                     </div>
                   ))}
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* === ANDAMENTO (MOVIDO) === */}
+          {progress.total > 0 && (
+            <div className={styles.section}>
+              <div className={styles.sectionHeader}>
+                <FiClipboard className={styles.sectionIcon} />
+                <h3>Andamento</h3>
+                <span className={styles.progressLabel}>
+                  {progress.finished}/{progress.total} • {progress.percent}%
+                </span>
+              </div>
+
+              <div className={styles.sectionContent}>
+                {/* Barra de progresso */}
+                <div className={styles.progressTrack} aria-label="Andamento">
+                  <div
+                    className={styles.progressBar}
+                    style={{ width: `${progress.percent}%` }}
+                  />
+                </div>
+
+                {/* Ações rápidas */}
+                <div className={styles.subtasksToolbar}>
+                  <button
+                    type="button"
+                    className={styles.subtasksAllBtn}
+                    onClick={handleCompleteAll}
+                    title={
+                      subtasks.every((s) => s.done)
+                        ? "Reabrir todas as subtasks"
+                        : "Concluir todas as subtasks"
+                    }
+                  >
+                    <FiCheckCircle />
+                    {subtasks.every((s) => s.done)
+                      ? "Reabrir tudo"
+                      : "Concluir tudo"}
+                  </button>
+                </div>
+
+                {/* Checklist de subtasks */}
+                <ul className={styles.subtasksList}>
+                  {subtasks.map((s) => (
+                    <li key={s.id} className={styles.subtaskItem}>
+                      <div className={styles.subtaskCheck}>
+                        <Checkbox
+                          checked={!!s.done}
+                          onCheckedChange={(checked) => handleToggleSubtask(s, !!checked)}
+                          id={`st-${s.id}`}
+                        />
+                      </div>
+                      <div className={styles.subtaskBody}>
+                        <div className={styles.subtaskTitleRow}>
+                          <span
+                            className={`${styles.subtaskTitle} ${
+                              s.done ? styles.subtaskDone : ""
+                            }`}
+                          >
+                            {s.title || s.name || `Subtask ${s.id}`}
+                          </span>
+                          {s.due_date && (
+                            <span className={styles.subtaskDue}>
+                              {formatDate(s.due_date)}
+                            </span>
+                          )}
+                        </div>
+                        {s.description && (
+                          <p className={styles.subtaskDesc}>{s.description}</p>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
               </div>
             </div>
           )}

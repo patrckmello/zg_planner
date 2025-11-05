@@ -130,6 +130,35 @@
   padding: 16px;
 }
 
+/* Subtasks list */
+.subtasksList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.subtaskRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+
+.subtaskCheck { flex-shrink: 0; }
+
+.subtaskTitle {
+  flex: 1;
+  color: #1f2937;
+}
+
+.subtaskDone .subtaskTitle {
+  color: #6b7280;
+  text-decoration: line-through;
+}
+
 /* Description */
 .description {
   margin-bottom: 16px;
@@ -794,3 +823,108 @@
   animation:modalStripes 1s linear infinite;
 }
 @keyframes modalStripes{ to{ transform: translateX(20px); } }
+
+/* Barra de progresso */
+.progressTrack {
+  width: 100%;
+  height: 10px;
+  background: var(--zg-surface-2, #f1f2f4);
+  border-radius: 999px;
+  overflow: hidden;
+  margin: 8px 0 14px;
+}
+.progressBar {
+  height: 100%;
+  background: var(--zg-primary, #2563eb);
+  border-radius: 999px;
+  transition: width 220ms ease;
+}
+.progressLabel {
+  margin-left: auto;
+  font-weight: 600;
+  color: var(--zg-text-2, #6b7280);
+}
+
+/* Subtasks */
+.subtasksToolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+.subtasksAllBtn {
+  display: inline-flex;
+  align-items: center;
+  color: rgb(82, 177, 95);
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(0,0,0,0.08);
+  background: var(--zg-surface, #fff);
+  cursor: pointer;
+  transition: transform 0.1s ease, background 0.2s ease;
+}
+.subtasksAllBtn:hover { background: var(--zg-surface-2, #f8fafc); }
+.subtasksAllBtn:active { transform: translateY(1px); }
+
+.subtasksList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.subtaskItem {
+  display: grid;
+  grid-template-columns: 32px 1fr;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(0,0,0,0.06);
+  border-radius: 12px;
+  background: var(--zg-surface, #fff);
+}
+/* Checkbox area wrapper to center the input */
+.subtaskCheck {
+  width: 32px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+/* Native checkbox styling with accent color for clarity */
+.subtaskCheckbox {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--zg-primary, #2563eb);
+  cursor: pointer;
+}
+
+.subtaskBody { min-width: 0; }
+.subtaskTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.subtaskTitle {
+  font-weight: 600;
+  color: var(--zg-text-1, #111827);
+  line-height: 1.25;
+}
+.subtaskDone {
+  color: var(--zg-text-3, #9ca3af);
+  text-decoration: line-through;
+}
+.subtaskDue {
+  margin-left: auto;
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--zg-surface-2, #f3f4f6);
+  color: var(--zg-text-2, #6b7280);
+}
+.subtaskDesc {
+  margin-top: 4px;
+  color: var(--zg-text-2, #6b7280);
+  font-size: 14px;
+}

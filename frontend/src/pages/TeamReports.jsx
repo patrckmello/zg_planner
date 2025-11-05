@@ -333,14 +333,18 @@ function TeamReports() {
 
       const dueDate = task.due_date ? getBrasiliaDate(task.due_date) : null;
       const createdAt = task.created_at ? getBrasiliaDate(task.created_at) : null;
-      const updatedAt = task.updated_at ? getBrasiliaDate(task.updated_at) : null;
+      const completionAt = task.completed_at
+        ? getBrasiliaDate(task.completed_at)
+        : task.status === "done"
+        ? getBrasiliaDate(task.updated_at)
+        : null;
 
-      if (task.status === "done" && dueDate && updatedAt) {
-        if (updatedAt <= dueDate) metrics.tasks_completed_on_time += 1;
+      if (completionAt && dueDate) {
+        if (completionAt <= dueDate) metrics.tasks_completed_on_time += 1;
         else metrics.tasks_completed_late += 1;
 
         if (createdAt) {
-          const completionTime = Math.ceil((updatedAt - createdAt) / (1000 * 60 * 60 * 24));
+          const completionTime = Math.ceil((completionAt - createdAt) / (1000 * 60 * 60 * 24));
           totalCompletionTime += completionTime;
           completedTasksWithTime += 1;
         }

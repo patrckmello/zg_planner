@@ -124,18 +124,27 @@ function ReportsPage() {
           (metrics.tasks_by_category[task.categoria] || 0) + 1;
       }
 
-      const statusInfo = getTaskStatus(task);
-      if (statusInfo.text === "Atrasada") metrics.overdue_tasks += 1;
-      if (statusInfo.text === "Pendente") metrics.upcoming_tasks += 1;
+      const dueDate = task.due_date ? getBrasiliaDate(task.due_date) : null;
+      const createdAt = task.created_at ? getBrasiliaDate(task.created_at) : null;
+      const completionAt = task.completed_at
+        ? getBrasiliaDate(task.completed_at)
+        : task.status === "done"
+        ? getBrasiliaDate(task.updated_at)
+        : null;
+      const now = new Date();
 
-      if (task.status === "done" && task.due_date) {
-        const dueDate = getBrasiliaDate(task.due_date);
-        const updatedAt = getBrasiliaDate(task.updated_at);
-        if (updatedAt <= dueDate) metrics.tasks_completed_on_time += 1;
+      if (!completionAt && task.status !== "archived" && dueDate) {
+        if (dueDate < now) metrics.overdue_tasks += 1;
+        else metrics.upcoming_tasks += 1;
+      }
+
+      if (completionAt && dueDate) {
+        if (completionAt <= dueDate) metrics.tasks_completed_on_time += 1;
         else metrics.tasks_completed_late += 1;
+      }
 
-        const createdAt = getBrasiliaDate(task.created_at);
-        const completionTime = Math.ceil((updatedAt - createdAt) / (1000 * 60 * 60 * 24));
+      if (completionAt && createdAt) {
+        const completionTime = Math.ceil((completionAt - createdAt) / (1000 * 60 * 60 * 24));
         totalCompletionTime += completionTime;
         completedTasksWithTime += 1;
       }
